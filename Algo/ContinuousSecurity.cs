@@ -31,8 +31,10 @@ namespace StockSharp.Algo
 	/// <summary>
 	/// Continuous security (generally, a futures contract), containing expirable securities.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.ContinuousSecurityKey)]
-	[DescriptionLoc(LocalizedStrings.Str696Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ContinuousSecurityKey,
+		Description = LocalizedStrings.ContinuousSecurityDescKey)]
 	public abstract class ContinuousSecurity : BasketSecurity
 	{
 	}
@@ -40,8 +42,10 @@ namespace StockSharp.Algo
 	/// <summary>
 	/// Rollover by expiration date continuous security.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.ContinuousSecurityKey)]
-	[DescriptionLoc(LocalizedStrings.Str696Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ContinuousSecurityKey,
+		Description = LocalizedStrings.ContinuousSecurityDescKey)]
 	[BasketCode("CE")]
 	public class ExpirationContinuousSecurity : ContinuousSecurity
 	{
@@ -82,13 +86,6 @@ namespace StockSharp.Algo
 			/// <param name="security">Security.</param>
 			/// <returns>The previous instrument. If the <paramref name="security" /> is the first instrument then <see langword="null" /> will be returned.</returns>
 			SecurityId? GetPrevSecurity(SecurityId security);
-			
-			/// <summary>
-			/// To get the range of operation of the internal instrument.
-			/// </summary>
-			/// <param name="security">The internal instrument.</param>
-			/// <returns>The range of operation.</returns>
-			Range<DateTimeOffset> GetActivityRange(SecurityId security);
 		}
 
 		private sealed class ExpirationJumpsDictionary : SynchronizedPairSet<SecurityId, DateTimeOffset>, IExpirationJumpList
@@ -102,7 +99,7 @@ namespace StockSharp.Algo
 				Func<Range<DateTimeOffset>, Range<DateTimeOffset>, int> comparer = (r1, r2) => r1.Max.CompareTo(r2.Max);
 				_expirationRanges = new SortedDictionary<Range<DateTimeOffset>, SecurityId>(comparer.ToComparer());
 
-				InnerSecurities = ArrayHelper.Empty<SecurityId>();
+				InnerSecurities = Array.Empty<SecurityId>();
 			}
 
 			public SecurityId[] InnerSecurities { get; private set; }
@@ -138,7 +135,7 @@ namespace StockSharp.Algo
 
 					_expirationRanges.Clear();
 					_current = null;
-					InnerSecurities = ArrayHelper.Empty<SecurityId>();
+					InnerSecurities = Array.Empty<SecurityId>();
 
 					DisposeEnumerator();
 				}
@@ -160,7 +157,7 @@ namespace StockSharp.Algo
 
 				DisposeEnumerator();
 
-				_enumerator = ((IEnumerable<KeyValuePair<Range<DateTimeOffset>, SecurityId>>)new CircularBuffer<KeyValuePair<Range<DateTimeOffset>, SecurityId>>(_expirationRanges)).GetEnumerator();
+				_enumerator = new CircularBuffer<KeyValuePair<Range<DateTimeOffset>, SecurityId>>(_expirationRanges.Count, _expirationRanges.ToArray()).GetEnumerator();
 
 				MoveNext();
 			}
@@ -190,20 +187,17 @@ namespace StockSharp.Algo
 						if (kv.Key.Contains(marketTime))
 							return kv.Value;
 
-						if (security.IsDefault())
+						if (security == default)
 							security = _current.Value.Value;
 
 						MoveNext();
 					}
 
-					return default(SecurityId);
+					return default;
 				}
 			}
 
-			private void DisposeEnumerator()
-			{
-				_enumerator?.Dispose();
-			}
+			private void DisposeEnumerator() => _enumerator?.Dispose();
 
 			SecurityId IExpirationJumpList.FirstSecurity => GetSecurity(DateTimeOffset.MinValue);
 
@@ -214,10 +208,10 @@ namespace StockSharp.Algo
 				lock (SyncRoot)
 				{
 					if (!ContainsKey(security))
-						throw new ArgumentException(LocalizedStrings.Str697Params.Put(security));
+						throw new ArgumentException(LocalizedStrings.NotInternalSecurity.Put(security));
 
 					var index = InnerSecurities.IndexOf(security);
-					return index == InnerSecurities.Length - 1 ? (SecurityId?)null : InnerSecurities[index + 1];
+					return index == InnerSecurities.Length - 1 ? null : InnerSecurities[index + 1];
 				}
 			}
 
@@ -226,23 +220,10 @@ namespace StockSharp.Algo
 				lock (SyncRoot)
 				{
 					if (!ContainsKey(security))
-						throw new ArgumentException(LocalizedStrings.Str697Params.Put(security));
+						throw new ArgumentException(LocalizedStrings.NotInternalSecurity.Put(security));
 
 					var index = InnerSecurities.IndexOf(security);
-					return index == 0 ? (SecurityId?)null : InnerSecurities[index - 1];
-				}
-			}
-
-			Range<DateTimeOffset> IExpirationJumpList.GetActivityRange(SecurityId security)
-			{
-				if (security == null)
-					throw new ArgumentNullException(nameof(security));
-
-				lock (SyncRoot)
-				{
-					return (from expirationRange in _expirationRanges
-							where expirationRange.Value == security
-							select expirationRange.Key).First();
+					return index == 0 ? null : InnerSecurities[index - 1];
 				}
 			}
 		}
@@ -284,7 +265,7 @@ namespace StockSharp.Algo
 		protected override string ToSerializedString()
 		{
 			lock (_expirationJumps.SyncRoot)
-				return _expirationJumps.Select(j => $"{j.Key.ToStringId()}={j.Value.UtcDateTime.ToString(_dateFormat)}").Join(",");
+				return _expirationJumps.Select(j => $"{j.Key.ToStringId()}={j.Value.UtcDateTime.ToString(_dateFormat)}").JoinComma();
 		}
 
 		/// <inheritdoc />
@@ -297,48 +278,22 @@ namespace StockSharp.Algo
 				if (text.IsEmpty())
 					return;
 
-				_expirationJumps.AddRange(text.Split(",").Select(p =>
+				_expirationJumps.AddRange(text.SplitByComma().Select(p =>
 				{
-					var parts = p.Split("=");
+					var parts = p.SplitByEqual();
 					return new KeyValuePair<SecurityId, DateTimeOffset>(parts[0].ToSecurityId(), parts[1].ToDateTime(_dateFormat).UtcKind());
 				}));
 			}
 		}
-
-		///// <summary>
-		///// To shift the expiration of internal instruments <see cref="ExpirationJumps"/> to a size equas to <paramref name="offset" />.
-		///// </summary>
-		///// <param name="offset">The size of the expiration shift.</param>
-		//public void Offset(TimeSpan offset)
-		//{
-		//	lock (_expirationJumps.SyncRoot)
-		//	{
-		//		var dict = new PairSet<Security, DateTimeOffset>();
-
-		//		foreach (var security in InnerSecurityIds)
-		//		{
-		//			if (security.ExpiryDate == null)
-		//				throw new InvalidOperationException(LocalizedStrings.Str698Params.Put(security.Id));
-
-		//			var expiryDate = (DateTimeOffset)security.ExpiryDate + offset;
-
-		//			if (expiryDate > security.ExpiryDate)
-		//				throw new ArgumentOutOfRangeException(nameof(offset), offset, LocalizedStrings.Str699Params.Put(security.Id, expiryDate, security.ExpiryDate));
-
-		//			dict.Add(security, expiryDate);
-		//		}
-
-		//		_expirationJumps.Clear();
-		//		_expirationJumps.AddRange(dict);
-		//	}
-		//}
 	}
 
 	/// <summary>
 	/// Rollover by volume continuous security.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.ContinuousSecurityKey)]
-	[DescriptionLoc(LocalizedStrings.Str696Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ContinuousSecurityKey,
+		Description = LocalizedStrings.ContinuousSecurityDescKey)]
 	[BasketCode("CV")]
 	public class VolumeContinuousSecurity : ContinuousSecurity
 	{
@@ -361,12 +316,12 @@ namespace StockSharp.Algo
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.OIKey,
-			Description = LocalizedStrings.OpenInterestKey,
+			Description = LocalizedStrings.OpenInterestDescKey,
 			GroupName = LocalizedStrings.ContinuousSecurityKey,
 			Order = 1)]
 		public bool IsOpenInterest { get; set; }
 
-		private Unit _volumeLevel = new Unit();
+		private Unit _volumeLevel = new();
 
 		/// <summary>
 		/// Volume trigger causes switch to the next contract.
@@ -392,14 +347,14 @@ namespace StockSharp.Algo
 		{
 			lock (InnerSecurities.SyncRoot)
 			{
-				return $"{IsOpenInterest},{VolumeLevel}," + InnerSecurities.Select(id => id.ToStringId()).Join(",");
+				return $"{IsOpenInterest},{VolumeLevel}," + InnerSecurities.Select(id => id.ToStringId()).JoinComma();
 			}
 		}
 
 		/// <inheritdoc />
 		protected override void FromSerializedString(string text)
 		{
-			var parts = text.Split(",");
+			var parts = text.SplitByComma();
 
 			IsOpenInterest = parts[0].To<bool>();
 			VolumeLevel = parts[1].ToUnit();

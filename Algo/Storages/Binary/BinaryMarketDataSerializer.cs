@@ -18,47 +18,55 @@ namespace StockSharp.Algo.Storages.Binary
 	using System;
 	using System.Collections;
 	using System.Collections.Generic;
+	using System.Diagnostics;
 	using System.IO;
 	using System.Linq;
 
 	using Ecng.Collections;
 	using Ecng.Common;
-	using Ecng.Reflection;
-	using Ecng.Serialization;
 
+	using StockSharp.Localization;
 	using StockSharp.Messages;
 
 	static class MarketDataVersions
 	{
 		//public static readonly Version Version30 = new Version(3, 0);
-		public static readonly Version Version31 = new Version(3, 1);
-		public static readonly Version Version33 = new Version(3, 3);
-		public static readonly Version Version34 = new Version(3, 4);
-		public static readonly Version Version40 = new Version(4, 0);
-		public static readonly Version Version41 = new Version(4, 1);
-		public static readonly Version Version42 = new Version(4, 2);
-		public static readonly Version Version43 = new Version(4, 3);
-		public static readonly Version Version44 = new Version(4, 4);
-		public static readonly Version Version45 = new Version(4, 5);
-		public static readonly Version Version46 = new Version(4, 6);
-		public static readonly Version Version47 = new Version(4, 7);
-		public static readonly Version Version48 = new Version(4, 8);
-		public static readonly Version Version49 = new Version(4, 9);
-		public static readonly Version Version50 = new Version(5, 0);
-		public static readonly Version Version51 = new Version(5, 1);
-		public static readonly Version Version52 = new Version(5, 2);
-		public static readonly Version Version53 = new Version(5, 3);
-		public static readonly Version Version54 = new Version(5, 4);
-		public static readonly Version Version55 = new Version(5, 5);
-		public static readonly Version Version56 = new Version(5, 6);
-		public static readonly Version Version57 = new Version(5, 7);
-		public static readonly Version Version58 = new Version(5, 8);
-		public static readonly Version Version59 = new Version(5, 9);
-		public static readonly Version Version60 = new Version(6, 0);
-		public static readonly Version Version61 = new Version(6, 1);
-		public static readonly Version Version62 = new Version(6, 2);
-		public static readonly Version Version63 = new Version(6, 3);
-		public static readonly Version Version64 = new Version(6, 4);
+		public static readonly Version Version31 = new(3, 1);
+		public static readonly Version Version33 = new(3, 3);
+		public static readonly Version Version34 = new(3, 4);
+		public static readonly Version Version35 = new(3, 5);
+		public static readonly Version Version36 = new(3, 6);
+		public static readonly Version Version40 = new(4, 0);
+		public static readonly Version Version41 = new(4, 1);
+		public static readonly Version Version42 = new(4, 2);
+		public static readonly Version Version43 = new(4, 3);
+		public static readonly Version Version44 = new(4, 4);
+		public static readonly Version Version45 = new(4, 5);
+		public static readonly Version Version46 = new(4, 6);
+		public static readonly Version Version47 = new(4, 7);
+		public static readonly Version Version48 = new(4, 8);
+		public static readonly Version Version49 = new(4, 9);
+		public static readonly Version Version50 = new(5, 0);
+		public static readonly Version Version51 = new(5, 1);
+		public static readonly Version Version52 = new(5, 2);
+		public static readonly Version Version53 = new(5, 3);
+		public static readonly Version Version54 = new(5, 4);
+		public static readonly Version Version55 = new(5, 5);
+		public static readonly Version Version56 = new(5, 6);
+		public static readonly Version Version57 = new(5, 7);
+		public static readonly Version Version58 = new(5, 8);
+		public static readonly Version Version59 = new(5, 9);
+		public static readonly Version Version60 = new(6, 0);
+		public static readonly Version Version61 = new(6, 1);
+		public static readonly Version Version62 = new(6, 2);
+		public static readonly Version Version63 = new(6, 3);
+		public static readonly Version Version64 = new(6, 4);
+		public static readonly Version Version65 = new(6, 5);
+		public static readonly Version Version66 = new(6, 6);
+		public static readonly Version Version67 = new(6, 7);
+		public static readonly Version Version68 = new(6, 8);
+		public static readonly Version Version69 = new(6, 9);
+		public static readonly Version Version70 = new(7, 0);
 	}
 
 	abstract class BinaryMetaInfo : MetaInfo
@@ -99,6 +107,9 @@ namespace StockSharp.Algo.Storages.Binary
 		public DateTime FirstItemLocalTime { get; set; }
 		public DateTime LastItemLocalTime { get; set; }
 
+		public long FirstSeqNum { get; set; }
+		public long PrevSeqNum { get; set; }
+
 		public override object LastId
 		{
 			get => LastTime;
@@ -114,23 +125,23 @@ namespace StockSharp.Algo.Storages.Binary
 		{
 			stream.WriteByte((byte)Version.Major);
 			stream.WriteByte((byte)Version.Minor);
-			stream.Write(Count);
-			stream.Write(PriceStep);
+			stream.WriteEx(Count);
+			stream.WriteEx(PriceStep);
 
 			if (Version < MarketDataVersions.Version40)
-				stream.Write(0m); // ранее был StepPrice
+				stream.WriteEx(0m); // ранее был StepPrice
 
-			stream.Write(FirstTime);
-			stream.Write(LastTime);
+			stream.WriteEx(FirstTime);
+			stream.WriteEx(LastTime);
 
 			if (Version < MarketDataVersions.Version40)
 				return;
 
-			stream.Write(LocalOffset);
+			stream.WriteEx(LocalOffset);
 
 			// размер под дополнительную информацию.
 			// пока этой информации нет.
-			stream.Write((short)0);
+			stream.WriteEx((short)0);
 		}
 
 		public override void Read(Stream stream)
@@ -165,8 +176,8 @@ namespace StockSharp.Algo.Storages.Binary
 			if (Version < MarketDataVersions.Version43)
 				return;
 
-			stream.Write(FirstFractionalPrice);
-			stream.Write(LastFractionalPrice);
+			stream.WriteEx(FirstFractionalPrice);
+			stream.WriteEx(LastFractionalPrice);
 		}
 
 		protected void ReadFractionalPrice(Stream stream)
@@ -182,8 +193,8 @@ namespace StockSharp.Algo.Storages.Binary
 		{
 			WriteFractionalPrice(stream);
 
-			stream.Write(/*FirstPriceStep*/0m);
-			stream.Write(LastPriceStep);
+			stream.WriteEx(/*FirstPriceStep*/0m);
+			stream.WriteEx(LastPriceStep);
 		}
 
 		protected void ReadPriceStep(Stream stream)
@@ -199,9 +210,9 @@ namespace StockSharp.Algo.Storages.Binary
 			if (Version < MarketDataVersions.Version44)
 				return;
 
-			stream.Write(VolumeStep);
-			stream.Write(FirstFractionalVolume);
-			stream.Write(LastFractionalVolume);
+			stream.WriteEx(VolumeStep);
+			stream.WriteEx(FirstFractionalVolume);
+			stream.WriteEx(LastFractionalVolume);
 		}
 
 		protected void ReadFractionalVolume(Stream stream)
@@ -219,8 +230,8 @@ namespace StockSharp.Algo.Storages.Binary
 			if (Version < minVersion)
 				return;
 
-			stream.Write(FirstLocalTime);
-			stream.Write(LastLocalTime);
+			stream.WriteEx(FirstLocalTime);
+			stream.WriteEx(LastLocalTime);
 		}
 
 		protected void ReadLocalTime(Stream stream, Version minVersion)
@@ -234,11 +245,11 @@ namespace StockSharp.Algo.Storages.Binary
 
 		protected void WriteOffsets(Stream stream)
 		{
-			stream.Write(FirstLocalOffset);
-			stream.Write(LastLocalOffset);
+			stream.WriteEx(FirstLocalOffset);
+			stream.WriteEx(LastLocalOffset);
 
-			stream.Write(FirstServerOffset);
-			stream.Write(LastServerOffset);
+			stream.WriteEx(FirstServerOffset);
+			stream.WriteEx(LastServerOffset);
 		}
 
 		protected void ReadOffsets(Stream stream)
@@ -250,13 +261,25 @@ namespace StockSharp.Algo.Storages.Binary
 			LastServerOffset = stream.Read<TimeSpan>();
 		}
 
+		protected void WriteSeqNums(Stream stream)
+		{
+			stream.WriteEx(FirstSeqNum);
+			stream.WriteEx(PrevSeqNum);
+		}
+
+		protected void ReadSeqNums(Stream stream)
+		{
+			FirstSeqNum = stream.Read<long>();
+			PrevSeqNum = stream.Read<long>();
+		}
+
 		protected void WriteItemLocalOffset(Stream stream, Version minVersion)
 		{
 			if (Version < minVersion)
 				return;
 
-			stream.Write(FirstItemLocalOffset);
-			stream.Write(LastItemLocalOffset);
+			stream.WriteEx(FirstItemLocalOffset);
+			stream.WriteEx(LastItemLocalOffset);
 		}
 
 		protected void ReadItemLocalOffset(Stream stream, Version minVersion)
@@ -273,8 +296,8 @@ namespace StockSharp.Algo.Storages.Binary
 			if (Version < minVersion)
 				return;
 
-			stream.Write(FirstItemLocalTime);
-			stream.Write(LastItemLocalTime);
+			stream.WriteEx(FirstItemLocalTime);
+			stream.WriteEx(LastItemLocalTime);
 		}
 
 		protected void ReadItemLocalTime(Stream stream, Version minVersion)
@@ -322,6 +345,9 @@ namespace StockSharp.Algo.Storages.Binary
 			LastPriceStep = src.LastPriceStep;
 			FirstPrice = src.FirstPrice;
 			LastPrice = src.LastPrice;
+
+			FirstSeqNum = src.FirstSeqNum;
+			PrevSeqNum = src.PrevSeqNum;
 		}
 	}
 
@@ -392,7 +418,7 @@ namespace StockSharp.Algo.Storages.Binary
 			{
 				Index = -1;
 				MetaInfo = null;
-				Previous = Current = default(TData);
+				Previous = Current = default;
 				PartSize = 0;
 
 				if (Reader != null)
@@ -400,11 +426,12 @@ namespace StockSharp.Algo.Storages.Binary
 			}
 		}
 
-		protected BinaryMarketDataSerializer(SecurityId securityId, int dataSize, Version version, IExchangeInfoProvider exchangeInfoProvider)
+		protected BinaryMarketDataSerializer(SecurityId securityId, DataType dataType, int dataSize, Version version, IExchangeInfoProvider exchangeInfoProvider)
 		{
-			if (securityId == null)
-				throw new ArgumentNullException(nameof(securityId));
+			// force hash code caching
+			securityId.GetHashCode();
 
+			DataType = dataType ?? throw new ArgumentNullException(nameof(dataType));
 			SecurityId = securityId;
 			DataSize = dataSize;
 
@@ -412,6 +439,7 @@ namespace StockSharp.Algo.Storages.Binary
 			ExchangeInfoProvider = exchangeInfoProvider ?? throw new ArgumentNullException(nameof(exchangeInfoProvider));
 		}
 
+		protected DataType DataType { get; }
 		protected SecurityId SecurityId { get; }
 		protected int DataSize { get; }
 		protected Version Version { get; set; }
@@ -438,23 +466,39 @@ namespace StockSharp.Algo.Storages.Binary
 			return Deserialize(stream, metaInfo);
 		}
 
+		private void CheckVersion(TMetaInfo metaInfo, string operation)
+		{
+			if (metaInfo.Version <= Version)
+				return;
+
+			var name = $"{SecurityId}/{DataType}";
+			Debug.WriteLine($"Storage ({operation}) !! DISABLED !!: {name}");
+
+			throw new InvalidOperationException(LocalizedStrings.StorageVersionNewerKey.Put(name, metaInfo.Version, Version));
+		}
+
 		public void Serialize(Stream stream, IEnumerable<TData> data, IMarketDataMetaInfo metaInfo)
 		{
+			var typedInfo = (TMetaInfo)metaInfo;
+			CheckVersion(typedInfo, "Save");
 			//var temp = new MemoryStream { Capacity = DataSize * data.Count() * 2 };
 
 			using (var writer = new BitArrayWriter(stream))
-				OnSave(writer, data, (TMetaInfo)metaInfo);
+				OnSave(writer, data, typedInfo);
 
 			//return stream.To<byte[]>();
 		}
 
 		public IEnumerable<TData> Deserialize(Stream stream, IMarketDataMetaInfo metaInfo)
 		{
+			var typedInfo = (TMetaInfo)metaInfo;
+			CheckVersion(typedInfo, "Load");
+
 			var data = new MemoryStream();
 			stream.CopyTo(data);
 			stream.Dispose();
 
-			return new SimpleEnumerable<TData>(() => new MarketDataEnumerator(this, new BitArrayReader(data), (TMetaInfo)metaInfo));
+			return new SimpleEnumerable<TData>(() => new MarketDataEnumerator(this, new BitArrayReader(data), typedInfo));
 		}
 
 		protected abstract void OnSave(BitArrayWriter writer, IEnumerable<TData> data, TMetaInfo metaInfo);

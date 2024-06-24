@@ -13,209 +13,261 @@ Created: 2015, 11, 11, 2:32 PM
 Copyright 2010 by StockSharp, LLC
 *******************************************************************************************/
 #endregion S# License
+
 namespace StockSharp.Messages
 {
 	using System;
-	using System.ComponentModel;
 	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
+	using System.ComponentModel;
 
 	using Ecng.Common;
-	using Ecng.Serialization;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// A message containing info about the security.
 	/// </summary>
-	[System.Runtime.Serialization.DataContract]
+	[DataContract]
 	[Serializable]
-	public class SecurityMessage : Message, ISecurityIdMessage
+	public class SecurityMessage : BaseSubscriptionIdMessage<SecurityMessage>, ISecurityIdMessage
 	{
-		/// <summary>
-		/// Security ID.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str361Key)]
-		[DescriptionLoc(LocalizedStrings.SecurityIdKey, true)]
-		[MainCategory]
-		[ReadOnly(true)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.IdentifierKey,
+			Description = LocalizedStrings.SecurityIdKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		[TypeConverter(typeof(StringToSecurityIdTypeConverter))]
 		public SecurityId SecurityId { get; set; }
 
 		/// <summary>
 		/// Security name.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.NameKey)]
-		[DescriptionLoc(LocalizedStrings.Str362Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.NameKey,
+			Description = LocalizedStrings.SecurityNameKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string Name { get; set; }
 
 		/// <summary>
 		/// Short security name.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str363Key)]
-		[DescriptionLoc(LocalizedStrings.Str364Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ShortNameKey,
+			Description = LocalizedStrings.ShortNameDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string ShortName { get; set; }
 
 		/// <summary>
 		/// Minimum volume step.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.VolumeStepKey)]
-		[DescriptionLoc(LocalizedStrings.Str366Key)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.VolumeStepKey,
+			Description = LocalizedStrings.MinVolStepKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public decimal? VolumeStep { get; set; }
 
 		/// <summary>
 		/// Minimum volume allowed in order.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.MinVolumeKey)]
-		[DescriptionLoc(LocalizedStrings.MinVolumeDescKey)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.MinVolumeKey,
+			Description = LocalizedStrings.MinVolumeDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public decimal? MinVolume { get; set; }
+
+		/// <summary>
+		/// Maximum volume allowed in order.
+		/// </summary>
+		[DataMember]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.MaxVolumeKey,
+			Description = LocalizedStrings.MaxVolumeDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
+		public decimal? MaxVolume { get; set; }
 
 		/// <summary>
 		/// Lot multiplier.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str330Key)]
-		[DescriptionLoc(LocalizedStrings.LotVolumeKey)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LotKey,
+			Description = LocalizedStrings.LotVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public decimal? Multiplier { get; set; }
 
 		/// <summary>
 		/// Number of digits in price after coma.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.DecimalsKey)]
-		[DescriptionLoc(LocalizedStrings.Str548Key)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.DecimalsKey,
+			Description = LocalizedStrings.DecimalsDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public int? Decimals { get; set; }
-		
+
+		private decimal? _priceStep;
+
 		/// <summary>
 		/// Minimum price step.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.PriceStepKey)]
-		[DescriptionLoc(LocalizedStrings.MinPriceStepKey)]
-		[MainCategory]
-		[Nullable]
-		public decimal? PriceStep { get; set; }
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PriceStepKey,
+			Description = LocalizedStrings.MinPriceStepKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
+		public decimal? PriceStep
+		{
+			get => _priceStep;
+			set => _priceStep = value > 0 ? value : null;
+		}
 
 		/// <summary>
 		/// Security type.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.TypeKey)]
-		[DescriptionLoc(LocalizedStrings.Str360Key)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TypeKey,
+			Description = LocalizedStrings.SecurityTypeDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public SecurityTypes? SecurityType { get; set; }
 
 		/// <summary>
 		/// Type in ISO 10962 standard.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.CfiCodeKey)]
-		[DescriptionLoc(LocalizedStrings.CfiCodeDescKey)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CfiCodeKey,
+			Description = LocalizedStrings.CfiCodeDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string CfiCode { get; set; }
 
 		/// <summary>
 		/// Security expiration date (for derivatives - expiration, for bonds — redemption).
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.ExpiryDateKey)]
-		[DescriptionLoc(LocalizedStrings.Str371Key)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ExpiryDateKey,
+			Description = LocalizedStrings.ExpiryDateDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public DateTimeOffset? ExpiryDate { get; set; }
 
 		/// <summary>
 		/// Settlement date for security (for derivatives and bonds).
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.SettlementDateKey)]
-		[DescriptionLoc(LocalizedStrings.Str373Key)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SettlementDateKey,
+			Description = LocalizedStrings.SettlementDateForSecurityKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public DateTimeOffset? SettlementDate { get; set; }
 
 		/// <summary>
-		/// Underlying asset code, on which the current security is based.
+		/// Underlying asset on which the current security is built.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.UnderlyingAssetKey)]
-		[DescriptionLoc(LocalizedStrings.UnderlyingAssetCodeKey)]
-		public string UnderlyingSecurityCode { get; set; }
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.UnderlyingAssetKey,
+			Description = LocalizedStrings.UnderlyingAssetDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public SecurityId UnderlyingSecurityId { get; set; }
 
 		/// <summary>
 		/// Minimum volume allowed in order for underlying security.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.UnderlyingMinVolumeKey)]
-		[DescriptionLoc(LocalizedStrings.UnderlyingMinVolumeDescKey)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.UnderlyingMinVolumeKey,
+			Description = LocalizedStrings.UnderlyingMinVolumeDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public decimal? UnderlyingSecurityMinVolume { get; set; }
 
 		/// <summary>
 		/// Option strike price.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.StrikeKey)]
-		[DescriptionLoc(LocalizedStrings.OptionStrikePriceKey)]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.StrikeKey,
+			Description = LocalizedStrings.OptionStrikePriceKey,
+			GroupName = LocalizedStrings.OptionsKey)]
+		//[Nullable]
 		public decimal? Strike { get; set; }
 
 		/// <summary>
 		/// Option type.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.OptionsContractKey)]
-		[DescriptionLoc(LocalizedStrings.OptionContractTypeKey)]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.OptionsContractKey,
+			Description = LocalizedStrings.OptionContractTypeKey,
+			GroupName = LocalizedStrings.OptionsKey)]
+		//[Nullable]
 		public OptionTypes? OptionType { get; set; }
 
 		/// <summary>
 		/// Type of binary option.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.BinaryOptionKey)]
-		[DescriptionLoc(LocalizedStrings.TypeBinaryOptionKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.BinaryOptionKey,
+			Description = LocalizedStrings.TypeBinaryOptionKey,
+			GroupName = LocalizedStrings.OptionsKey)]
 		public string BinaryOptionType { get; set; }
 
 		/// <summary>
 		/// Trading security currency.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.CurrencyKey)]
-		[DescriptionLoc(LocalizedStrings.Str382Key)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CurrencyKey,
+			Description = LocalizedStrings.CurrencyDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public CurrencyTypes? Currency { get; set; }
-
-		/// <summary>
-		/// ID of the original message <see cref="SecurityLookupMessage.TransactionId"/> for which this message is a response.
-		/// </summary>
-		[DataMember]
-		public long OriginalTransactionId { get; set; }
 
 		/// <summary>
 		/// Security class.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.ClassKey)]
-		[DescriptionLoc(LocalizedStrings.SecurityClassKey)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ClassKey,
+			Description = LocalizedStrings.SecurityClassKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string Class { get; set; }
 
 		/// <summary>
@@ -223,7 +275,7 @@ namespace StockSharp.Messages
 		/// </summary>
 		[DataMember]
 		public decimal? IssueSize { get; set; }
-		
+
 		/// <summary>
 		/// Date of issue.
 		/// </summary>
@@ -234,14 +286,12 @@ namespace StockSharp.Messages
 		/// Underlying security type.
 		/// </summary>
 		[DataMember]
-		[MainCategory]
 		public SecurityTypes? UnderlyingSecurityType { get; set; }
 
 		/// <summary>
 		/// Can have short positions.
 		/// </summary>
 		[DataMember]
-		[MainCategory]
 		public bool? Shortable { get; set; }
 
 		/// <summary>
@@ -267,6 +317,34 @@ namespace StockSharp.Messages
 			GroupName = LocalizedStrings.BasketKey,
 			Order = 201)]
 		public string BasketExpression { get; set; }
+
+		/// <summary>
+		/// Face value.
+		/// </summary>
+		[DataMember]
+		public decimal? FaceValue { get; set; }
+
+		/// <summary>
+		/// Identifier on primary exchange.
+		/// </summary>
+		[DataMember]
+		public SecurityId PrimaryId { get; set; }
+
+		/// <summary>
+		/// <see cref="SettlementTypes"/>.
+		/// </summary>
+		[DataMember]
+		public SettlementTypes? SettlementType { get; set; }
+
+		/// <summary>
+		/// <see cref="OptionStyles"/>.
+		/// </summary>
+		[DataMember]
+		public OptionStyles? OptionStyle { get; set; }
+
+		/// <inheritdoc />
+		public override DataType DataType => DataType.Securities;
+
 		/// <summary>
 		/// Initializes a new instance of the <see cref="SecurityMessage"/>.
 		/// </summary>
@@ -285,25 +363,35 @@ namespace StockSharp.Messages
 		}
 
 		/// <summary>
-		/// Create a copy of <see cref="SecurityMessage"/>.
+		/// Copy the message into the <paramref name="destination" />.
 		/// </summary>
-		/// <returns>Copy.</returns>
-		public override Message Clone()
+		/// <param name="destination">The object, to which copied information.</param>
+		/// <param name="copyOriginalTransactionId">Copy <see cref="IOriginalTransactionIdMessage.OriginalTransactionId"/>.</param>
+		public void CopyTo(SecurityMessage destination, bool copyOriginalTransactionId)
 		{
-			var clone = new SecurityMessage();
-			CopyTo(clone);
-			return clone;
+			var originTransId = destination.OriginalTransactionId;
+
+			CopyTo(destination);
+
+			if (!copyOriginalTransactionId)
+				destination.OriginalTransactionId = originTransId;
+		}
+
+		/// <inheritdoc />
+		public override void CopyTo(SecurityMessage destination)
+		{
+			CopyEx(destination, true);
 		}
 
 		/// <summary>
 		/// Copy the message into the <paramref name="destination" />.
 		/// </summary>
 		/// <param name="destination">The object, to which copied information.</param>
-		/// <param name="copyOriginalTransactionId">Copy <see cref="OriginalTransactionId"/>.</param>
-		public void CopyTo(SecurityMessage destination, bool copyOriginalTransactionId = true)
+		/// <param name="copyBase">Copy <see cref="BaseSubscriptionIdMessage{TMessage}"/>.</param>
+		public void CopyEx(SecurityMessage destination, bool copyBase)
 		{
-			if (destination == null)
-				throw new ArgumentNullException(nameof(destination));
+			if (copyBase)
+				base.CopyTo(destination);
 
 			destination.SecurityId = SecurityId;
 			destination.Name = Name;
@@ -317,13 +405,13 @@ namespace StockSharp.Messages
 			destination.CfiCode = CfiCode;
 			destination.SettlementDate = SettlementDate;
 			destination.Strike = Strike;
-			destination.UnderlyingSecurityCode = UnderlyingSecurityCode;
+			destination.UnderlyingSecurityId = UnderlyingSecurityId;
 			destination.VolumeStep = VolumeStep;
 			destination.MinVolume = MinVolume;
+			destination.MaxVolume = MaxVolume;
 			destination.Multiplier = Multiplier;
 			destination.Class = Class;
 			destination.BinaryOptionType = BinaryOptionType;
-			destination.LocalTime = LocalTime;
 			destination.IssueSize = IssueSize;
 			destination.IssueDate = IssueDate;
 			destination.UnderlyingSecurityType = UnderlyingSecurityType;
@@ -331,9 +419,10 @@ namespace StockSharp.Messages
 			destination.Shortable = Shortable;
 			destination.BasketCode = BasketCode;
 			destination.BasketExpression = BasketExpression;
-
-			if (copyOriginalTransactionId)
-				destination.OriginalTransactionId = OriginalTransactionId;
+			destination.FaceValue = FaceValue;
+			destination.SettlementType = SettlementType;
+			destination.OptionStyle = OptionStyle;
+			destination.PrimaryId = PrimaryId;
 		}
 
 		/// <inheritdoc />
@@ -362,6 +451,9 @@ namespace StockSharp.Messages
 			if (MinVolume != null)
 				str += $",MinVol={MinVolume}";
 
+			if (MaxVolume != null)
+				str += $",MaxVol={MaxVolume}";
+
 			if (Decimals != null)
 				str += $",Dec={Decimals}";
 
@@ -383,20 +475,32 @@ namespace StockSharp.Messages
 			if (CfiCode != null)
 				str += $",CFI={CfiCode}";
 
-			if (UnderlyingSecurityCode != null)
-				str += $",Under={UnderlyingSecurityCode}";
+			if (UnderlyingSecurityId != default)
+				str += $",Under={UnderlyingSecurityId}";
 
 			if (Class != null)
 				str += $",Class={Class}";
 
 			if (BinaryOptionType != null)
 				str += $",Bin={BinaryOptionType}";
-			
+
 			if (Shortable != null)
 				str += $",Strike={Shortable}";
 
 			if (BasketCode != null)
 				str += $",Basket={BasketCode}/{BasketExpression}";
+
+			if (FaceValue != null)
+				str += $",FaceValue={FaceValue}";
+
+			if (SettlementType != null)
+				str += $",SettlementType={SettlementType}";
+
+			if (OptionStyle != null)
+				str += $",OptionStyle={OptionStyle}";
+
+			if (PrimaryId != default)
+				str += $",Primary={PrimaryId}";
 
 			return str;
 		}

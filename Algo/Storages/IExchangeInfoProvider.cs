@@ -22,14 +22,13 @@ namespace StockSharp.Algo.Storages
 	using Ecng.Common;
 	using Ecng.Collections;
 
-	using MoreLinq;
-
 	using StockSharp.BusinessEntities;
+	using StockSharp.Messages;
 
 	/// <summary>
 	/// Interface describing exchanges and trading boards provider.
 	/// </summary>
-	public interface IExchangeInfoProvider
+	public interface IExchangeInfoProvider : IBoardMessageProvider
 	{
 		/// <summary>
 		/// All exchanges.
@@ -51,14 +50,14 @@ namespace StockSharp.Algo.Storages
 		/// </summary>
 		/// <param name="code">The board code <see cref="ExchangeBoard.Code"/>.</param>
 		/// <returns>Trading board. If the board with the specified code does not exist, then <see langword="null" /> will be returned.</returns>
-		ExchangeBoard GetExchangeBoard(string code);
+		ExchangeBoard TryGetExchangeBoard(string code);
 
 		/// <summary>
 		/// To get an exchange by the code.
 		/// </summary>
 		/// <param name="code">The exchange code <see cref="Exchange.Name"/>.</param>
 		/// <returns>Exchange. If the exchange with the specified code does not exist, then <see langword="null" /> will be returned.</returns>
-		Exchange GetExchange(string code);
+		Exchange TryGetExchange(string code);
 
 		/// <summary>
 		/// To save the board.
@@ -110,16 +109,16 @@ namespace StockSharp.Algo.Storages
 	/// </summary>
 	public class InMemoryExchangeInfoProvider : IExchangeInfoProvider
 	{
-		private readonly CachedSynchronizedDictionary<string, ExchangeBoard> _boards = new CachedSynchronizedDictionary<string, ExchangeBoard>(StringComparer.InvariantCultureIgnoreCase);
-		private readonly CachedSynchronizedDictionary<string, Exchange> _exchanges = new CachedSynchronizedDictionary<string, Exchange>(StringComparer.InvariantCultureIgnoreCase);
+		private readonly CachedSynchronizedDictionary<string, ExchangeBoard> _boards = new(StringComparer.InvariantCultureIgnoreCase);
+		private readonly CachedSynchronizedDictionary<string, Exchange> _exchanges = new(StringComparer.InvariantCultureIgnoreCase);
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="InMemoryExchangeInfoProvider"/>.
 		/// </summary>
 		public InMemoryExchangeInfoProvider()
 		{
-			ExchangeBoard.EnumerateExchanges().ForEach(b => _exchanges[b.Name] = b);
-			ExchangeBoard.EnumerateExchangeBoards().ForEach(b => _boards[b.Code] = b);
+			EntitiesExtensions.EnumerateExchanges().ForEach(b => _exchanges[b.Name] = b);
+			EntitiesExtensions.EnumerateExchangeBoards().ForEach(b => _boards[b.Code] = b);
 		}
 
 		/// <inheritdoc />
@@ -134,7 +133,7 @@ namespace StockSharp.Algo.Storages
 		}
 
 		/// <inheritdoc />
-		public ExchangeBoard GetExchangeBoard(string code)
+		public ExchangeBoard TryGetExchangeBoard(string code)
 		{
 			if (code.IsEmpty())
 				throw new ArgumentNullException(nameof(code));
@@ -143,12 +142,12 @@ namespace StockSharp.Algo.Storages
 		}
 
 		/// <inheritdoc />
-		public Exchange GetExchange(string code)
+		public Exchange TryGetExchange(string code)
 		{
 			if (code.IsEmpty())
 				throw new ArgumentNullException(nameof(code));
 
-			if (code.CompareIgnoreCase("RTS"))
+			if (code.EqualsIgnoreCase("RTS"))
 				code = "FORTS";
 
 			return _exchanges.TryGetValue(code);
@@ -223,6 +222,9 @@ namespace StockSharp.Algo.Storages
 			_boards.Remove(board.Code);
 			BoardRemoved?.Invoke(board);
 		}
+
+		IEnumerable<BoardMessage> IBoardMessageProvider.Lookup(BoardLookupMessage criteria)
+			=> Boards.Filter(criteria).Select(b => b.ToMessage());
 	}
 
 	/// <summary>
@@ -248,7 +250,7 @@ namespace StockSharp.Algo.Storages
 		/// <inheritdoc />
 		public override void Init()
 		{
-			var boardCodes = new HashSet<string>();
+			var boardCodes = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
 
 			boardCodes.AddRange(_entityRegistry.ExchangeBoards.Select(b => b.Code));
 

@@ -17,17 +17,14 @@ namespace StockSharp.Messages
 {
 	using System;
 	using System.Collections.Generic;
-	using System.Linq;
 	using System.Runtime.Serialization;
-
-	using Ecng.Common;
 
 	/// <summary>
 	/// The price level.
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class CandlePriceLevel : Cloneable<CandlePriceLevel>
+	public struct CandlePriceLevel// : ICloneable<CandlePriceLevel>
 	{
 		/// <summary>
 		/// Price.
@@ -77,23 +74,28 @@ namespace StockSharp.Messages
 		[DataMember]
 		public IEnumerable<decimal> SellVolumes { get; set; }
 
-		/// <summary>
-		/// Create a copy of <see cref="CandlePriceLevel"/>.
-		/// </summary>
-		/// <returns>Copy.</returns>
-		public override CandlePriceLevel Clone()
-		{
-			return new CandlePriceLevel
-			{
-				Price = Price,
-				BuyCount = BuyCount,
-				SellCount = SellCount,
-				SellVolume = SellVolume,
-				BuyVolume = BuyVolume,
-				TotalVolume = TotalVolume,
-				BuyVolumes = BuyVolumes?.ToArray(),
-				SellVolumes = SellVolumes?.ToArray(),
-			};
-		}
+		///// <summary>
+		///// Create a copy of <see cref="CandlePriceLevel"/>.
+		///// </summary>
+		///// <returns>Copy.</returns>
+		//public CandlePriceLevel Clone()
+		//{
+		//	return new CandlePriceLevel
+		//	{
+		//		Price = Price,
+		//		BuyCount = BuyCount,
+		//		SellCount = SellCount,
+		//		SellVolume = SellVolume,
+		//		BuyVolume = BuyVolume,
+		//		TotalVolume = TotalVolume,
+		//		BuyVolumes = BuyVolumes?.ToArray(),
+		//		SellVolumes = SellVolumes?.ToArray(),
+		//	};
+		//}
+
+		//object ICloneable.Clone()
+		//{
+		//	return Clone();
+		//}
 	}
 }

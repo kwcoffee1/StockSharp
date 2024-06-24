@@ -15,24 +15,31 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Stochastic %K.
 	/// </summary>
-	[DisplayName("Stochastic %K")]
-	[DescriptionLoc(LocalizedStrings.Str774Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/stochastic_oscillator_k%.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.StochasticKKey,
+		Description = LocalizedStrings.StochasticKDescKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/stochastic_oscillator_k%.html")]
 	public class StochasticK : LengthIndicator<decimal>
 	{
 		// Минимальная цена за период.
-		private readonly Lowest _low = new Lowest();
+		private readonly Lowest _low = new();
 
 		// Максимальная цена за период.
-		private readonly Highest _high = new Highest();
+		private readonly Highest _high = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="StochasticK"/>.
@@ -42,38 +49,33 @@ namespace StockSharp.Algo.Indicators
 			Length = 14;
 		}
 
-		/// <summary>
-		/// The indicator is formed.
-		/// </summary>
-		public override bool IsFormed => _high.IsFormed;
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Percent;
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _high.IsFormed;
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_high.Length = _low.Length = Length;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var (_, high, low, close) = input.GetOhlc();
 
-			var highValue = _high.Process(input.SetValue(this, candle.HighPrice)).GetValue<decimal>();
-			var lowValue = _low.Process(input.SetValue(this, candle.LowPrice)).GetValue<decimal>();
+			var highValue = _high.Process(input.SetValue(this, high)).GetValue<decimal>();
+			var lowValue = _low.Process(input.SetValue(this, low)).GetValue<decimal>();
 
 			var diff = highValue - lowValue;
 
 			if (diff == 0)
 				return new DecimalIndicatorValue(this, 0);
 
-			return new DecimalIndicatorValue(this, 100 * (candle.ClosePrice - lowValue) / diff);
+			return new DecimalIndicatorValue(this, 100 * (close - lowValue) / diff);
 		}
 	}
 }

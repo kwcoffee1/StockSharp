@@ -31,9 +31,8 @@ namespace StockSharp.Messages
 	/// <summary>
 	/// Base order condition (for example, for stop order algo orders).
 	/// </summary>
-	[System.Runtime.Serialization.DataContract]
+	[DataContract]
 	[Serializable]
-	[TypeSchemaFactory(SearchBy.Properties, VisibleScopes.Public)]
 	public abstract class OrderCondition : Cloneable<OrderCondition>
 	{
 		/// <summary>
@@ -43,7 +42,7 @@ namespace StockSharp.Messages
 		{
 		}
 
-		private readonly SynchronizedDictionary<string, object> _parameters = new SynchronizedDictionary<string, object>();
+		private readonly SynchronizedDictionary<string, object> _parameters = new();
 
 		/// <summary>
 		/// Condition parameters.
@@ -73,6 +72,12 @@ namespace StockSharp.Messages
 			clone.Parameters.Clear(); // removing pre-defined values
 			clone.Parameters.AddRange(_parameters.SyncGet(d => d.Select(p => new KeyValuePair<string, object>(p.Key, p.Value is ICloneable cl ? cl.Clone() : (p.Value is IPersistable pers ? pers.Clone() : p.Value))).ToArray()));
 			return clone;
+		}
+
+		/// <inheritdoc />
+		public override string ToString()
+		{
+			return GetType().Name.Remove(nameof(OrderCondition)) + ": " + _parameters.SyncGet(d => d.Select(p => $"{p.Key}={p.Value}").JoinComma());
 		}
 	}
 
@@ -122,11 +127,6 @@ namespace StockSharp.Messages
 		/// The absolute value of the price when the one is reached the protective strategy is activated.
 		/// </summary>
 		decimal? ActivationPrice { get; set; }
-
-		/// <summary>
-		/// Trailing take-profit.
-		/// </summary>
-		bool IsTrailing { get; set; }
 	}
 
 	/// <summary>
@@ -170,7 +170,7 @@ namespace StockSharp.Messages
 	/// The base implementation <see cref="IWithdrawOrderCondition"/>.
 	/// </summary>
 	[Serializable]
-	[System.Runtime.Serialization.DataContract]
+	[DataContract]
 	public abstract class BaseWithdrawOrderCondition : OrderCondition, IWithdrawOrderCondition
 	{
 		/// <summary>

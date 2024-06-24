@@ -8,7 +8,7 @@ namespace StockSharp.Messages
 	/// </summary>
 	[Serializable]
 	[DataContract]
-	public class SubscriptionListRequestMessage : Message
+	public class SubscriptionListRequestMessage : BaseRequestMessage
 	{
 		/// <summary>
 		/// Initialize <see cref="SubscriptionListRequestMessage"/>.
@@ -18,11 +18,8 @@ namespace StockSharp.Messages
 		{
 		}
 
-		/// <summary>
-		/// Request identifier.
-		/// </summary>
-		[DataMember]
-		public long TransactionId { get; set; }
+		/// <inheritdoc />
+		public override DataType DataType => DataType.Create<MarketDataMessage>();
 
 		/// <summary>
 		/// Create a copy of <see cref="SubscriptionListRequestMessage"/>.
@@ -30,13 +27,9 @@ namespace StockSharp.Messages
 		/// <returns>Copy.</returns>
 		public override Message Clone()
 		{
-			return new SubscriptionListRequestMessage
-			{
-				TransactionId = TransactionId,
-			};
+			var clone = new SubscriptionListRequestMessage();
+			CopyTo(clone);
+			return clone;
 		}
-
-		/// <inheritdoc />
-		public override string ToString() => base.ToString() + $",TrId={TransactionId}";
 	}
 }

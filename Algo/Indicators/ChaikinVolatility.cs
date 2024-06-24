@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -13,24 +13,30 @@ Created: 2015, 11, 11, 2:32 PM
 Copyright 2010 by StockSharp, LLC
 *******************************************************************************************/
 #endregion S# License
+
 namespace StockSharp.Algo.Indicators
 {
+	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
-	using StockSharp.Algo.Candles;
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Chaikin volatility.
 	/// </summary>
 	/// <remarks>
-	/// http://www2.wealth-lab.com/WL5Wiki/Volatility.ashx http://www.incrediblecharts.com/indicators/chaikin_volatility.php.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/chv.html
 	/// </remarks>
-	[DisplayName("Chaikin's Volatility")]
-	[DescriptionLoc(LocalizedStrings.Str730Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ChaikinVolatilityKey,
+		Description = LocalizedStrings.ChaikinVolatilityIndicatorKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/chv.html")]
 	public class ChaikinVolatility : BaseIndicator
 	{
 		/// <summary>
@@ -42,38 +48,43 @@ namespace StockSharp.Algo.Indicators
 			Roc = new RateOfChange();
 		}
 
+		/// <inheritdoc />
+		public override int NumValuesToInitialize => Math.Max(Ema.NumValuesToInitialize, Roc.NumValuesToInitialize);
+
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Percent;
+
 		/// <summary>
 		/// Moving Average.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("MA")]
-		[DescriptionLoc(LocalizedStrings.Str731Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.MAKey,
+			Description = LocalizedStrings.MovingAverageKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public ExponentialMovingAverage Ema { get; }
 
 		/// <summary>
 		/// Rate of change.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("ROC")]
-		[DescriptionLoc(LocalizedStrings.Str732Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ROCKey,
+			Description = LocalizedStrings.RateOfChangeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public RateOfChange Roc { get; }
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => Roc.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => Roc.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
-			var emaValue = Ema.Process(input.SetValue(this, candle.HighPrice - candle.LowPrice));
+			var (_, high, low, _) = input.GetOhlc();
+
+			var emaValue = Ema.Process(input.SetValue(this, high - low));
 
 			if (Ema.IsFormed)
 			{
@@ -84,28 +95,22 @@ namespace StockSharp.Algo.Indicators
 			return new DecimalIndicatorValue(this);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
+			base.Load(storage);
 
-			Ema.LoadNotNull(settings, nameof(Ema));
-			Roc.LoadNotNull(settings, nameof(Roc));
+			Ema.LoadIfNotNull(storage, nameof(Ema));
+			Roc.LoadIfNotNull(storage, nameof(Roc));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
+			base.Save(storage);
 
-			settings.SetValue(nameof(Ema), Ema.Save());
-			settings.SetValue(nameof(Roc), Roc.Save());
+			storage.SetValue(nameof(Ema), Ema.Save());
+			storage.SetValue(nameof(Roc), Roc.Save());
 		}
 	}
 }

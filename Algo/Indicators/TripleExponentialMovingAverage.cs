@@ -15,7 +15,9 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
@@ -23,14 +25,15 @@ namespace StockSharp.Algo.Indicators
 	/// Triple Exponential Moving Average.
 	/// </summary>
 	/// <remarks>
-	/// http://tradingsim.com/blog/triple-exponential-moving-average/ (3 * EMA) – (3 * EMA of EMA) + EMA of EMA of EMA).
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/tema.html
 	/// </remarks>
-	[DisplayName("TEMA")]
-	[DescriptionLoc(LocalizedStrings.Str752Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TEMAKey,
+		Description = LocalizedStrings.TripleExponentialMovingAverageKey)]
+	[Doc("topics/api/indicators/list_of_indicators/tema.html")]
 	public class TripleExponentialMovingAverage : LengthIndicator<decimal>
 	{
-		// http://www2.wealth-lab.com/WL5Wiki/GetFile.aspx?File=%2fTEMA.cs&Provider=ScrewTurn.Wiki.FilesStorageProvider
-
 		private readonly ExponentialMovingAverage _ema1;
 		private readonly ExponentialMovingAverage _ema2;
 		private readonly ExponentialMovingAverage _ema3;
@@ -47,25 +50,17 @@ namespace StockSharp.Algo.Indicators
 			Length = 32;
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _ema1.IsFormed && _ema2.IsFormed && _ema3.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _ema1.IsFormed && _ema2.IsFormed && _ema3.IsFormed;
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_ema3.Length = _ema2.Length = _ema1.Length = Length;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var ema1Value = _ema1.Process(input);

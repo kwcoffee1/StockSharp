@@ -3,7 +3,6 @@ namespace StockSharp.Messages
 	using System;
 	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
-	using System.Xml.Serialization;
 
 	using StockSharp.Localization;
 
@@ -12,7 +11,7 @@ namespace StockSharp.Messages
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class UserRequestMessage : Message, ITransactionIdMessage
+	public class UserRequestMessage : BaseRequestMessage
 	{
 		/// <summary>
 		/// Login.
@@ -27,29 +26,13 @@ namespace StockSharp.Messages
 		public string Login { get; set; }
 
 		/// <summary>
-		/// The message is subscription.
+		/// Identifier.
 		/// </summary>
 		[DataMember]
-		public bool IsSubscribe { get; set; }
+		public long? Id { get; set; }
 
-		/// <summary>
-		/// Request identifier.
-		/// </summary>
-		[DataMember]
-		public long TransactionId { get; set; }
-
-		/// <summary>
-		/// ID of the original message <see cref="TransactionId"/> for which this message is a response.
-		/// </summary>
-		[DataMember]
-		public long OriginalTransactionId { get; set; }
-
-		/// <summary>
-		/// Subscribe or unsubscribe error info. To be set if the answer.
-		/// </summary>
-		[DataMember]
-		[XmlIgnore]
-		public Exception Error { get; set; }
+		/// <inheritdoc />
+		public override DataType DataType => DataType.Users;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="UserRequestMessage"/>.
@@ -75,13 +58,10 @@ namespace StockSharp.Messages
 		/// <returns>The object, to which copied information.</returns>
 		protected UserRequestMessage CopyTo(UserRequestMessage destination)
 		{
-			destination.Login = Login;
-			destination.IsSubscribe = IsSubscribe;
-			destination.TransactionId = TransactionId;
-			destination.OriginalTransactionId = OriginalTransactionId;
-			destination.Error = Error;
+			base.CopyTo(destination);
 
-			this.CopyExtensionInfo(destination);
+			destination.Login = Login;
+			destination.Id = Id;
 
 			return destination;
 		}
@@ -89,7 +69,7 @@ namespace StockSharp.Messages
 		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",Login={Login},IsSubscribe={IsSubscribe},TrId={TransactionId},Origin={OriginalTransactionId}";
+			return base.ToString() + $",User={Login}/{Id}";
 		}
 	}
 }

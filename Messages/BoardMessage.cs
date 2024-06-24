@@ -16,8 +16,11 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Messages
 {
 	using System;
+	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
 	using System.Xml.Serialization;
+
+	using Ecng.Serialization;
 
 	using StockSharp.Localization;
 
@@ -26,68 +29,52 @@ namespace StockSharp.Messages
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class BoardMessage : Message
+	public class BoardMessage : BaseSubscriptionIdMessage<BoardMessage>
 	{
 		/// <summary>
 		/// Exchange code, which owns the board. Maybe be the same <see cref="Code"/>.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.ExchangeInfoKey)]
-		[DescriptionLoc(LocalizedStrings.Str56Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ExchangeInfoKey,
+			Description = LocalizedStrings.BoardExchangeCodeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string ExchangeCode { get; set; }
 
 		/// <summary>
 		/// Board code.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.CodeKey)]
-		[DescriptionLoc(LocalizedStrings.BoardCodeKey, true)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CodeKey,
+			Description = LocalizedStrings.BoardCodeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string Code { get; set; }
-
-		/// <summary>
-		/// ID of the original message <see cref="BoardLookupMessage.TransactionId"/> for which this message is a response.
-		/// </summary>
-		[DataMember]
-		public long OriginalTransactionId { get; set; }
-
-		///// <summary>
-		///// Gets a value indicating whether the re-registration orders via <see cref="OrderReplaceMessage"/> as a single transaction.
-		///// </summary>
-		//[DataMember]
-		//[DisplayNameLoc(LocalizedStrings.ReregisteringKey)]
-		//[DescriptionLoc(LocalizedStrings.Str60Key)]
-		//[MainCategory]
-		//public bool IsSupportAtomicReRegister { get; set; }
-
-		///// <summary>
-		///// Are market type orders <see cref="OrderTypes.Market"/> supported.
-		///// </summary>
-		//[DataMember]
-		//[DisplayNameLoc(LocalizedStrings.MarketOrdersKey)]
-		//[DescriptionLoc(LocalizedStrings.MarketOrdersSupportedKey)]
-		//[MainCategory]
-		//public bool IsSupportMarketOrders { get; set; }
 
 		/// <summary>
 		/// Securities expiration times.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.ExpiryDateKey)]
-		[DescriptionLoc(LocalizedStrings.Str64Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ExpiryDateKey,
+			Description = LocalizedStrings.SecExpirationTimeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public TimeSpan ExpiryTime { get; set; }
 
-		private WorkingTime _workingTime = new WorkingTime();
+		private WorkingTime _workingTime = new() { IsEnabled = true };
 
 		/// <summary>
 		/// Board working hours.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.WorkingTimeKey)]
-		[DescriptionLoc(LocalizedStrings.WorkingHoursKey)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.WorkingTimeKey,
+			Description = LocalizedStrings.WorkingHoursKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public WorkingTime WorkingTime
 		{
 			get => _workingTime;
@@ -110,10 +97,13 @@ namespace StockSharp.Messages
 		/// Information about the time zone where the exchange is located.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.TimeZoneKey)]
-		[DescriptionLoc(LocalizedStrings.Str68Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TimeZoneKey,
+			Description = LocalizedStrings.BoardTimeZoneKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		[XmlIgnore]
+		//[Ecng.Serialization.TimeZoneInfo]
 		public TimeZoneInfo TimeZone
 		{
 			get => _timeZone;
@@ -129,6 +119,9 @@ namespace StockSharp.Messages
 			}
 		}
 
+		/// <inheritdoc />
+		public override DataType DataType => DataType.Board;
+
 		/// <summary>
 		/// Initializes a new instance of the <see cref="BoardMessage"/>.
 		/// </summary>
@@ -137,23 +130,16 @@ namespace StockSharp.Messages
 		{
 		}
 
-		/// <summary>
-		/// Create a copy of <see cref="BoardMessage"/>.
-		/// </summary>
-		/// <returns>Copy.</returns>
-		public override Message Clone()
+		/// <inheritdoc />
+		public override void CopyTo(BoardMessage destination)
 		{
-			return new BoardMessage
-			{
-				Code = Code,
-				ExchangeCode = ExchangeCode,
-				ExpiryTime = ExpiryTime,
-				//IsSupportAtomicReRegister = IsSupportAtomicReRegister,
-				//IsSupportMarketOrders = IsSupportMarketOrders,
-				WorkingTime = WorkingTime.Clone(),
-				TimeZone = TimeZone,
-				OriginalTransactionId = OriginalTransactionId,
-			};
+			base.CopyTo(destination);
+
+			destination.Code = Code;
+			destination.ExchangeCode = ExchangeCode;
+			destination.ExpiryTime = ExpiryTime;
+			destination.WorkingTime = WorkingTime.Clone();
+			destination.TimeZone = TimeZone;
 		}
 
 		/// <inheritdoc />

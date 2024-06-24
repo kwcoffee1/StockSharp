@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,15 +15,24 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
+	using StockSharp.Messages;
 
 	/// <summary>
 	/// Peak.
 	/// </summary>
-	[DisplayName("Peak")]
-	[DescriptionLoc(LocalizedStrings.Str816Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/peak.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.PeakKey,
+		Description = LocalizedStrings.PeakKey)]
+	[Doc("topics/api/indicators/list_of_indicators/peak.html")]
 	public sealed class Peak : ZigZagEquis
 	{
 		/// <summary>
@@ -31,14 +40,10 @@ namespace StockSharp.Algo.Indicators
 		/// </summary>
 		public Peak()
 		{
-			ByPrice = c => c.HighPrice;
+			PriceField = Level1Fields.HighPrice;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var value = base.OnProcess(input);
@@ -55,7 +60,7 @@ namespace StockSharp.Algo.Indicators
 				if (input.IsFinal)
 					IsFormed = !lastValue.IsEmpty;
 
-				return IsFormed ? new ShiftedIndicatorValue(this, lastValue.Shift + 1, lastValue.Value) : lastValue;
+				return IsFormed ? new ShiftedIndicatorValue(this, lastValue.Value, lastValue.Shift + 1) : lastValue;
 			}
 
 			IsFormed = false;

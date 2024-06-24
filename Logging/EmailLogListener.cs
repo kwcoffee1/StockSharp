@@ -28,7 +28,7 @@ namespace StockSharp.Logging
 	/// </summary>
 	public class EmailLogListener : LogListener
 	{
-		private readonly BlockingQueue<Tuple<string, string>> _queue = new BlockingQueue<Tuple<string, string>>();
+		private readonly BlockingQueue<Tuple<string, string>> _queue = new();
 
 		private bool _isThreadStarted;
 
@@ -42,12 +42,12 @@ namespace StockSharp.Logging
 		/// <summary>
 		/// The address, on whose behalf the message will be sent.
 		/// </summary>
-		public string From { get; set; }
+		public virtual string From { get; set; }
 
 		/// <summary>
 		/// The address to which the message will be sent to.
 		/// </summary>
-		public string To { get; set; }
+		public virtual string To { get; set; }
 
 		/// <summary>
 		/// To create the email client.
@@ -118,19 +118,13 @@ namespace StockSharp.Logging
 			}
 		}
 
-		/// <summary>
-		/// To record a message.
-		/// </summary>
-		/// <param name="message">A debug message.</param>
+		/// <inheritdoc />
 		protected override void OnWriteMessage(LogMessage message)
 		{
 			EnqueueMessage(message);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Settings storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -139,10 +133,7 @@ namespace StockSharp.Logging
 			To = storage.GetValue<string>(nameof(To));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Settings storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);

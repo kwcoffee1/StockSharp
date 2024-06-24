@@ -23,9 +23,9 @@ namespace StockSharp.Algo.Derivatives
 
 	using Ecng.Collections;
 	using Ecng.Common;
+	using Ecng.MathLight;
 
-	using MathNet.Numerics.Distributions;
-
+	using StockSharp.Algo.Storages;
 	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
 	using StockSharp.Localization;
@@ -35,14 +35,13 @@ namespace StockSharp.Algo.Derivatives
 	/// </summary>
 	public static class DerivativesHelper
 	{
-		private static readonly Regex _futureNameRegex = new Regex(@"(?<code>[A-Z,a-z]+)-(?<expiryMonth>[0-9]{1,2})\.(?<expiryYear>[0-9]{1,2})", RegexOptions.Compiled);
-		private static readonly Regex _optionNameRegex = new Regex(@"(?<code>\w+-[0-9]{1,2}\.[0-9]{1,2})(?<isMargin>[M_])(?<expiryDate>[0-9]{6,6})(?<optionType>[CP])(?<region>\w)\s(?<strike>\d*\.*\d*)", RegexOptions.Compiled);
-		private static readonly Regex _optionCodeRegex = new Regex(@"(?<code>[A-Z,a-z]+)(?<strike>\d*\.*\d*)(?<optionType>[BA])(?<expiryMonth>[A-X]{1})(?<expiryYear>[0-9]{1})", RegexOptions.Compiled);
+		private static readonly Regex _futureNameRegex = new(@"(?<code>[A-Z,a-z]+)-(?<expiryMonth>[0-9]{1,2})\.(?<expiryYear>[0-9]{1,2})", RegexOptions.Compiled);
+		private static readonly Regex _optionNameRegex = new(@"(?<code>\w+-[0-9]{1,2}\.[0-9]{1,2})(?<isMargin>[M_])(?<expiryDate>[0-9]{6,6})(?<optionType>[CP])(?<region>\w)\s(?<strike>\d*\.*\d*)", RegexOptions.Compiled);
+		private static readonly Regex _optionCodeRegex = new(@"(?<code>[A-Z,a-z]+)(?<strike>\d*\.*\d*)(?<optionType>[BA])(?<expiryMonth>[A-X]{1})(?<expiryYear>[0-9]{1})", RegexOptions.Compiled);
 
-		private static readonly SynchronizedPairSet<int, char> _futureMonthCodes = new SynchronizedPairSet<int, char>();
-		private static readonly SynchronizedPairSet<int, char> _optionCallMonthCodes = new SynchronizedPairSet<int, char>();
-		private static readonly SynchronizedPairSet<int, char> _optionPutMonthCodes = new SynchronizedPairSet<int, char>();
-		private static readonly Normal _normalDistribution = new Normal();
+		private static readonly SynchronizedPairSet<int, char> _futureMonthCodes = new();
+		private static readonly SynchronizedPairSet<int, char> _optionCallMonthCodes = new();
+		private static readonly SynchronizedPairSet<int, char> _optionPutMonthCodes = new();
 
 		static DerivativesHelper()
 		{
@@ -87,7 +86,7 @@ namespace StockSharp.Algo.Derivatives
 			_optionPutMonthCodes.Add(12, 'X');
 		}
 
-		private static readonly SynchronizedDictionary<Security, Security> _underlyingSecurities = new SynchronizedDictionary<Security, Security>();
+		private static readonly SynchronizedDictionary<Security, Security> _underlyingSecurities = new();
 
 		/// <summary>
 		/// To get the underlying asset by the derivative.
@@ -112,7 +111,7 @@ namespace StockSharp.Algo.Derivatives
 					var underlyingSecurity = provider.LookupById(key.UnderlyingSecurityId);
 
 					if (underlyingSecurity == null)
-						throw new InvalidOperationException(LocalizedStrings.Str704Params.Put(key.UnderlyingSecurityId));
+						throw new InvalidOperationException(LocalizedStrings.SecurityNoFound.Put(key.UnderlyingSecurityId));
 
 					return underlyingSecurity;
 				});
@@ -203,7 +202,7 @@ namespace StockSharp.Algo.Derivatives
 			var asset = provider.LookupById(derivative.UnderlyingSecurityId);
 
 			if (asset == null)
-				throw new ArgumentException(LocalizedStrings.Str705Params.Put(derivative));
+				throw new ArgumentException(LocalizedStrings.UnderlyingAssentNotFound.Put(derivative));
 
 			return asset;
 		}
@@ -242,7 +241,7 @@ namespace StockSharp.Algo.Derivatives
 				.FirstOrDefault();
 
 			if (oppositeOption == null)
-				throw new ArgumentException(LocalizedStrings.Str706Params.Put(option.Id), nameof(option));
+				throw new ArgumentException(LocalizedStrings.OppositeOptionNotFound.Put(option.Id), nameof(option));
 
 			return oppositeOption;
 		}
@@ -301,7 +300,7 @@ namespace StockSharp.Algo.Derivatives
 				.FirstOrDefault();
 
 			if (option == null)
-				throw new ArgumentException(LocalizedStrings.Str707Params.Put(future.Id), nameof(future));
+				throw new ArgumentException(LocalizedStrings.OptionNotFound.Put(future.Id), nameof(future));
 
 			return option;
 		}
@@ -356,7 +355,7 @@ namespace StockSharp.Algo.Derivatives
 				.FirstOrDefault();
 
 			if (group == null)
-				throw new InvalidOperationException(LocalizedStrings.Str708);
+				throw new InvalidOperationException(LocalizedStrings.CannotCalcStrikeStep);
 
 			var orderedStrikes = group.OrderBy(s => s.Strike).Take(2).ToArray();
 			return orderedStrikes[1].Strike.Value - orderedStrikes[0].Strike.Value;
@@ -519,15 +518,24 @@ namespace StockSharp.Algo.Derivatives
 			return (decimal)(price - intrinsic);
 		}
 
-		internal static DateTimeOffset GetExpirationTime(this Security security)
+		internal static DateTimeOffset GetExpirationTime(this Security security, IExchangeInfoProvider provider)
 		{
+			if (security == null)
+				throw new ArgumentNullException(nameof(security));
+
+			if (provider == null)
+				throw new ArgumentNullException(nameof(provider));
+
 			if (security.ExpiryDate == null)
-				throw new ArgumentException(LocalizedStrings.Str709Params.Put(security.Id), nameof(security));
+				throw new ArgumentException(LocalizedStrings.NoExpirationDate.Put(security.Id), nameof(security));
 
 			var expDate = security.ExpiryDate.Value;
 
 			if (expDate.TimeOfDay == TimeSpan.Zero)
-				expDate += security.CheckExchangeBoard().ExpiryTime;
+			{
+				var board = provider.GetOrCreateBoard(security.ToSecurityId().BoardCode);
+				expDate += board.ExpiryTime;
+			}
 
 			return expDate;
 		}
@@ -536,11 +544,12 @@ namespace StockSharp.Algo.Derivatives
 		/// To check whether the instrument has finished the action.
 		/// </summary>
 		/// <param name="security">Security.</param>
+		/// <param name="exchangeInfoProvider">Exchanges and trading boards provider.</param>
 		/// <param name="currentTime">The current time.</param>
 		/// <returns><see langword="true" /> if the instrument has finished its action.</returns>
-		public static bool IsExpired(this Security security, DateTimeOffset currentTime)
+		public static bool IsExpired(this Security security, IExchangeInfoProvider exchangeInfoProvider, DateTimeOffset currentTime)
 		{
-			return security.GetExpirationTime() <= currentTime;
+			return security.GetExpirationTime(exchangeInfoProvider) <= currentTime;
 		}
 
 		/// <summary>
@@ -629,16 +638,17 @@ namespace StockSharp.Algo.Derivatives
 		/// <param name="depth">The order book quotes of which will be changed to volatility quotes.</param>
 		/// <param name="securityProvider">The provider of information about instruments.</param>
 		/// <param name="dataProvider">The market data provider.</param>
+		/// <param name="exchangeInfoProvider">Exchanges and trading boards provider.</param>
 		/// <param name="currentTime">The current time.</param>
 		/// <param name="riskFree">The risk free interest rate.</param>
 		/// <param name="dividend">The dividend amount on shares.</param>
 		/// <returns>The order book volatility.</returns>
-		public static MarketDepth ImpliedVolatility(this MarketDepth depth, ISecurityProvider securityProvider, IMarketDataProvider dataProvider, DateTimeOffset currentTime, decimal riskFree = 0, decimal dividend = 0)
+		public static QuoteChangeMessage ImpliedVolatility(this IOrderBookMessage depth, ISecurityProvider securityProvider, IMarketDataProvider dataProvider, IExchangeInfoProvider exchangeInfoProvider, DateTimeOffset currentTime, decimal riskFree = 0, decimal dividend = 0)
 		{
 			if (depth == null)
 				throw new ArgumentNullException(nameof(depth));
 
-			return depth.ImpliedVolatility(new BlackScholes(depth.Security, securityProvider, dataProvider) { RiskFree = riskFree, Dividend = dividend }, currentTime);
+			return depth.ImpliedVolatility(new BlackScholes(securityProvider.LookupById(depth.SecurityId), securityProvider, dataProvider, exchangeInfoProvider) { RiskFree = riskFree, Dividend = dividend }, currentTime);
 		}
 
 		/// <summary>
@@ -648,7 +658,7 @@ namespace StockSharp.Algo.Derivatives
 		/// <param name="model">The model for calculating Greeks values by the Black-Scholes formula.</param>
 		/// <param name="currentTime">The current time.</param>
 		/// <returns>The order book volatility.</returns>
-		public static MarketDepth ImpliedVolatility(this MarketDepth depth, BlackScholes model, DateTimeOffset currentTime)
+		public static QuoteChangeMessage ImpliedVolatility(this IOrderBookMessage depth, IBlackScholes model, DateTimeOffset currentTime)
 		{
 			if (depth == null)
 				throw new ArgumentNullException(nameof(depth));
@@ -656,14 +666,19 @@ namespace StockSharp.Algo.Derivatives
 			if (model == null)
 				throw new ArgumentNullException(nameof(model));
 
-			Quote Convert(Quote quote)
+			QuoteChange Convert(QuoteChange quote)
 			{
-				quote = quote.Clone();
 				quote.Price = model.ImpliedVolatility(currentTime, quote.Price) ?? 0;
 				return quote;
 			}
 
-			return new MarketDepth(depth.Security).Update(depth.Bids.Select(Convert), depth.Asks.Select(Convert), true, depth.LastChangeTime);
+			return new()
+			{
+				ServerTime = depth.ServerTime,
+				SecurityId = depth.SecurityId,
+				Bids = depth.Bids.Select(Convert).ToArray(),
+				Asks = depth.Asks.Select(Convert).ToArray(),
+			};
 		}
 
 		/// <summary>
@@ -690,7 +705,6 @@ namespace StockSharp.Algo.Derivatives
 
 			if (retVal <= TimeSpan.Zero)
 				return null;
-				//throw new InvalidOperationException(LocalizedStrings.Str710Params.Put(expirationTime, currentTime));
 
 			return (double)retVal.Ticks / timeLine.Ticks;
 		}
@@ -727,7 +741,7 @@ namespace StockSharp.Algo.Derivatives
 		public static double D1(decimal assetPrice, decimal strike, decimal riskFree, decimal dividend, decimal deviation, double timeToExp)
 		{
 			if (deviation < 0)
-				throw new ArgumentOutOfRangeException(nameof(deviation), deviation, LocalizedStrings.Str711);
+				throw new ArgumentOutOfRangeException(nameof(deviation), deviation, LocalizedStrings.InvalidValue);
 
 			return ((double)(assetPrice / strike).Log() +
 				(double)(riskFree - dividend + deviation * deviation / 2.0m) * timeToExp) / ((double)deviation * timeToExp.Sqrt());
@@ -884,6 +898,9 @@ namespace StockSharp.Algo.Derivatives
 			var high = 2m;
 			var low = 0m;
 
+			const int maxIter = 10000;
+			var currIter = 0;
+
 			while ((high - low) > min)
 			{
 				deviation = (high + low) / 2;
@@ -892,14 +909,33 @@ namespace StockSharp.Algo.Derivatives
 					high = deviation;
 				else
 					low = deviation;
+
+				if (++currIter > maxIter)
+					throw new InvalidOperationException("Too much iterations.");
 			}
 
 			return ((high + low) / 2) * 100;
 		}
 
 		private static double NormalDistr(double x)
+			=> Normal.CumulativeDistribution(x);
+
+		internal static void CheckOption(this Security option)
 		{
-			return _normalDistribution.CumulativeDistribution(x);
+			if (option == null)
+				throw new ArgumentNullException(nameof(option));
+
+			if (option.Type != SecurityTypes.Option)
+				throw new ArgumentException(LocalizedStrings.WrongSecType.Put(option.Type), nameof(option));
+
+			if (option.OptionType == null)
+				throw new ArgumentException(LocalizedStrings.OrderTypeMissed.Put(option), nameof(option));
+
+			if (option.ExpiryDate == null)
+				throw new ArgumentException(LocalizedStrings.NoExpirationDate.Put(option), nameof(option));
+
+			if (option.UnderlyingSecurityId == null)
+				throw new ArgumentException(LocalizedStrings.NoAssetInfo.Put(option), nameof(option));
 		}
 	}
 }

@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,16 +15,23 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
-	using System.Linq;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Exponential Moving Average.
 	/// </summary>
-	[DisplayName("EMA")]
-	[DescriptionLoc(LocalizedStrings.Str785Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/ema.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.EMAKey,
+		Description = LocalizedStrings.ExponentialMovingAverageKey)]
+	[Doc("topics/api/indicators/list_of_indicators/ema.html")]
 	public class ExponentialMovingAverage : LengthIndicator<decimal>
 	{
 		private decimal _prevFinalValue;
@@ -36,11 +43,10 @@ namespace StockSharp.Algo.Indicators
 		public ExponentialMovingAverage()
 		{
 			Length = 32;
+			Buffer.Operator = new DecimalOperator();
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -48,11 +54,7 @@ namespace StockSharp.Algo.Indicators
 			_prevFinalValue = 0;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
@@ -64,15 +66,15 @@ namespace StockSharp.Algo.Indicators
 				// или "недоделанную" sma c пропущенным первым значением из буфера + промежуточное значение
 				if (input.IsFinal)
 				{
-					Buffer.Add(newValue);
+					Buffer.AddEx(newValue);
 
-					_prevFinalValue = Buffer.Sum() / Length;
+					_prevFinalValue = Buffer.Sum / Length;
 
 					return new DecimalIndicatorValue(this, _prevFinalValue);
 				}
 				else
 				{
-					return new DecimalIndicatorValue(this, (Buffer.Skip(1).Sum() + newValue) / Length);
+					return new DecimalIndicatorValue(this, (Buffer.SumNoFirst + newValue) / Length);
 				}
 			}
 			else

@@ -5,14 +5,14 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 
 	using Ecng.Common;
 	using Ecng.Interop;
-	using Ecng.Serialization;
 
 	using StockSharp.Messages;
+	using Key = System.Tuple<Messages.SecurityId, string, string>;
 
 	/// <summary>
 	/// Implementation of <see cref="ISnapshotSerializer{TKey,TMessage}"/> in binary format for <see cref="PositionChangeMessage"/>.
 	/// </summary>
-	public class PositionBinarySnapshotSerializer : ISnapshotSerializer<SecurityId, PositionChangeMessage>
+	public class PositionBinarySnapshotSerializer : ISnapshotSerializer<Key, PositionChangeMessage>
 	{
 		[StructLayout(LayoutKind.Sequential, Pack = 1, CharSet = CharSet.Unicode)]
 		private struct PositionSnapshot
@@ -26,26 +26,60 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			public long LastChangeServerTime;
 			public long LastChangeLocalTime;
 
-			public decimal? BeginValue;
-			public decimal? CurrentValue;
-			public decimal? BlockedValue;
-			public decimal? CurrentPrice;
-			public decimal? AveragePrice;
-			public decimal? UnrealizedPnL;
-			public decimal? RealizedPnL;
-			public decimal? VariationMargin;
+			public BlittableDecimal? BeginValue;
+			public BlittableDecimal? CurrentValue;
+			public BlittableDecimal? BlockedValue;
+			public BlittableDecimal? CurrentPrice;
+			public BlittableDecimal? AveragePrice;
+			public BlittableDecimal? UnrealizedPnL;
+			public BlittableDecimal? RealizedPnL;
+			public BlittableDecimal? VariationMargin;
 			public short? Currency;
-			public decimal? Leverage;
-			public decimal? Commission;
-			public decimal? CurrentValueInLots;
+			public BlittableDecimal? Leverage;
+			public BlittableDecimal? Commission;
+			public BlittableDecimal? CurrentValueInLots;
 			public byte? State;
+			public long? ExpirationDate;
+			public BlittableDecimal? CommissionTaker;
+			public BlittableDecimal? CommissionMaker;
+			public BlittableDecimal? SettlementPrice;
+			public int? BuyOrdersCount;
+			public int? SellOrdersCount;
+			public BlittableDecimal? BuyOrdersMargin;
+			public BlittableDecimal? SellOrdersMargin;
+			public BlittableDecimal? OrdersMargin;
+			public int? OrdersCount;
+			public int? TradesCount;
+
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
+			public string DepoName;
+
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
+			public string BoardCode;
+
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
+			public string ClientCode;
+
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
+			public string Description;
+
+			public int? LimitType;
+
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
+			public string StrategyId;
+
+			public int? Side;
+
+			public SnapshotDataType? BuildFrom;
+
+			public BlittableDecimal? LiquidationPrice;
 		}
 
-		Version ISnapshotSerializer<SecurityId, PositionChangeMessage>.Version { get; } = SnapshotVersions.V20;
+		Version ISnapshotSerializer<Key, PositionChangeMessage>.Version { get; } = SnapshotVersions.V24;
 
-		string ISnapshotSerializer<SecurityId, PositionChangeMessage>.Name => "Positions";
+		string ISnapshotSerializer<Key, PositionChangeMessage>.Name => "Positions";
 
-		byte[] ISnapshotSerializer<SecurityId, PositionChangeMessage>.Serialize(Version version, PositionChangeMessage message)
+		byte[] ISnapshotSerializer<Key, PositionChangeMessage>.Serialize(Version version, PositionChangeMessage message)
 		{
 			if (version == null)
 				throw new ArgumentNullException(nameof(version));
@@ -59,6 +93,14 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 				Portfolio = message.PortfolioName.VerifySize(Sizes.S100),
 				LastChangeServerTime = message.ServerTime.To<long>(),
 				LastChangeLocalTime = message.LocalTime.To<long>(),
+				DepoName = message.DepoName,
+				LimitType = (int?)message.LimitType,
+				BoardCode = message.BoardCode,
+				ClientCode = message.ClientCode,
+				Description = message.Description,
+				StrategyId = message.StrategyId,
+				Side = (int?)message.Side,
+				BuildFrom = message.BuildFrom == null ? default(SnapshotDataType?) : (SnapshotDataType)message.BuildFrom,
 			};
 
 			foreach (var change in message.Changes)
@@ -66,65 +108,102 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 				switch (change.Key)
 				{
 					case PositionChangeTypes.BeginValue:
-						snapshot.BeginValue = (decimal)change.Value;
+						snapshot.BeginValue = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.CurrentValue:
-						snapshot.CurrentValue = (decimal)change.Value;
+						snapshot.CurrentValue = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.BlockedValue:
-						snapshot.BlockedValue = (decimal)change.Value;
+						snapshot.BlockedValue = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.CurrentPrice:
-						snapshot.CurrentPrice = (decimal)change.Value;
+						snapshot.CurrentPrice = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.AveragePrice:
-						snapshot.AveragePrice = (decimal)change.Value;
+						snapshot.AveragePrice = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.UnrealizedPnL:
-						snapshot.UnrealizedPnL = (decimal)change.Value;
+						snapshot.UnrealizedPnL = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.RealizedPnL:
-						snapshot.RealizedPnL = (decimal)change.Value;
+						snapshot.RealizedPnL = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.VariationMargin:
-						snapshot.VariationMargin = (decimal)change.Value;
+						snapshot.VariationMargin = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.Currency:
 						snapshot.Currency = (short)(CurrencyTypes)change.Value;
 						break;
 					case PositionChangeTypes.Leverage:
-						snapshot.Leverage = (decimal)change.Value;
+						snapshot.Leverage = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.Commission:
-						snapshot.Commission = (decimal)change.Value;
+						snapshot.Commission = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.CurrentValueInLots:
-						snapshot.CurrentValueInLots = (decimal)change.Value;
+						snapshot.CurrentValueInLots = (BlittableDecimal)(decimal)change.Value;
 						break;
 					case PositionChangeTypes.State:
 						snapshot.State = (byte)(PortfolioStates)change.Value;
 						break;
+					case PositionChangeTypes.ExpirationDate:
+						snapshot.ExpirationDate = change.Value.To<long?>();
+						break;
+					case PositionChangeTypes.CommissionTaker:
+						snapshot.CommissionTaker = (BlittableDecimal)(decimal)change.Value;
+						break;
+					case PositionChangeTypes.CommissionMaker:
+						snapshot.CommissionMaker = (BlittableDecimal)(decimal)change.Value;
+						break;
+					case PositionChangeTypes.SettlementPrice:
+						snapshot.SettlementPrice = (BlittableDecimal)(decimal)change.Value;
+						break;
+					case PositionChangeTypes.BuyOrdersCount:
+						snapshot.BuyOrdersCount = (int)change.Value;
+						break;
+					case PositionChangeTypes.SellOrdersCount:
+						snapshot.SellOrdersCount = (int)change.Value;
+						break;
+					case PositionChangeTypes.BuyOrdersMargin:
+						snapshot.BuyOrdersMargin = (BlittableDecimal)(decimal)change.Value;
+						break;
+					case PositionChangeTypes.SellOrdersMargin:
+						snapshot.SellOrdersMargin = (BlittableDecimal)(decimal)change.Value;
+						break;
+					case PositionChangeTypes.OrdersMargin:
+						snapshot.OrdersMargin = (BlittableDecimal)(decimal)change.Value;
+						break;
+					case PositionChangeTypes.OrdersCount:
+						snapshot.OrdersCount = (int)change.Value;
+						break;
+					case PositionChangeTypes.TradesCount:
+						snapshot.TradesCount = (int)change.Value;
+						break;
+					case PositionChangeTypes.LiquidationPrice:
+						snapshot.LiquidationPrice = (BlittableDecimal)(decimal)change.Value;
+						break;
+					default:
+						throw new InvalidOperationException(change.Key.To<string>());
 				}
 			}
 
 			var buffer = new byte[typeof(PositionSnapshot).SizeOf()];
 
 			var ptr = snapshot.StructToPtr();
-			Marshal.Copy(ptr, buffer, 0, buffer.Length);
-			Marshal.FreeHGlobal(ptr);
+			ptr.CopyTo(buffer);
+			ptr.FreeHGlobal();
 
 			return buffer;
 		}
 
-		PositionChangeMessage ISnapshotSerializer<SecurityId, PositionChangeMessage>.Deserialize(Version version, byte[] buffer)
+		PositionChangeMessage ISnapshotSerializer<Key, PositionChangeMessage>.Deserialize(Version version, byte[] buffer)
 		{
 			if (version == null)
 				throw new ArgumentNullException(nameof(version));
 
-			// Pin the managed memory while, copy it out the data, then unpin it
-			using (var handle = new GCHandle<byte[]>(buffer, GCHandleType.Pinned))
+			using (var handle = new GCHandle<byte[]>(buffer))
 			{
-				var snapshot = handle.Value.AddrOfPinnedObject().ToStruct<PositionSnapshot>();
+				var snapshot = handle.CreatePointer().ToStruct<PositionSnapshot>(true);
 
 				var posMsg = new PositionChangeMessage
 				{
@@ -132,6 +211,14 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 					PortfolioName = snapshot.Portfolio,
 					ServerTime = snapshot.LastChangeServerTime.To<DateTimeOffset>(),
 					LocalTime = snapshot.LastChangeLocalTime.To<DateTimeOffset>(),
+					ClientCode = snapshot.ClientCode,
+					DepoName = snapshot.DepoName,
+					BoardCode = snapshot.BoardCode,
+					LimitType = (TPlusLimits?)snapshot.LimitType,
+					Description = snapshot.Description,
+					StrategyId = snapshot.StrategyId,
+					Side = (Sides?)snapshot.Side,
+					BuildFrom = snapshot.BuildFrom,
 				}
 				.TryAdd(PositionChangeTypes.BeginValue, snapshot.BeginValue, true)
 				.TryAdd(PositionChangeTypes.CurrentValue, snapshot.CurrentValue, true)
@@ -144,39 +231,66 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 				.TryAdd(PositionChangeTypes.Leverage, snapshot.Leverage, true)
 				.TryAdd(PositionChangeTypes.Commission, snapshot.Commission, true)
 				.TryAdd(PositionChangeTypes.CurrentValueInLots, snapshot.CurrentValueInLots, true)
+				.TryAdd(PositionChangeTypes.CommissionTaker, snapshot.CommissionTaker, true)
+				.TryAdd(PositionChangeTypes.CommissionMaker, snapshot.CommissionMaker, true)
+				.TryAdd(PositionChangeTypes.SettlementPrice, snapshot.SettlementPrice, true)
+				.TryAdd(PositionChangeTypes.ExpirationDate, snapshot.ExpirationDate.To<DateTimeOffset?>())
+				.TryAdd(PositionChangeTypes.BuyOrdersCount, snapshot.BuyOrdersCount, true)
+				.TryAdd(PositionChangeTypes.SellOrdersCount, snapshot.SellOrdersCount, true)
+				.TryAdd(PositionChangeTypes.BuyOrdersMargin, snapshot.BuyOrdersMargin, true)
+				.TryAdd(PositionChangeTypes.SellOrdersMargin, snapshot.SellOrdersMargin, true)
+				.TryAdd(PositionChangeTypes.OrdersMargin, snapshot.OrdersMargin, true)
+				.TryAdd(PositionChangeTypes.OrdersCount, snapshot.OrdersCount, true)
+				.TryAdd(PositionChangeTypes.TradesCount, snapshot.TradesCount, true)
+				.TryAdd(PositionChangeTypes.State, snapshot.State?.ToEnum<PortfolioStates>())
+				.TryAdd(PositionChangeTypes.LiquidationPrice, snapshot.LiquidationPrice, true)
 				;
 
 				if (snapshot.Currency != null)
 					posMsg.Add(PositionChangeTypes.Currency, (CurrencyTypes)snapshot.Currency.Value);
 
-				if (snapshot.State != null)
-					posMsg.Add(PositionChangeTypes.State, (PortfolioStates)snapshot.State.Value);
-
 				return posMsg;
 			}
 		}
 
-		SecurityId ISnapshotSerializer<SecurityId, PositionChangeMessage>.GetKey(PositionChangeMessage message)
-		{
-			return message.SecurityId;
-		}
+		Key ISnapshotSerializer<Key, PositionChangeMessage>.GetKey(PositionChangeMessage message)
+			=> Tuple.Create(message.SecurityId, message.PortfolioName, message.StrategyId ?? string.Empty);
 
-		PositionChangeMessage ISnapshotSerializer<SecurityId, PositionChangeMessage>.CreateCopy(PositionChangeMessage message)
-		{
-			return (PositionChangeMessage)message.Clone();
-		}
-
-		void ISnapshotSerializer<SecurityId, PositionChangeMessage>.Update(PositionChangeMessage message, PositionChangeMessage changes)
+		void ISnapshotSerializer<Key, PositionChangeMessage>.Update(PositionChangeMessage message, PositionChangeMessage changes)
 		{
 			foreach (var pair in changes.Changes)
 			{
 				message.Changes[pair.Key] = pair.Value;
 			}
 
+			if (changes.LimitType != null)
+				message.LimitType = changes.LimitType;
+
+			if (!changes.DepoName.IsEmpty())
+				message.DepoName = changes.DepoName;
+
+			if (!changes.ClientCode.IsEmpty())
+				message.ClientCode = changes.ClientCode;
+
+			if (!changes.BoardCode.IsEmpty())
+				message.BoardCode = changes.BoardCode;
+
+			if (!changes.Description.IsEmpty())
+				message.Description = changes.Description;
+
+			if (!changes.StrategyId.IsEmpty())
+				message.StrategyId = changes.StrategyId;
+
+			if (changes.Side != null)
+				message.Side = changes.Side;
+
+			if (changes.BuildFrom != default)
+				message.BuildFrom = changes.BuildFrom;
+
 			message.LocalTime = changes.LocalTime;
 			message.ServerTime = changes.ServerTime;
 		}
 
-		DataType ISnapshotSerializer<SecurityId, PositionChangeMessage>.DataType => DataType.PositionChanges;
+		DataType ISnapshotSerializer<Key, PositionChangeMessage>.DataType => DataType.PositionChanges;
 	}
 }

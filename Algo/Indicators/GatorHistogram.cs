@@ -17,6 +17,7 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 
+	using Ecng.Common;
 	using Ecng.Serialization;
 
 	/// <summary>
@@ -27,6 +28,9 @@ namespace StockSharp.Algo.Indicators
 		private readonly AlligatorLine _line1;
 		private readonly AlligatorLine _line2;
 		private readonly bool _isNegative;
+
+		/// <inheritdoc />
+		public override int NumValuesToInitialize => Math.Max(_line1.NumValuesToInitialize, _line2.NumValuesToInitialize);
 
 		internal GatorHistogram(AlligatorLine line1, AlligatorLine line2, bool isNegative)
 		{
@@ -56,25 +60,25 @@ namespace StockSharp.Algo.Indicators
 		/// <returns>Copy.</returns>
 		public override IIndicator Clone()
 		{
-			return new GatorHistogram((AlligatorLine)_line1.Clone(), (AlligatorLine)_line2.Clone(), _isNegative) { Name = Name };
+			return new GatorHistogram(_line1.TypedClone(), _line2.TypedClone(), _isNegative) { Name = Name };
 		}
 
 		/// <inheritdoc />
-		public override void Load(SettingsStorage settings)
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
+			base.Load(storage);
 
-			_line1.LoadNotNull(settings, "line1");
-			_line2.LoadNotNull(settings, "line2");
+			_line1.LoadIfNotNull(storage, "line1");
+			_line2.LoadIfNotNull(storage, "line2");
 		}
 
 		/// <inheritdoc />
-		public override void Save(SettingsStorage settings)
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
+			base.Save(storage);
 
-			settings.SetValue("line1", _line1.Save());
-			settings.SetValue("line2", _line2.Save());
+			storage.SetValue("line1", _line1.Save());
+			storage.SetValue("line2", _line2.Save());
 		}
 	}
 }

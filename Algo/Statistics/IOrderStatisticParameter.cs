@@ -16,17 +16,18 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Statistics
 {
 	using System;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Common;
-	using Ecng.Serialization;
 
 	using StockSharp.BusinessEntities;
 	using StockSharp.Localization;
+	using StockSharp.Messages;
 
 	/// <summary>
 	/// The interface, describing statistic parameter, calculated based on orders.
 	/// </summary>
-	public interface IOrderStatisticParameter
+	public interface IOrderStatisticParameter : IStatisticParameter
 	{
 		/// <summary>
 		/// To add to the parameter an information on new order.
@@ -63,7 +64,9 @@ namespace StockSharp.Algo.Statistics
 		/// <summary>
 		/// Initialize <see cref="BaseOrderStatisticParameter{T}"/>.
 		/// </summary>
-		protected BaseOrderStatisticParameter()
+		/// <param name="type"><see cref="IStatisticParameter.Type"/></param>
+		protected BaseOrderStatisticParameter(StatisticParameterTypes type)
+			: base(type)
 		{
 		}
 
@@ -91,15 +94,27 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// The maximal value of the order registration delay.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str947Key)]
-	[DescriptionLoc(LocalizedStrings.Str948Key)]
-	[CategoryLoc(LocalizedStrings.OrdersKey)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MaxLatencyRegistrationKey,
+		Description = LocalizedStrings.MaxLatencyRegistrationDescKey,
+		GroupName = LocalizedStrings.OrdersKey,
+		Order = 300
+	)]
 	public class MaxLatencyRegistrationParameter : BaseOrderStatisticParameter<TimeSpan>
 	{
+		/// <summary>
+		/// Initialize <see cref="MaxLatencyRegistrationParameter"/>.
+		/// </summary>
+		public MaxLatencyRegistrationParameter()
+			: base(StatisticParameterTypes.MaxLatencyRegistration)
+		{
+		}
+
 		/// <inheritdoc />
 		public override void New(Order order)
 		{
-			if (order.LatencyRegistration != null)
+			if (order.LatencyRegistration is not null)
 				Value = Value.Max(order.LatencyRegistration.Value);
 		}
 	}
@@ -107,15 +122,27 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// The maximal value of the order cancelling delay.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str950Key)]
-	[DescriptionLoc(LocalizedStrings.Str951Key)]
-	[CategoryLoc(LocalizedStrings.OrdersKey)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MaxLatencyCancellationKey,
+		Description = LocalizedStrings.MaxLatencyCancellationDescKey,
+		GroupName = LocalizedStrings.OrdersKey,
+		Order = 301
+	)]
 	public class MaxLatencyCancellationParameter : BaseOrderStatisticParameter<TimeSpan>
 	{
+		/// <summary>
+		/// Initialize <see cref="MaxLatencyCancellationParameter"/>.
+		/// </summary>
+		public MaxLatencyCancellationParameter()
+			: base(StatisticParameterTypes.MaxLatencyCancellation)
+		{
+		}
+
 		/// <inheritdoc />
 		public override void Changed(Order order)
 		{
-			if (order.LatencyCancellation != null)
+			if (order.LatencyCancellation is not null)
 				Value = Value.Max(order.LatencyCancellation.Value);
 		}
 	}
@@ -123,109 +150,132 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// The minimal value of order registration delay.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str952Key)]
-	[DescriptionLoc(LocalizedStrings.Str953Key)]
-	[CategoryLoc(LocalizedStrings.OrdersKey)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MinLatencyRegistrationKey,
+		Description = LocalizedStrings.MinLatencyRegistrationDescKey,
+		GroupName = LocalizedStrings.OrdersKey,
+		Order = 302
+	)]
 	public class MinLatencyRegistrationParameter : BaseOrderStatisticParameter<TimeSpan>
 	{
-		private bool _initialized;
-
-		/// <inheritdoc />
-		public override void Reset()
+		/// <summary>
+		/// Initialize <see cref="MinLatencyRegistrationParameter"/>.
+		/// </summary>
+		public MinLatencyRegistrationParameter()
+			: base(StatisticParameterTypes.MinLatencyRegistration)
 		{
-			_initialized = false;
-			base.Reset();
 		}
 
 		/// <inheritdoc />
 		public override void New(Order order)
 		{
-			if (order.LatencyRegistration == null)
-				return;
-
-			if (!_initialized)
-			{
-				Value = order.LatencyRegistration.Value;
-				_initialized = true;
-			}
-			else
+			if (order.LatencyRegistration is not null)
 				Value = Value.Min(order.LatencyRegistration.Value);
-		}
-
-		/// <inheritdoc />
-		public override void Load(SettingsStorage storage)
-		{
-			_initialized = storage.GetValue<bool>("Initialized");
-			base.Load(storage);
-		}
-
-		/// <inheritdoc />
-		public override void Save(SettingsStorage storage)
-		{
-			storage.SetValue("Initialized", _initialized);
-			base.Save(storage);
 		}
 	}
 
 	/// <summary>
 	/// The minimal value of order cancelling delay.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str954Key)]
-	[DescriptionLoc(LocalizedStrings.Str955Key)]
-	[CategoryLoc(LocalizedStrings.OrdersKey)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MinLatencyCancellationKey,
+		Description = LocalizedStrings.MinLatencyCancellationDescKey,
+		GroupName = LocalizedStrings.OrdersKey,
+		Order = 303
+	)]
 	public class MinLatencyCancellationParameter : BaseOrderStatisticParameter<TimeSpan>
 	{
-		private bool _initialized;
-
-		/// <inheritdoc />
-		public override void Reset()
+		/// <summary>
+		/// Initialize <see cref="MinLatencyCancellationParameter"/>.
+		/// </summary>
+		public MinLatencyCancellationParameter()
+			: base(StatisticParameterTypes.MinLatencyCancellation)
 		{
-			_initialized = false;
-			base.Reset();
 		}
 
 		/// <inheritdoc />
 		public override void Changed(Order order)
 		{
-			if (order.LatencyCancellation == null)
-				return;
-
-			if (!_initialized)
-			{
-				Value = order.LatencyCancellation.Value;
-				_initialized = true;
-			}
-			else
+			if (order.LatencyCancellation is not null)
 				Value = Value.Min(order.LatencyCancellation.Value);
-		}
-
-		/// <inheritdoc />
-		public override void Load(SettingsStorage storage)
-		{
-			_initialized = storage.GetValue<bool>("Initialized");
-			base.Load(storage);
-		}
-
-		/// <inheritdoc />
-		public override void Save(SettingsStorage storage)
-		{
-			storage.SetValue("Initialized", _initialized);
-			base.Save(storage);
 		}
 	}
 
 	/// <summary>
 	/// Total number of orders.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str956Key)]
-	[DescriptionLoc(LocalizedStrings.Str957Key)]
-	[CategoryLoc(LocalizedStrings.OrdersKey)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TotalOrdersKey,
+		Description = LocalizedStrings.OrdersCountKey,
+		GroupName = LocalizedStrings.OrdersKey,
+		Order = 304
+	)]
 	public class OrderCountParameter : BaseOrderStatisticParameter<int>
 	{
-		/// <inheritdoc />
-		public override void New(Order order)
+		/// <summary>
+		/// Initialize <see cref="OrderCountParameter"/>.
+		/// </summary>
+		public OrderCountParameter()
+			: base(StatisticParameterTypes.OrderCount)
 		{
-			Value++;
+		}
+
+		/// <inheritdoc />
+		public override void New(Order order) => Value++;
+	}
+
+	/// <summary>
+	/// Total number of error orders.
+	/// </summary>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ErrorsKey,
+		Description = LocalizedStrings.ErrorOrdersOnlyKey,
+		GroupName = LocalizedStrings.OrdersKey,
+		Order = 305
+	)]
+	public class OrderErrorCountParameter : BaseOrderStatisticParameter<int>
+	{
+		/// <summary>
+		/// Initialize <see cref="OrderErrorCountParameter"/>.
+		/// </summary>
+		public OrderErrorCountParameter()
+			: base(StatisticParameterTypes.OrderErrorCount)
+		{
+		}
+
+		/// <inheritdoc />
+		public override void RegisterFailed(OrderFail fail) => Value++;
+	}
+
+	/// <summary>
+	/// Total number of insufficient fund error orders.
+	/// </summary>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.IFEKey,
+		Description = LocalizedStrings.InsufficientFundErrorKey,
+		GroupName = LocalizedStrings.OrdersKey,
+		Order = 306
+	)]
+	public class OrderInsufficientFundErrorCountParameter : BaseOrderStatisticParameter<int>
+	{
+		/// <summary>
+		/// Initialize <see cref="OrderInsufficientFundErrorCountParameter"/>.
+		/// </summary>
+		public OrderInsufficientFundErrorCountParameter()
+			: base(StatisticParameterTypes.OrderInsufficientFundErrorCount)
+		{
+		}
+
+		/// <inheritdoc />
+		public override void RegisterFailed(OrderFail fail)
+		{
+			if (fail.Error is InsufficientFundException)
+				Value++;
 		}
 	}
 }

@@ -19,12 +19,14 @@ namespace StockSharp.Algo.Candles
 	using System.Collections.Generic;
 	using System.Linq;
 	using System.Runtime.Serialization;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Common;
 
 	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
 	using StockSharp.Localization;
+	using DataType = Messages.DataType;
 
 	/// <summary>
 	/// Base candle class (contains main parameters).
@@ -37,167 +39,255 @@ namespace StockSharp.Algo.Candles
 	[KnownType(typeof(TimeFrameCandle))]
 	[KnownType(typeof(PnFCandle))]
 	[KnownType(typeof(RenkoCandle))]
-	public abstract class Candle : Cloneable<Candle>
+	[Obsolete("Use ICandleMessage.")]
+	public abstract class Candle : Cloneable<Candle>, ICandleMessage
 	{
+		/// <summary>
+		/// Initializes a new instance of the <see cref="Candle"/>.
+		/// </summary>
+		protected Candle()
+		{
+		}
+
+		private SecurityId? _securityId;
+
+		SecurityId ISecurityIdMessage.SecurityId
+		{
+			get => _securityId ??= Security?.Id.ToSecurityId() ?? default;
+			set => throw new NotSupportedException();
+		}
+
+		DateTimeOffset IServerTimeMessage.ServerTime
+		{
+			get => OpenTime;
+			set => OpenTime = value;
+		}
+
+		DateTimeOffset ILocalTimeMessage.LocalTime => OpenTime;
+
 		/// <summary>
 		/// Security.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.SecurityKey)]
-		[DescriptionLoc(LocalizedStrings.SecurityKey, true)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SecurityKey,
+			Description = LocalizedStrings.SecurityKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public Security Security { get; set; }
 
-		/// <summary>
-		/// Open time.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.CandleOpenTimeKey)]
-		[DescriptionLoc(LocalizedStrings.CandleOpenTimeKey, true)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CandleOpenTimeKey,
+			Description = LocalizedStrings.CandleOpenTimeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public DateTimeOffset OpenTime { get; set; }
 
-		/// <summary>
-		/// Close time.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.CandleCloseTimeKey)]
-		[DescriptionLoc(LocalizedStrings.CandleCloseTimeKey, true)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CandleCloseTimeKey,
+			Description = LocalizedStrings.CandleCloseTimeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public DateTimeOffset CloseTime { get; set; }
 
-		/// <summary>
-		/// High time.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.CandleHighTimeKey)]
-		[DescriptionLoc(LocalizedStrings.CandleHighTimeKey, true)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CandleHighTimeKey,
+			Description = LocalizedStrings.CandleHighTimeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public DateTimeOffset HighTime { get; set; }
 
-		/// <summary>
-		/// Low time.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.CandleLowTimeKey)]
-		[DescriptionLoc(LocalizedStrings.CandleLowTimeKey, true)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CandleLowTimeKey,
+			Description = LocalizedStrings.CandleLowTimeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public DateTimeOffset LowTime { get; set; }
 
-		/// <summary>
-		/// Opening price.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str79Key)]
-		[DescriptionLoc(LocalizedStrings.Str80Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.OpenPriceKey,
+			Description = LocalizedStrings.CandleOpenPriceKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal OpenPrice { get; set; }
 
-		/// <summary>
-		/// Closing price.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.ClosingPriceKey)]
-		[DescriptionLoc(LocalizedStrings.Str86Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ClosingPriceKey,
+			Description = LocalizedStrings.ClosePriceOfCandleKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal ClosePrice { get; set; }
 
-		/// <summary>
-		/// Highest price.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.HighestPriceKey)]
-		[DescriptionLoc(LocalizedStrings.Str82Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.HighestPriceKey,
+			Description = LocalizedStrings.HighPriceOfCandleKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal HighPrice { get; set; }
 
-		/// <summary>
-		/// Lowest price.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.LowestPriceKey)]
-		[DescriptionLoc(LocalizedStrings.Str84Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LowestPriceKey,
+			Description = LocalizedStrings.LowPriceOfCandleKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal LowPrice { get; set; }
 
-		/// <summary>
-		/// Total price size.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.TotalPriceKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TotalPriceKey,
+			Description = LocalizedStrings.TotalPriceKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal TotalPrice { get; set; }
 
-		/// <summary>
-		/// Volume at open.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.OpenVolumeKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.OpenVolumeKey,
+			Description = LocalizedStrings.OpenVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal? OpenVolume { get; set; }
 
-		/// <summary>
-		/// Volume at close.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.CloseVolumeKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CloseVolumeKey,
+			Description = LocalizedStrings.CloseVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal? CloseVolume { get; set; }
 
-		/// <summary>
-		/// Volume at high.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.HighVolumeKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.HighVolumeKey,
+			Description = LocalizedStrings.HighVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal? HighVolume { get; set; }
 
-		/// <summary>
-		/// Volume at low.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.LowVolumeKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LowVolumeKey,
+			Description = LocalizedStrings.LowVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal? LowVolume { get; set; }
 
-		/// <summary>
-		/// Total volume.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.VolumeKey)]
-		[DescriptionLoc(LocalizedStrings.TotalCandleVolumeKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.VolumeKey,
+			Description = LocalizedStrings.TotalCandleVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal TotalVolume { get; set; }
 
-		/// <summary>
-		/// Relative volume.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.RelativeVolumeKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.RelativeVolumeKey,
+			Description = LocalizedStrings.RelativeVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal? RelativeVolume { get; set; }
 
-		/// <summary>
-		/// Candle arg.
-		/// </summary>
+		/// <inheritdoc />
+		[DataMember]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.BuyVolumeKey,
+			Description = LocalizedStrings.BuyVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public decimal? BuyVolume { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SellVolumeKey,
+			Description = LocalizedStrings.SellVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public decimal? SellVolume { get; set; }
+
+		/// <inheritdoc />
 		public abstract object Arg { get; set; }
 
-		/// <summary>
-		/// Number of ticks.
-		/// </summary>
+		private DataType _dataType;
+
+		/// <inheritdoc />
+		public DataType DataType
+		{
+			get
+			{
+				if (_dataType is null)
+				{
+					var arg = Arg;
+
+					if (!arg.IsNull(true))
+						_dataType = DataType.Create(GetType().ToCandleMessageType(), arg);
+				}
+
+				return _dataType;
+			}
+			set => throw new NotSupportedException();
+		}
+
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.TicksKey)]
-		[DescriptionLoc(LocalizedStrings.TickCountKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TicksKey,
+			Description = LocalizedStrings.TickCountKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public int? TotalTicks { get; set; }
 
-		/// <summary>
-		/// Number of up trending ticks.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.TickUpKey)]
-		[DescriptionLoc(LocalizedStrings.TickUpCountKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TickUpKey,
+			Description = LocalizedStrings.TickUpCountKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public int? UpTicks { get; set; }
 
-		/// <summary>
-		/// Number of down trending ticks.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.TickDownKey)]
-		[DescriptionLoc(LocalizedStrings.TickDownCountKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TickDownKey,
+			Description = LocalizedStrings.TickDownCountKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public int? DownTicks { get; set; }
 
 		private CandleStates _state;
 
-		/// <summary>
-		/// State.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.StateKey)]
-		[DescriptionLoc(LocalizedStrings.CandleStateKey, true)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.StateKey,
+			Description = LocalizedStrings.CandleStateKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public CandleStates State
 		{
 			get => _state;
@@ -208,25 +298,36 @@ namespace StockSharp.Algo.Candles
 			}
 		}
 
-		/// <summary>
-		/// Price levels.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.PriceLevelsKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PriceLevelsKey,
+			Description = LocalizedStrings.PriceLevelsKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public IEnumerable<CandlePriceLevel> PriceLevels { get; set; }
 
-		/// <summary>
-		/// Open interest.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.OIKey)]
-		[DescriptionLoc(LocalizedStrings.OpenInterestKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.OIKey,
+			Description = LocalizedStrings.OpenInterestDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal? OpenInterest { get; set; }
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
+		[DataMember]
+		public long SeqNum { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		public DataType BuildFrom { get; set; }
+
+		/// <inheritdoc />
+		public abstract Type ArgType { get; }
+
+		/// <inheritdoc />
 		public override string ToString()
 		{
 			return "{0:HH:mm:ss} {1} (O:{2}, H:{3}, L:{4}, C:{5}, V:{6})"
@@ -236,7 +337,7 @@ namespace StockSharp.Algo.Candles
 		private void ThrowIfFinished()
 		{
 			if (State == CandleStates.Finished)
-				throw new InvalidOperationException(LocalizedStrings.Str649);
+				throw new InvalidOperationException(LocalizedStrings.CannotChangeFormedCandle);
 		}
 
 		/// <summary>
@@ -271,11 +372,61 @@ namespace StockSharp.Algo.Candles
 			destination.TotalPrice = TotalPrice;
 			destination.TotalTicks = TotalTicks;
 			destination.TotalVolume = TotalVolume;
+			destination.BuyVolume = BuyVolume;
+			destination.SellVolume = SellVolume;
 			//destination.VolumeProfileInfo = VolumeProfileInfo;
-			destination.PriceLevels = PriceLevels?.Select(l => l.Clone()).ToArray();
+			destination.PriceLevels = PriceLevels?./*Select(l => l.Clone()).*/ToArray();
+			destination.SeqNum = SeqNum;
+			destination.BuildFrom = BuildFrom;
 
 			return destination;
 		}
+	}
+
+	/// <summary>
+	/// Base candle class (contains main parameters).
+	/// </summary>
+	/// <typeparam name="TArg"></typeparam>
+	[Obsolete("Use ICandleMessage.")]
+	public abstract class Candle<TArg> : Candle
+	{
+		/// <summary>
+		/// Initializes a new instance of the <see cref="Candle"/>.
+		/// </summary>
+		protected Candle()
+		{
+		}
+
+		private TArg _typedArg;
+
+		/// <summary>
+		/// Arg.
+		/// </summary>
+		public TArg TypedArg
+		{
+			get => _typedArg;
+			set
+			{
+				Validate(value);
+				_typedArg = value;
+			}
+		}
+
+		/// <summary>
+		/// Validate value.
+		/// </summary>
+		/// <param name="value">Value.</param>
+		protected virtual void Validate(TArg value) { }
+
+		/// <inheritdoc />
+		public override object Arg
+		{
+			get => TypedArg;
+			set => TypedArg = (TArg)value;
+		}
+
+		/// <inheritdoc />
+		public override Type ArgType => typeof(TArg);
 	}
 
 	/// <summary>
@@ -283,22 +434,25 @@ namespace StockSharp.Algo.Candles
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	[DisplayNameLoc(LocalizedStrings.TimeFrameCandleKey)]
-	public class TimeFrameCandle : Candle
+	[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.TimeFrameCandleKey)]
+	[Obsolete("Use TimeFrameCandleMessage.")]
+	public class TimeFrameCandle : Candle<TimeSpan>, ITimeFrameCandleMessage
 	{
 		/// <summary>
 		/// Time-frame.
 		/// </summary>
 		[DataMember]
-		public TimeSpan TimeFrame { get; set; }
-
-		/// <summary>
-		/// Candle arg.
-		/// </summary>
-		public override object Arg
+		public TimeSpan TimeFrame
 		{
-			get => TimeFrame;
-			set => TimeFrame = (TimeSpan)value;
+			get => TypedArg;
+			set => TypedArg = value;
+		}
+
+		/// <inheritdoc />
+		protected override void Validate(TimeSpan value)
+		{
+			if (value <= TimeSpan.Zero)
+				throw new ArgumentOutOfRangeException(nameof(value));
 		}
 
 		/// <summary>
@@ -316,22 +470,25 @@ namespace StockSharp.Algo.Candles
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	[DisplayNameLoc(LocalizedStrings.TickCandleKey)]
-	public class TickCandle : Candle
+	[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.TickCandleKey)]
+	[Obsolete("Use TickCandleMessage.")]
+	public class TickCandle : Candle<int>, ITickCandleMessage
 	{
 		/// <summary>
 		/// Maximum tick count.
 		/// </summary>
 		[DataMember]
-		public int MaxTradeCount { get; set; }
-
-		/// <summary>
-		/// Candle arg.
-		/// </summary>
-		public override object Arg
+		public int MaxTradeCount
 		{
-			get => MaxTradeCount;
-			set => MaxTradeCount = (int)value;
+			get => TypedArg;
+			set => TypedArg = value;
+		}
+
+		/// <inheritdoc />
+		protected override void Validate(int value)
+		{
+			if (value <= 0)
+				throw new ArgumentOutOfRangeException(nameof(value));
 		}
 
 		/// <summary>
@@ -349,22 +506,25 @@ namespace StockSharp.Algo.Candles
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	[DisplayNameLoc(LocalizedStrings.VolumeCandleKey)]
-	public class VolumeCandle : Candle
+	[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.VolumeCandleKey)]
+	[Obsolete("Use VolumeCandleMessage.")]
+	public class VolumeCandle : Candle<decimal>, IVolumeCandleMessage
 	{
 		/// <summary>
 		/// Maximum volume.
 		/// </summary>
 		[DataMember]
-		public decimal Volume { get; set; }
-
-		/// <summary>
-		/// Candle arg.
-		/// </summary>
-		public override object Arg
+		public decimal Volume
 		{
-			get => Volume;
-			set => Volume = (decimal)value;
+			get => TypedArg;
+			set => TypedArg = value;
+		}
+
+		/// <inheritdoc />
+		protected override void Validate(decimal value)
+		{
+			if (value <= 0)
+				throw new ArgumentOutOfRangeException(nameof(value));
 		}
 
 		/// <summary>
@@ -382,22 +542,25 @@ namespace StockSharp.Algo.Candles
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	[DisplayNameLoc(LocalizedStrings.RangeCandleKey)]
-	public class RangeCandle : Candle
+	[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.RangeCandleKey)]
+	[Obsolete("Use RangeCandleMessage.")]
+	public class RangeCandle : Candle<Unit>, IRangeCandleMessage
 	{
 		/// <summary>
 		/// Range of price.
 		/// </summary>
 		[DataMember]
-		public Unit PriceRange { get; set; }
-
-		/// <summary>
-		/// Candle arg.
-		/// </summary>
-		public override object Arg
+		public Unit PriceRange
 		{
-			get => PriceRange;
-			set => PriceRange = (Unit)value;
+			get => TypedArg;
+			set => TypedArg = value;
+		}
+
+		/// <inheritdoc />
+		protected override void Validate(Unit value)
+		{
+			if (value is null)
+				throw new ArgumentNullException(nameof(value));
 		}
 
 		/// <summary>
@@ -415,28 +578,25 @@ namespace StockSharp.Algo.Candles
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	[DisplayNameLoc(LocalizedStrings.PnFCandleKey)]
-	public class PnFCandle : Candle
+	[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.PnFCandleKey)]
+	[Obsolete("Use PnFCandleMessage.")]
+	public class PnFCandle : Candle<PnFArg>, IPnFCandleMessage
 	{
 		/// <summary>
 		/// Value of arguments.
 		/// </summary>
 		[DataMember]
-		public PnFArg PnFArg { get; set; }
-
-		///// <summary>
-		///// Type of symbols.
-		///// </summary>
-		//[DataMember]
-		//public PnFTypes Type { get; set; }
-
-		/// <summary>
-		/// Candle arg.
-		/// </summary>
-		public override object Arg
+		public PnFArg PnFArg
 		{
-			get => PnFArg;
-			set => PnFArg = (PnFArg)value;
+			get => TypedArg;
+			set => TypedArg = value;
+		}
+
+		/// <inheritdoc />
+		protected override void Validate(PnFArg value)
+		{
+			if (value is null)
+				throw new ArgumentNullException(nameof(value));
 		}
 
 		/// <summary>
@@ -454,22 +614,25 @@ namespace StockSharp.Algo.Candles
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	[DisplayNameLoc(LocalizedStrings.RenkoCandleKey)]
-	public class RenkoCandle : Candle
+	[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.RenkoCandleKey)]
+	[Obsolete("Use RenkoCandleMessage.")]
+	public class RenkoCandle : Candle<Unit>, IRenkoCandleMessage
 	{
 		/// <summary>
 		/// Possible price change range.
 		/// </summary>
 		[DataMember]
-		public Unit BoxSize { get; set; }
-
-		/// <summary>
-		/// Candle arg.
-		/// </summary>
-		public override object Arg
+		public Unit BoxSize
 		{
-			get => BoxSize;
-			set => BoxSize = (Unit)value;
+			get => TypedArg;
+			set => TypedArg = value;
+		}
+
+		/// <inheritdoc />
+		protected override void Validate(Unit value)
+		{
+			if (value is null)
+				throw new ArgumentNullException(nameof(value));
 		}
 
 		/// <summary>
@@ -479,6 +642,25 @@ namespace StockSharp.Algo.Candles
 		public override Candle Clone()
 		{
 			return CopyTo(new RenkoCandle());
+		}
+	}
+
+	/// <summary>
+	/// Heikin ashi candle.
+	/// </summary>
+	[DataContract]
+	[Serializable]
+	[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.HeikinAshiKey)]
+	[Obsolete("Use HeikinAshiCandleMessage.")]
+	public class HeikinAshiCandle : TimeFrameCandle, IHeikinAshiCandleMessage
+	{
+		/// <summary>
+		/// Create a copy of <see cref="HeikinAshiCandle"/>.
+		/// </summary>
+		/// <returns>Copy.</returns>
+		public override Candle Clone()
+		{
+			return CopyTo(new HeikinAshiCandle());
 		}
 	}
 }

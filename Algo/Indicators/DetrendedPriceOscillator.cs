@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,18 +15,28 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Price oscillator without trend.
 	/// </summary>
-	[DisplayName("DPO")]
-	[DescriptionLoc(LocalizedStrings.Str761Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/dpo.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.DPOKey,
+		Description = LocalizedStrings.DetrendedPriceOscillatorKey)]
+	[Doc("topics/api/indicators/list_of_indicators/dpo.html")]
 	public class DetrendedPriceOscillator : LengthIndicator<decimal>
 	{
 		private readonly SimpleMovingAverage _sma;
+		private int _lookBack;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="DetrendedPriceOscillator"/>.
@@ -37,39 +47,29 @@ namespace StockSharp.Algo.Indicators
 			Length = 3;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
-			_sma.Length = (Length - 2) * 2;
+			_sma.Length = Length;
+			_lookBack = Length / 2 + 1;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// The indicator is formed.
-		/// </summary>
-		public override bool IsFormed => Buffer.Count >= Length;
-
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var smaValue = _sma.Process(input);
 
 			if (_sma.IsFormed && input.IsFinal)
-				Buffer.Add(smaValue.GetValue<decimal>());
+				Buffer.PushBack(smaValue.GetValue<decimal>());
 
 			if (!IsFormed)
 				return new DecimalIndicatorValue(this);
 
-			if (Buffer.Count > Length)
-				Buffer.RemoveAt(0);
-
-			return new DecimalIndicatorValue(this, input.GetValue<decimal>() - Buffer[0]);
+			return new DecimalIndicatorValue(this, input.GetValue<decimal>() - Buffer[Math.Max(0, Buffer.Count - 1 - _lookBack)]);
 		}
 	}
 }

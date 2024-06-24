@@ -17,18 +17,24 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.Collections.Generic;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Linq;
 
-	using Ecng.Collections;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Standard deviation.
 	/// </summary>
-	[DisplayName("StdDev")]
-	[DescriptionLoc(LocalizedStrings.Str820Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/standard_deviation.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.StdDevKey,
+		Description = LocalizedStrings.StandardDeviationKey)]
+	[Doc("topics/api/indicators/list_of_indicators/standard_deviation.html")]
 	public class StandardDeviation : LengthIndicator<decimal>
 	{
 		private readonly SimpleMovingAverage _sma;
@@ -42,25 +48,20 @@ namespace StockSharp.Algo.Indicators
 			Length = 10;
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _sma.IsFormed;
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _sma.IsFormed;
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_sma.Length = Length;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
@@ -68,19 +69,10 @@ namespace StockSharp.Algo.Indicators
 
 			if (input.IsFinal)
 			{
-				Buffer.Add(newValue);
-
-				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
+				Buffer.AddEx(newValue);
 			}
 
-			var buff = Buffer;
-			if (!input.IsFinal)
-			{
-				buff = new List<decimal>();
-				buff.AddRange(Buffer.Skip(1));
-				buff.Add(newValue);
-			}
+			var buff = input.IsFinal ? Buffer : (IList<decimal>)Buffer.Skip(1).Append(newValue).ToArray();
 
 			//считаем значение отклонения в последней точке
 			var std = buff.Select(t1 => t1 - smaValue).Select(t => t * t).Sum();

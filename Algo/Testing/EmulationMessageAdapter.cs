@@ -13,128 +13,374 @@ Created: 2015, 11, 11, 2:32 PM
 Copyright 2010 by StockSharp, LLC
 *******************************************************************************************/
 #endregion S# License
+
 namespace StockSharp.Algo.Testing
 {
 	using System;
+    using System.Collections.Generic;
+    using System.Linq;
 
-	using Ecng.Common;
+    using Ecng.Common;
+	using Ecng.Collections;
+	using Ecng.Serialization;
 
-	using StockSharp.Messages;
+	using StockSharp.Algo.Positions;
+	using StockSharp.Algo.Strategies;
+    using StockSharp.BusinessEntities;
+    using StockSharp.Messages;
+	using StockSharp.Algo.Storages;
 
 	/// <summary>
-	/// The adapter, executing messages in <see cref="IMarketEmulator"/>.
+	/// The interface of the real time market data adapter.
 	/// </summary>
-	public class EmulationMessageAdapter : MessageAdapter
+	public interface IEmulationMessageAdapter : IMessageAdapterWrapper
 	{
-		/// <summary>
-		/// Initializes a new instance of the <see cref="EmulationMessageAdapter"/>.
-		/// </summary>
-		/// <param name="transactionIdGenerator">Transaction id generator.</param>
-		public EmulationMessageAdapter(IdGenerator transactionIdGenerator)
-			: this(new MarketEmulator(), transactionIdGenerator)
-		{
-		}
+	}
+
+	/// <summary>
+	/// Emulation message adapter.
+	/// </summary>
+	public class EmulationMessageAdapter : MessageAdapterWrapper, IEmulationMessageAdapter
+	{
+		private readonly SynchronizedSet<long> _subscriptionIds = new();
+		private readonly SynchronizedSet<long> _emuOrderIds = new();
+
+		private readonly IMessageAdapter _inAdapter;
+		private readonly bool _isEmulationOnly;
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="EmulationMessageAdapter"/>.
+		/// Initialize <see cref="EmulationMessageAdapter"/>.
 		/// </summary>
-		/// <param name="emulator">Paper trading.</param>
-		/// <param name="transactionIdGenerator">Transaction id generator.</param>
-		public EmulationMessageAdapter(IMarketEmulator emulator, IdGenerator transactionIdGenerator)
-			: base(transactionIdGenerator)
+		/// <param name="innerAdapter">Underlying adapter.</param>
+		/// <param name="inChannel">Incoming messages channel.</param>
+		/// <param name="isEmulationOnly">All messages do not contains real trading.</param>
+		/// <param name="securityProvider">The provider of information about instruments.</param>
+		/// <param name="portfolioProvider">The portfolio to be used to register orders. If value is not given, the portfolio with default name Simulator will be created.</param>
+		/// <param name="exchangeInfoProvider">Exchanges and trading boards provider.</param>
+		public EmulationMessageAdapter(IMessageAdapter innerAdapter, IMessageChannel inChannel, bool isEmulationOnly, ISecurityProvider securityProvider, IPortfolioProvider portfolioProvider, IExchangeInfoProvider exchangeInfoProvider)
+			: base(innerAdapter)
 		{
-			Emulator = emulator;
-
-			this.AddTransactionalSupport();
-			this.AddSupportedMessage(MessageTypes.Security);
-			this.AddSupportedMessage(MessageTypes.Board);
-			this.AddSupportedMessage(MessageTypes.Level1Change);
-			this.AddSupportedMessage(MessageTypes.PortfolioChange);
-			this.AddSupportedMessage(MessageTypes.PositionChange);
-			this.AddSupportedMessage(ExtendedMessageTypes.CommissionRule);
-			this.AddSupportedMessage(ExtendedMessageTypes.Clearing);
-			this.AddSupportedMessage(ExtendedMessageTypes.Generator);
-		}
-
-		private IMarketEmulator _emulator;
-
-		/// <summary>
-		/// Paper trading.
-		/// </summary>
-		public IMarketEmulator Emulator
-		{
-			get => _emulator;
-			set
+			Emulator = new MarketEmulator(securityProvider, portfolioProvider, exchangeInfoProvider, TransactionIdGenerator)
 			{
-				if (value == null)
-					throw new ArgumentNullException(nameof(value));
-
-				if (value == _emulator)
-					return;
-
-				if (_emulator != null)
+				Parent = this,
+				Settings =
 				{
-					_emulator.NewOutMessage -= SendOutMessage;
-					_emulator.Parent = null;
+					ConvertTime = true,
+					InitialOrderId = DateTime.Now.Ticks,
+					InitialTradeId = DateTime.Now.Ticks,
+				}
+			};
+
+			InChannel = inChannel;
+
+			_inAdapter = new SubscriptionOnlineMessageAdapter(Emulator);
+			_inAdapter = new PositionMessageAdapter(_inAdapter, new StrategyPositionManager(Emulator.IsPositionsEmulationRequired ?? true));
+			_inAdapter = new ChannelMessageAdapter(_inAdapter, inChannel, new PassThroughMessageChannel());
+			_inAdapter.NewOutMessage += RaiseNewOutMessage;
+
+			_isEmulationOnly = isEmulationOnly;
+		}
+
+		/// <inheritdoc />
+		public override void Dispose()
+		{
+			_inAdapter.NewOutMessage -= RaiseNewOutMessage;
+			base.Dispose();
+		}
+
+		/// <summary>
+		/// Emulator.
+		/// </summary>
+		public IMarketEmulator Emulator { get; }
+
+		/// <summary>
+		/// Settings of exchange emulator.
+		/// </summary>
+		public MarketEmulatorSettings Settings => Emulator.Settings;
+
+		/// <summary>
+		/// Incoming messages channel.
+		/// </summary>
+		public IMessageChannel InChannel { get; }
+
+		/// <inheritdoc />
+		public override IEnumerable<MessageTypes> SupportedInMessages => InnerAdapter.SupportedInMessages.Concat(Emulator.SupportedInMessages).Distinct().ToArray();
+
+		/// <inheritdoc />
+		public override bool? IsPositionsEmulationRequired => Emulator.IsPositionsEmulationRequired;
+
+		/// <inheritdoc />
+		public override bool IsSupportTransactionLog => Emulator.IsSupportTransactionLog;
+
+		private void SendToEmulator(Message message)
+		{
+			_inAdapter.SendInMessage(message);
+		}
+
+		/// <inheritdoc />
+		protected override bool OnSendInMessage(Message message)
+		{
+			message.Forced = true;
+
+			switch (message.Type)
+			{
+				case MessageTypes.OrderRegister:
+				{
+					var regMsg = (OrderRegisterMessage)message;
+					ProcessOrderMessage(regMsg.PortfolioName, regMsg);
+					return true;
+				}
+				case MessageTypes.OrderReplace:
+				case MessageTypes.OrderCancel:
+				{
+					ProcessOrderMessage(((OrderMessage)message).OriginalTransactionId, message);
+					return true;
 				}
 
-				_emulator = value;
-				_emulator.Parent = this;
-				_emulator.NewOutMessage += SendOutMessage;
+				case MessageTypes.OrderPairReplace:
+				{
+					var ordMsg = (OrderPairReplaceMessage)message;
+					ProcessOrderMessage(ordMsg.Message1.OriginalTransactionId, message);
+					return true;
+				}
+
+				case MessageTypes.OrderGroupCancel:
+				{
+					SendToEmulator(message);
+					return true;
+				}
+
+				case MessageTypes.Reset:
+				case MessageTypes.Connect:
+				case MessageTypes.Disconnect:
+				{
+					SendToEmulator(message);
+
+					if (message.Type == MessageTypes.Reset)
+					{
+						_subscriptionIds.Clear();
+						_emuOrderIds.Clear();
+					}
+
+					if (OwnInnerAdapter)
+						return base.OnSendInMessage(message);
+					else
+						return true;
+				}
+
+				case MessageTypes.PortfolioLookup:
+				case MessageTypes.Portfolio:
+				case MessageTypes.OrderStatus:
+				{
+					if (OwnInnerAdapter)
+						base.OnSendInMessage(message);
+
+					SendToEmulator(message);
+					return true;
+				}
+
+				case MessageTypes.SecurityLookup:
+				case MessageTypes.TimeFrameLookup:
+				case MessageTypes.BoardLookup:
+				case MessageTypes.MarketData:
+				{
+					// MarketEmulator works faster with order book increments
+					if (message is MarketDataMessage mdMsg && mdMsg.IsSubscribe)
+						mdMsg.DoNotBuildOrderBookIncrement = true;
+
+					_subscriptionIds.Add(((ISubscriptionMessage)message).TransactionId);
+
+					// sends to emu for init subscription ids
+					SendToEmulator(message);
+
+					return base.OnSendInMessage(message);
+				}
+
+				case MessageTypes.Level1Change:
+				case ExtendedMessageTypes.CommissionRule:
+				{
+					SendToEmulator(message);
+					return true;
+				}
+
+				default:
+				{
+					if (OwnInnerAdapter)
+						return base.OnSendInMessage(message);
+
+					return true;
+				}
 			}
 		}
 
-		private DateTimeOffset _currentTime;
-
 		/// <inheritdoc />
-		public override DateTimeOffset CurrentTime => _currentTime;
-
-		/// <summary>
-		/// The number of processed messages.
-		/// </summary>
-		public int ProcessedMessageCount { get; private set; }
-
-		/// <inheritdoc />
-		public override bool IsFullCandlesOnly => false;
-
-		/// <inheritdoc />
-		public override bool IsSupportSubscriptions => false;
-
-		/// <inheritdoc />
-		protected override void OnSendInMessage(Message message)
+		protected override void InnerAdapterNewOutMessage(Message message)
 		{
-			var localTime = message.LocalTime;
+			if (OwnInnerAdapter || !message.IsBack())
+				base.InnerAdapterNewOutMessage(message);
+		}
 
-			if (!localTime.IsDefault())
-				_currentTime = localTime;
+		/// <inheritdoc />
+		protected override void OnInnerAdapterNewOutMessage(Message message)
+		{
+			if (message.IsBack())
+			{
+				if (OwnInnerAdapter)
+					base.OnInnerAdapterNewOutMessage(message);
+
+				return;
+			}
 
 			switch (message.Type)
 			{
 				case MessageTypes.Connect:
-					
-					SendOutMessage(new ConnectMessage());
-					return;
-
+				case MessageTypes.Disconnect:
 				case MessageTypes.Reset:
-					ProcessedMessageCount = 0;
+					break;
+				case MessageTypes.SubscriptionResponse:
+				case MessageTypes.SubscriptionFinished:
+				case MessageTypes.SubscriptionOnline:
+				{
+					if (_subscriptionIds.Contains(((IOriginalTransactionIdMessage)message).OriginalTransactionId))
+						SendToEmulator(message);
 
-					if (TransactionIdGenerator is IncrementalIdGenerator incGen)
-						incGen.Current = Emulator.Settings.InitialTransactionId;
+					break;
+				}
+				//case MessageTypes.BoardState:
+				case MessageTypes.Portfolio:
+				case MessageTypes.PositionChange:
+				{
+					if (OwnInnerAdapter)
+						base.OnInnerAdapterNewOutMessage(message);
 
-					_currentTime = default(DateTimeOffset);
+					break;
+				}
+
+				case MessageTypes.Execution:
+				{
+					var execMsg = (ExecutionMessage)message;
+
+					if (execMsg.IsMarketData())
+						TrySendToEmulator((ISubscriptionIdMessage)message);
+					else
+					{
+						if (OwnInnerAdapter)
+							base.OnInnerAdapterNewOutMessage(message);
+					}
+
+					break;
+				}
+
+				case MessageTypes.Security:
+				case MessageTypes.Board:
+				{
+					if (OwnInnerAdapter)
+						base.OnInnerAdapterNewOutMessage(message);
+
+					SendToEmulator(message);
+					//TrySendToEmulator((ISubscriptionIdMessage)message);
+					break;
+				}
+
+				case MessageTypes.EmulationState:
+					SendToEmulator(message);
 					break;
 
-				case MessageTypes.Disconnect:
-					SendOutMessage(new DisconnectMessage());
-					return;
+				case MessageTypes.Time:
+				{
+					if (OwnInnerAdapter)
+					{
+						if (_isEmulationOnly)
+							SendToEmulator(message);
+						else
+							base.OnInnerAdapterNewOutMessage(message);
+					}
 
-				//case ExtendedMessageTypes.EmulationState:
-				//	//SendOutMessage(message.Clone());
-				//	return;
+					break;
+				}
+
+				default:
+				{
+					if (message is ISubscriptionIdMessage subscrMsg)
+						TrySendToEmulator(subscrMsg);
+					else
+					{
+						if (OwnInnerAdapter)
+							base.OnInnerAdapterNewOutMessage(message);
+					}
+
+					break;
+				}
 			}
-
-			ProcessedMessageCount++;
-			_emulator.SendInMessage(message);
 		}
+
+		private void TrySendToEmulator(ISubscriptionIdMessage message)
+		{
+			if (_isEmulationOnly)
+				SendToEmulator((Message)message);
+			else
+			{
+				foreach (var id in message.GetSubscriptionIds())
+				{
+					if (_subscriptionIds.Contains(id))
+					{
+						SendToEmulator((Message)message);
+						break;
+					}
+				}
+			}
+		}
+
+		private void ProcessOrderMessage(string portfolioName, OrderMessage message)
+		{
+			if (OwnInnerAdapter)
+			{
+				if (_isEmulationOnly || portfolioName.EqualsIgnoreCase(Extensions.SimulatorPortfolioName))
+				{
+					if (!_isEmulationOnly)
+						_emuOrderIds.Add(message.TransactionId);
+
+					SendToEmulator(message);
+				}
+				else
+					base.OnSendInMessage(message);
+			}
+			else
+			{
+				_emuOrderIds.Add(message.TransactionId);
+				SendToEmulator(message);
+			}
+		}
+
+		private void ProcessOrderMessage(long transId, Message message)
+		{
+			if (_isEmulationOnly || _emuOrderIds.Contains(transId))
+				SendToEmulator(message);
+			else
+				base.OnSendInMessage(message);
+		}
+
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
+		{
+			base.Save(storage);
+
+			storage.SetValue(nameof(MarketEmulator), Settings.Save());
+		}
+
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
+		{
+			base.Load(storage);
+
+			Settings.Load(storage, nameof(MarketEmulator));
+		}
+
+		/// <summary>
+		/// Create a copy of <see cref="EmulationMessageAdapter"/>.
+		/// </summary>
+		/// <returns>Copy.</returns>
+		public override IMessageChannel Clone()
+			=> new EmulationMessageAdapter(InnerAdapter.TypedClone(), InChannel, _isEmulationOnly, Emulator.SecurityProvider, Emulator.PortfolioProvider, Emulator.ExchangeInfoProvider);
 	}
 }

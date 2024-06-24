@@ -24,7 +24,7 @@ namespace StockSharp.Messages
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class ErrorMessage : Message
+	public class ErrorMessage : Message, IErrorMessage, IOriginalTransactionIdMessage
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ErrorMessage"/>.
@@ -34,17 +34,19 @@ namespace StockSharp.Messages
 		{
 		}
 
-		/// <summary>
-		/// Error info.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
 		[XmlIgnore]
 		public Exception Error { get; set; }
 
 		/// <inheritdoc />
+		[DataMember]
+		public long OriginalTransactionId { get; set; }
+
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",Error={Error.Message}";
+			return base.ToString() + $",Error={Error?.Message},OrigTrId={OriginalTransactionId}";
 		}
 
 		/// <summary>
@@ -53,11 +55,15 @@ namespace StockSharp.Messages
 		/// <returns>Copy.</returns>
 		public override Message Clone()
 		{
-			return new ErrorMessage
+			var clone = new ErrorMessage
 			{
 				Error = Error,
-				LocalTime = LocalTime,
+				OriginalTransactionId = OriginalTransactionId,
 			};
+
+			CopyTo(clone);
+
+			return clone;
 		}
 	}
 }

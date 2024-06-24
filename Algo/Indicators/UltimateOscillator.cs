@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -13,22 +13,29 @@ Created: 2015, 11, 11, 2:32 PM
 Copyright 2010 by StockSharp, LLC
 *******************************************************************************************/
 #endregion S# License
+
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.Linq;
+	using System.ComponentModel.DataAnnotations;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
+	using StockSharp.Messages;
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Last oscillator.
 	/// </summary>
 	/// <remarks>
-	/// http://www2.wealth-lab.com/WL5Wiki/UltimateOsc.ashx http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:ultimate_oscillator.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/uo.html
 	/// </remarks>
-	[DisplayName("UltimateOsc")]
-	[DescriptionLoc(LocalizedStrings.Str776Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.UltimateOscKey,
+		Description = LocalizedStrings.UltimateOscillatorKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/uo.html")]
 	public class UltimateOscillator : BaseIndicator
 	{
 		private const decimal _stoProcentov = 100m;
@@ -65,21 +72,22 @@ namespace StockSharp.Algo.Indicators
 			_period28TrSum = new Sum { Length = _period28 };
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _period7BpSum.IsFormed && _period14BpSum.IsFormed &&
-		                                 _period28BpSum.IsFormed && _period7TrSum.IsFormed &&
-		                                 _period14TrSum.IsFormed && _period28TrSum.IsFormed;
+		/// <inheritdoc />
+		public override int NumValuesToInitialize => new[] { _period7BpSum, _period14BpSum, _period28BpSum, _period7TrSum, _period14TrSum, _period28TrSum }.Select(i => i.NumValuesToInitialize).Sum();
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Percent;
+
+		/// <inheritdoc />
+		protected override bool CalcIsFormed()
+			=>	_period7BpSum.IsFormed && _period14BpSum.IsFormed &&
+		        _period28BpSum.IsFormed && _period7TrSum.IsFormed &&
+		        _period14TrSum.IsFormed && _period28TrSum.IsFormed;
+
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var candle = input.GetValue<ICandleMessage>();
 
 			if (_previouseClosePrice != null)
 			{

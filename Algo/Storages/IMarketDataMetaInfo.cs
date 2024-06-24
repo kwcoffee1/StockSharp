@@ -36,12 +36,12 @@ namespace StockSharp.Algo.Storages
 		int Count { get; set; }
 
 		/// <summary>
-		/// Value <see cref="Security.PriceStep"/> at day <see cref="IMarketDataMetaInfo.Date"/>.
+		/// Value <see cref="Security.PriceStep"/> at day <see cref="Date"/>.
 		/// </summary>
 		decimal PriceStep { get; set; }
 
 		/// <summary>
-		/// Value <see cref="Security.VolumeStep"/> at day <see cref="IMarketDataMetaInfo.Date"/>.
+		/// Value <see cref="Security.VolumeStep"/> at day <see cref="Date"/>.
 		/// </summary>
 		decimal VolumeStep { get; set; }
 
@@ -88,8 +88,8 @@ namespace StockSharp.Algo.Storages
 		public DateTime Date { get; }
 		public int Count { get; set; }
 
-		public decimal PriceStep { get; set; }
-		public decimal VolumeStep { get; set; }
+		public decimal PriceStep { get; set; } = 0.01m;
+		public decimal VolumeStep { get; set; } = 1m;
 
 		//public decimal FirstPriceStep { get; set; }
 		public decimal LastPriceStep { get; set; }
@@ -99,26 +99,13 @@ namespace StockSharp.Algo.Storages
 
 		public abstract object LastId { get; set; }
 
-		/// <summary>
-		/// To save meta-information parameters to stream.
-		/// </summary>
-		/// <param name="stream">Data stream.</param>
+		/// <inheritdoc />
 		public abstract void Write(Stream stream);
 
-		/// <summary>
-		/// To load meta-information parameters from the stream.
-		/// </summary>
-		/// <param name="stream">Data stream.</param>
+		/// <inheritdoc />
 		public abstract void Read(Stream stream);
 
-		/// <summary>
-		/// Is override all data.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual bool IsOverride => false;
-
-		//public static TMetaInfo CreateMetaInfo(DateTime date)
-		//{
-		//	return typeof(TMetaInfo).CreateInstance<TMetaInfo>(date);
-		//}
 	}
 }

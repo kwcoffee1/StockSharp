@@ -16,6 +16,7 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Messages
 {
 	using System;
+	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
 
 	using StockSharp.Localization;
@@ -31,18 +32,22 @@ namespace StockSharp.Messages
 		/// <see langword="true" />, if cancel only a stop orders, <see langword="false" /> - if regular orders, <see langword="null" /> - both.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str226Key)]
-		[DescriptionLoc(LocalizedStrings.Str227Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.StopOrdersKey,
+			Description = LocalizedStrings.StopOrdersDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public bool? IsStop { get; set; }
 
 		/// <summary>
 		/// Order side. If the value is <see langword="null" />, the direction does not use.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str128Key)]
-		[DescriptionLoc(LocalizedStrings.Str228Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.DirectionKey,
+			Description = LocalizedStrings.CancelOrdersSideKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public Sides? Side { get; set; }
 
 		/// <summary>
@@ -53,13 +58,10 @@ namespace StockSharp.Messages
 		{
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",IsStop={IsStop},Side={Side},SecType={SecurityType}";
+			return base.ToString() + $",IsStop={IsStop},Side={Side}";
 		}
 
 		/// <summary>
@@ -68,23 +70,23 @@ namespace StockSharp.Messages
 		/// <returns>Copy.</returns>
 		public override Message Clone()
 		{
-			var clone = new OrderGroupCancelMessage
-			{
-				LocalTime = LocalTime,
-				SecurityId = SecurityId,
-				IsStop = IsStop,
-				OrderType = OrderType,
-				PortfolioName = PortfolioName,
-				//SecurityType = SecurityType,
-				Side = Side,
-				TransactionId = TransactionId,
-				ClientCode = ClientCode,
-				BrokerCode = BrokerCode,
-			};
+			var clone = new OrderGroupCancelMessage();
 
 			CopyTo(clone);
 
 			return clone;
+		}
+
+		/// <summary>
+		/// Copy the message into the <paramref name="destination" />.
+		/// </summary>
+		/// <param name="destination">The object, to which copied information.</param>
+		public void CopyTo(OrderGroupCancelMessage destination)
+		{
+			base.CopyTo(destination);
+
+			destination.IsStop = IsStop;
+			destination.Side = Side;
 		}
 	}
 }

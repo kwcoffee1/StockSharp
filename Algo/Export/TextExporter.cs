@@ -24,7 +24,6 @@ namespace StockSharp.Algo.Export
 	using SmartFormat;
 	using SmartFormat.Core.Formatting;
 
-	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
 
 	/// <summary>
@@ -38,14 +37,13 @@ namespace StockSharp.Algo.Export
 		/// <summary>
 		/// Initializes a new instance of the <see cref="TextExporter"/>.
 		/// </summary>
-		/// <param name="security">Security.</param>
-		/// <param name="arg">The data parameter.</param>
+		/// <param name="dataType">Data type info.</param>
 		/// <param name="isCancelled">The processor, returning process interruption sign.</param>
 		/// <param name="fileName">The path to file.</param>
 		/// <param name="template">The string formatting template.</param>
 		/// <param name="header">Header at the first line. Do not add header while empty string.</param>
-		public TextExporter(Security security, object arg, Func<int, bool> isCancelled, string fileName, string template, string header)
-			: base(security, arg, isCancelled, fileName)
+		public TextExporter(DataType dataType, Func<int, bool> isCancelled, string fileName, string template, string header)
+			: base(dataType, isCancelled, fileName)
 		{
 			if (template.IsEmpty())
 				throw new ArgumentNullException(nameof(template));
@@ -55,55 +53,50 @@ namespace StockSharp.Algo.Export
 		}
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<ExecutionMessage> messages)
-		{
-			Do(messages);
-		}
+		protected override (int, DateTimeOffset?) ExportOrderLog(IEnumerable<ExecutionMessage> messages)
+			=> Do(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<QuoteChangeMessage> messages)
-		{
-			Do(messages.ToTimeQuotes());
-		}
+		protected override (int, DateTimeOffset?) ExportTicks(IEnumerable<ExecutionMessage> messages)
+			=> Do(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<Level1ChangeMessage> messages)
-		{
-			Do(messages);
-		}
+		protected override (int, DateTimeOffset?) ExportTransactions(IEnumerable<ExecutionMessage> messages)
+			=> Do(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<CandleMessage> messages)
-		{
-			Do(messages);
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<QuoteChangeMessage> messages)
+			=> Do(messages.ToTimeQuotes());
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<NewsMessage> messages)
-		{
-			Do(messages);
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<Level1ChangeMessage> messages)
+			=> Do(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<SecurityMessage> messages)
-		{
-			Do(messages);
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<CandleMessage> messages)
+			=> Do(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<PositionChangeMessage> messages)
-		{
-			Do(messages);
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<NewsMessage> messages)
+			=> Do(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<IndicatorValue> values)
-		{
-			Do(values);
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<SecurityMessage> messages)
+			=> Do(messages);
 
-		private void Do<TValue>(IEnumerable<TValue> values)
+		/// <inheritdoc />
+		protected override (int, DateTimeOffset?) Export(IEnumerable<PositionChangeMessage> messages)
+			=> Do(messages);
+
+		/// <inheritdoc />
+		protected override (int, DateTimeOffset?) Export(IEnumerable<IndicatorValue> values)
+			=> Do(values);
+
+		private (int, DateTimeOffset?) Do<TValue>(IEnumerable<TValue> values)
 		{
+			var count = 0;
+			var lastTime = default(DateTimeOffset?);
+
 			using (var writer = new StreamWriter(Path, true))
 			{
 				if (!_header.IsEmpty())
@@ -118,10 +111,17 @@ namespace StockSharp.Algo.Export
 						break;
 
 					writer.WriteLine(formater.FormatWithCache(ref templateCache, _template, value));
+					
+					count++;
+
+					if (value is IServerTimeMessage timeMsg)
+						lastTime = timeMsg.ServerTime;
 				}
 
 				//writer.Flush();
 			}
+
+			return (count, lastTime);
 		}
 	}
 }

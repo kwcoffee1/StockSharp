@@ -16,16 +16,18 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Statistics
 {
 	using System;
-
+	using System.ComponentModel.DataAnnotations;
+	
 	using Ecng.Serialization;
 
 	using StockSharp.Algo.PnL;
 	using StockSharp.Localization;
+	using StockSharp.Messages;
 
 	/// <summary>
 	/// The interface, describing statistic parameter, calculated based on trade.
 	/// </summary>
-	public interface ITradeStatisticParameter
+	public interface ITradeStatisticParameter : IStatisticParameter
 	{
 		/// <summary>
 		/// To add information about new trade to the parameter.
@@ -37,13 +39,25 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// Number of trades won (whose profit is greater than 0).
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str983Key)]
-	[DescriptionLoc(LocalizedStrings.Str984Key)]
-	[CategoryLoc(LocalizedStrings.Str985Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ProfitTradesKey,
+		Description = LocalizedStrings.ProfitTradesDescKey,
+		GroupName = LocalizedStrings.TradesKey,
+		Order = 100
+	)]
 	public class WinningTradesParameter : BaseStatisticParameter<int>, ITradeStatisticParameter
 	{
-		/// <inheritdoc />
-		public void Add(PnLInfo info)
+		/// <summary>
+		/// Initialize <see cref="WinningTradesParameter"/>.
+		/// </summary>
+		public WinningTradesParameter()
+			: base(StatisticParameterTypes.WinningTrades)
+        {
+        }
+
+        /// <inheritdoc />
+        public void Add(PnLInfo info)
 		{
 			if (info == null)
 				throw new ArgumentNullException(nameof(info));
@@ -58,11 +72,23 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// Number of trades lost with zero profit (whose profit is less than or equal to 0).
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str986Key)]
-	[DescriptionLoc(LocalizedStrings.Str987Key)]
-	[CategoryLoc(LocalizedStrings.Str985Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.LossTradesKey,
+		Description = LocalizedStrings.LossTradesDescKey,
+		GroupName = LocalizedStrings.TradesKey,
+		Order = 101
+	)]
 	public class LossingTradesParameter : BaseStatisticParameter<int>, ITradeStatisticParameter
 	{
+		/// <summary>
+		/// Initialize <see cref="LossingTradesParameter"/>.
+		/// </summary>
+		public LossingTradesParameter()
+			: base(StatisticParameterTypes.LossingTrades)
+		{
+		}
+
 		/// <inheritdoc />
 		public void Add(PnLInfo info)
 		{
@@ -77,11 +103,23 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// Total number of trades.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str988Key)]
-	[DescriptionLoc(LocalizedStrings.Str989Key)]
-	[CategoryLoc(LocalizedStrings.Str985Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TotalTradesKey,
+		Description = LocalizedStrings.TotalTradesDescKey,
+		GroupName = LocalizedStrings.TradesKey,
+		Order = 102
+	)]
 	public class TradeCountParameter : BaseStatisticParameter<int>, ITradeStatisticParameter
 	{
+		/// <summary>
+		/// Initialize <see cref="TradeCountParameter"/>.
+		/// </summary>
+		public TradeCountParameter()
+			: base(StatisticParameterTypes.TradeCount)
+		{
+		}
+
 		/// <inheritdoc />
 		public void Add(PnLInfo info)
 		{
@@ -92,11 +130,23 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// Total number of closing trades.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str990Key)]
-	[DescriptionLoc(LocalizedStrings.Str991Key)]
-	[CategoryLoc(LocalizedStrings.Str985Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ClosingTradesKey,
+		Description = LocalizedStrings.ClosingTradesDescKey,
+		GroupName = LocalizedStrings.TradesKey,
+		Order = 103
+	)]
 	public class RoundtripCountParameter : BaseStatisticParameter<int>, ITradeStatisticParameter
 	{
+		/// <summary>
+		/// Initialize <see cref="RoundtripCountParameter"/>.
+		/// </summary>
+		public RoundtripCountParameter()
+			: base(StatisticParameterTypes.RoundtripCount)
+		{
+		}
+
 		/// <inheritdoc />
 		public void Add(PnLInfo info)
 		{
@@ -108,11 +158,23 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// Average trade profit.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str992Key)]
-	[DescriptionLoc(LocalizedStrings.Str993Key)]
-	[CategoryLoc(LocalizedStrings.Str985Key)]
-	public class AverageTradeParameter : BaseStatisticParameter<decimal>, ITradeStatisticParameter
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.AverageProfitKey,
+		Description = LocalizedStrings.AverageTradeProfitKey,
+		GroupName = LocalizedStrings.TradesKey,
+		Order = 104
+	)]
+	public class AverageTradeProfitParameter : BaseStatisticParameter<decimal>, ITradeStatisticParameter
 	{
+		/// <summary>
+		/// Initialize <see cref="AverageTradeProfitParameter"/>.
+		/// </summary>
+		public AverageTradeProfitParameter()
+			: base(StatisticParameterTypes.AverageTradeProfit)
+		{
+		}
+
 		private decimal _sum;
 		private int _count;
 
@@ -161,11 +223,23 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// Average winning trade.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str994Key)]
-	[DescriptionLoc(LocalizedStrings.Str995Key)]
-	[CategoryLoc(LocalizedStrings.Str985Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.AverageWinKey,
+		Description = LocalizedStrings.AverageWinTradeKey,
+		GroupName = LocalizedStrings.TradesKey,
+		Order = 105
+	)]
 	public class AverageWinTradeParameter : BaseStatisticParameter<decimal>, ITradeStatisticParameter
 	{
+		/// <summary>
+		/// Initialize <see cref="AverageWinTradeParameter"/>.
+		/// </summary>
+		public AverageWinTradeParameter()
+			: base(StatisticParameterTypes.AverageWinTrades)
+		{
+		}
+
 		private decimal _sum;
 		private int _count;
 
@@ -217,11 +291,23 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// Average losing trade.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str996Key)]
-	[DescriptionLoc(LocalizedStrings.Str997Key)]
-	[CategoryLoc(LocalizedStrings.Str985Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.AverageLossKey,
+		Description = LocalizedStrings.AverageLossTradeKey,
+		GroupName = LocalizedStrings.TradesKey,
+		Order = 106
+	)]
 	public class AverageLossTradeParameter : BaseStatisticParameter<decimal>, ITradeStatisticParameter
 	{
+		/// <summary>
+		/// Initialize <see cref="AverageLossTradeParameter"/>.
+		/// </summary>
+		public AverageLossTradeParameter()
+			: base(StatisticParameterTypes.AverageLossTrades)
+		{
+		}
+
 		private decimal _sum;
 		private int _count;
 
@@ -268,5 +354,141 @@ namespace StockSharp.Algo.Statistics
 
 			base.Load(storage);
 		}
+	}
+
+	/// <summary>
+	/// Average trades count per one base.
+	/// </summary>
+	public abstract class PerBaseTradeParameter : BaseStatisticParameter<decimal>, ITradeStatisticParameter
+	{
+		private DateTime _currStart;
+		private int _currCount;
+
+		private int _periodsCount;
+
+		/// <summary>
+		/// Initialize <see cref="PerMonthTradeParameter"/>.
+		/// </summary>
+		/// <param name="type"><see cref="IStatisticParameter.Type"/></param>
+		protected PerBaseTradeParameter(StatisticParameterTypes type)
+			: base(type)
+		{
+		}
+
+		/// <inheritdoc />
+		public override void Reset()
+		{
+			_currStart = default;
+			_currCount = default;
+			_periodsCount = default;
+
+			base.Reset();
+		}
+
+		/// <summary>
+		/// Align the specified date for exact period start.
+		/// </summary>
+		/// <param name="date">Trade date.</param>
+		/// <returns>Aligned value.</returns>
+		protected abstract DateTime Align(DateTime date);
+
+		/// <inheritdoc />
+		public void Add(PnLInfo info)
+		{
+			if (info is null)
+				throw new ArgumentNullException(nameof(info));
+
+			var date = Align(info.ServerTime.UtcDateTime);
+
+			if (_currStart == default)
+			{
+				_currStart = date;
+
+				_periodsCount = 1;
+				_currCount = 1;
+
+				Value = _currCount;
+			}
+			else if (_currStart == date)
+			{
+				Value = ((Value * _periodsCount - _currCount) + ++_currCount) / _periodsCount;
+			}
+			else
+			{
+				_currStart = date;
+
+				_currCount = 1;
+
+				Value = (Value * _periodsCount + _currCount) / ++_periodsCount;
+			}
+		}
+
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
+		{
+			storage
+				.Set("CurrStart", _currStart)
+				.Set("PeriodsCount", _periodsCount)
+				.Set("CurrCount", _currCount)
+			;
+
+			base.Save(storage);
+		}
+
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
+		{
+			_currStart = storage.GetValue<DateTime>("CurrStart");
+			_periodsCount = storage.GetValue<int>("PeriodsCount");
+			_currCount = storage.GetValue<int>("CurrCount");
+
+			base.Load(storage);
+		}
+	}
+
+	/// <summary>
+	/// Average trades count per one month.
+	/// </summary>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.PerMonthTradesKey,
+		Description = LocalizedStrings.PerMonthTradesDescKey,
+		GroupName = LocalizedStrings.TradesKey,
+		Order = 107)]	
+	public class PerMonthTradeParameter : PerBaseTradeParameter
+	{
+		/// <summary>
+		/// Initialize <see cref="PerMonthTradeParameter"/>.
+		/// </summary>
+		public PerMonthTradeParameter()
+			: base(StatisticParameterTypes.PerMonthTrades)
+        {
+        }
+
+		/// <inheritdoc/>
+		protected override DateTime Align(DateTime date) => new(date.Year, date.Month, 1);
+	}
+
+	/// <summary>
+	/// Average trades count per one day.
+	/// </summary>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.PerDayTradesKey,
+		Description = LocalizedStrings.PerDayTradesDescKey,
+		GroupName = LocalizedStrings.TradesKey,
+		Order = 108)]
+	public class PerDayTradeParameter : PerBaseTradeParameter
+	{
+		/// <summary>
+		/// Initialize <see cref="PerDayTradeParameter"/>.
+		/// </summary>
+		public PerDayTradeParameter()
+			: base(StatisticParameterTypes.PerDayTrades)
+		{
+		}
+
+		/// <inheritdoc/>
+		protected override DateTime Align(DateTime date) => date.Date;
 	}
 }

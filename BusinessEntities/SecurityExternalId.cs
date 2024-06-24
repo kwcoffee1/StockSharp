@@ -16,12 +16,11 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.BusinessEntities
 {
 	using System;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
 
 	using Ecng.Common;
 	using Ecng.ComponentModel;
-	using Ecng.Serialization;
 
 	using StockSharp.Localization;
 
@@ -29,9 +28,11 @@ namespace StockSharp.BusinessEntities
 	/// Security IDs in other systems.
 	/// </summary>
 	[Serializable]
-	[System.Runtime.Serialization.DataContract]
-	[DisplayNameLoc(LocalizedStrings.IdentifiersKey)]
-	[DescriptionLoc(LocalizedStrings.Str603Key)]
+	[DataContract]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.IdentifiersKey,
+		Description = LocalizedStrings.SecIdInOtherSystemsKey)]
 	public class SecurityExternalId : NotifiableObject, ICloneable<SecurityExternalId>, IEquatable<SecurityExternalId>
 	{
 		private string _sedol;
@@ -54,15 +55,17 @@ namespace StockSharp.BusinessEntities
 		/// ID in SEDOL format (Stock Exchange Daily Official List).
 		/// </summary>
 		[DataMember]
-		[DisplayName("SEDOL")]
-		[DescriptionLoc(LocalizedStrings.Str351Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SedolKey,
+			Description = LocalizedStrings.SedolDescKey)]
 		public string Sedol
 		{
 			get => _sedol;
 			set
 			{
 				_sedol = value;
-				NotifyChanged(nameof(Sedol));
+				NotifyChanged();
 			}
 		}
 
@@ -70,15 +73,17 @@ namespace StockSharp.BusinessEntities
 		/// ID in CUSIP format (Committee on Uniform Securities Identification Procedures).
 		/// </summary>
 		[DataMember]
-		[DisplayName("CUSIP")]
-		[DescriptionLoc(LocalizedStrings.Str352Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CusipKey,
+			Description = LocalizedStrings.CusipDescKey)]
 		public string Cusip
 		{
 			get => _cusip;
 			set
 			{
 				_cusip = value;
-				NotifyChanged(nameof(Cusip));
+				NotifyChanged();
 			}
 		}
 
@@ -86,15 +91,17 @@ namespace StockSharp.BusinessEntities
 		/// ID in ISIN format (International Securities Identification Number).
 		/// </summary>
 		[DataMember]
-		[DisplayName("ISIN")]
-		[DescriptionLoc(LocalizedStrings.Str353Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.IsinKey,
+			Description = LocalizedStrings.IsinDescKey)]
 		public string Isin
 		{
 			get => _isin;
 			set
 			{
 				_isin = value;
-				NotifyChanged(nameof(Isin));
+				NotifyChanged();
 			}
 		}
 
@@ -102,15 +109,17 @@ namespace StockSharp.BusinessEntities
 		/// ID in RIC format (Reuters Instrument Code).
 		/// </summary>
 		[DataMember]
-		[DisplayName("RIC")]
-		[DescriptionLoc(LocalizedStrings.Str354Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.RicKey,
+			Description = LocalizedStrings.RicDescKey)]
 		public string Ric
 		{
 			get => _ric;
 			set
 			{
 				_ric = value;
-				NotifyChanged(nameof(Ric));
+				NotifyChanged();
 			}
 		}
 
@@ -118,15 +127,17 @@ namespace StockSharp.BusinessEntities
 		/// ID in Bloomberg format.
 		/// </summary>
 		[DataMember]
-		[DisplayName("Bloomberg")]
-		[DescriptionLoc(LocalizedStrings.Str355Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.BloombergKey,
+			Description = LocalizedStrings.BloombergDescKey)]
 		public string Bloomberg
 		{
 			get => _bloomberg;
 			set
 			{
 				_bloomberg = value;
-				NotifyChanged(nameof(Bloomberg));
+				NotifyChanged();
 			}
 		}
 
@@ -134,15 +145,17 @@ namespace StockSharp.BusinessEntities
 		/// ID in IQFeed format.
 		/// </summary>
 		[DataMember]
-		[DisplayName("IQFeed")]
-		[DescriptionLoc(LocalizedStrings.Str356Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.IQFeedKey,
+			Description = LocalizedStrings.IQFeedDescKey)]
 		public string IQFeed
 		{
 			get => _iqFeed;
 			set
 			{
 				_iqFeed = value;
-				NotifyChanged(nameof(IQFeed));
+				NotifyChanged();
 			}
 		}
 
@@ -150,16 +163,18 @@ namespace StockSharp.BusinessEntities
 		/// ID in Interactive Brokers format.
 		/// </summary>
 		[DataMember]
-		[DisplayName("Interactive Brokers")]
-		[DescriptionLoc(LocalizedStrings.Str357Key)]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.InteractiveBrokersKey,
+			Description = LocalizedStrings.InteractiveBrokersDescKey)]
+		//[Nullable]
 		public int? InteractiveBrokers
 		{
 			get => _interactiveBrokers;
 			set
 			{
 				_interactiveBrokers = value;
-				NotifyChanged(nameof(InteractiveBrokers));
+				NotifyChanged();
 			}
 		}
 
@@ -167,15 +182,17 @@ namespace StockSharp.BusinessEntities
 		/// ID in Plaza format.
 		/// </summary>
 		[DataMember]
-		[DisplayName("Plaza")]
-		[DescriptionLoc(LocalizedStrings.Str358Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PlazaKey,
+			Description = LocalizedStrings.PlazaDescKey)]
 		public string Plaza
 		{
 			get => _plaza;
 			set
 			{
 				_plaza = value;
-				NotifyChanged(nameof(Plaza));
+				NotifyChanged();
 			}
 		}
 
@@ -198,57 +215,46 @@ namespace StockSharp.BusinessEntities
 			};
 		}
 
-		/// <summary>
-		/// Creates a new object that is a copy of the current instance.
-		/// </summary>
-		/// <returns>
-		/// A new object that is a copy of this instance.
-		/// </returns>
+		/// <inheritdoc />
 		object ICloneable.Clone()
 		{
 			return Clone();
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
 			var str = string.Empty;
 
 			if (!Bloomberg.IsEmpty())
-				str += " Bloom {0}".Put(Bloomberg);
+				str += $" Bloom {Bloomberg}";
 
 			if (!Cusip.IsEmpty())
-				str += " CUSIP {0}".Put(Cusip);
+				str += $" CUSIP {Cusip}";
 
 			if (!IQFeed.IsEmpty())
-				str += " IQFeed {0}".Put(IQFeed);
+				str += $" IQFeed {IQFeed}";
 
 			if (!Isin.IsEmpty())
-				str += " ISIN {0}".Put(Isin);
+				str += $" ISIN {Isin}";
 
 			if (!Ric.IsEmpty())
-				str += " RIC {0}".Put(Ric);
+				str += $" RIC {Ric}";
 
 			if (!Sedol.IsEmpty())
-				str += " SEDOL {0}".Put(Sedol);
+				str += $" SEDOL {Sedol}";
 
 			if (InteractiveBrokers != null)
-				str += " InteractiveBrokers {0}".Put(InteractiveBrokers);
+				str += $" InteractiveBrokers {InteractiveBrokers}";
 
 			if (!Plaza.IsEmpty())
-				str += " Plaza {0}".Put(Plaza);
+				str += $" Plaza {Plaza}";
 
 			return str;
 		}
 
 		/// <inheritdoc />
-		public override int GetHashCode()
-		{
-			return base.GetHashCode();
-		}
+		public override int GetHashCode() => base.GetHashCode();
 
 		/// <summary>
 		/// Compare <see cref="SecurityExternalId"/> on the equivalence.
@@ -263,7 +269,7 @@ namespace StockSharp.BusinessEntities
 		/// <inheritdoc />
 		public bool Equals(SecurityExternalId other)
 		{
-			if (ReferenceEquals(other, null))
+			if (other is null)
 				return false;
 
 			if (Bloomberg != other.Bloomberg)

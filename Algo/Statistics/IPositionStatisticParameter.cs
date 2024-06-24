@@ -16,15 +16,17 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Statistics
 {
 	using System;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Common;
 
 	using StockSharp.Localization;
+	using StockSharp.Messages;
 
 	/// <summary>
 	/// The interface, describing statistic parameter, calculated based on position.
 	/// </summary>
-	public interface IPositionStatisticParameter
+	public interface IPositionStatisticParameter : IStatisticParameter
 	{
 		/// <summary>
 		/// To add the new position value to the parameter.
@@ -37,11 +39,23 @@ namespace StockSharp.Algo.Statistics
 	/// <summary>
 	/// Maximum long position size.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str970Key)]
-	[DescriptionLoc(LocalizedStrings.Str971Key)]
-	[CategoryLoc(LocalizedStrings.Str972Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MaxLongPosKey,
+		Description = LocalizedStrings.MaxLongPosDescKey,
+		GroupName = LocalizedStrings.PositionsKey,
+		Order = 200
+	)]
 	public class MaxLongPositionParameter : BaseStatisticParameter<decimal>, IPositionStatisticParameter
 	{
+		/// <summary>
+		/// Initialize <see cref="MaxLongPositionParameter"/>.
+		/// </summary>
+		public MaxLongPositionParameter()
+			: base(StatisticParameterTypes.MaxLongPosition)
+		{
+		}
+
 		/// <summary>
 		/// To add the new position value to the parameter.
 		/// </summary>
@@ -49,19 +63,31 @@ namespace StockSharp.Algo.Statistics
 		/// <param name="position">The new position value.</param>
 		public void Add(DateTimeOffset marketTime, decimal position)
 		{
-			if (position > 0)
-				Value = position.Max(Value);
+			if (position > 0 && position > Value)
+				Value = position;
 		}
 	}
 
 	/// <summary>
 	/// Maximum short position size.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str973Key)]
-	[DescriptionLoc(LocalizedStrings.Str974Key)]
-	[CategoryLoc(LocalizedStrings.Str972Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MaxShortPosKey,
+		Description = LocalizedStrings.MaxShortPosDescKey,
+		GroupName = LocalizedStrings.PositionsKey,
+		Order = 201
+	)]
 	public class MaxShortPositionParameter : BaseStatisticParameter<decimal>, IPositionStatisticParameter
 	{
+		/// <summary>
+		/// Initialize <see cref="MaxShortPositionParameter"/>.
+		/// </summary>
+		public MaxShortPositionParameter()
+			: base(StatisticParameterTypes.MaxShortPosition)
+		{
+		}
+
 		/// <summary>
 		/// To add the new position value to the parameter.
 		/// </summary>
@@ -69,8 +95,8 @@ namespace StockSharp.Algo.Statistics
 		/// <param name="position">The new position value.</param>
 		public void Add(DateTimeOffset marketTime, decimal position)
 		{
-			if (position < 0)
-				Value = position.Abs().Max(Value);
+			if (position < 0 && position.Abs() > Value)
+				Value = position;
 		}
 	}
 }

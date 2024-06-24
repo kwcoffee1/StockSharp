@@ -21,6 +21,7 @@ namespace StockSharp.BusinessEntities
 
 	using StockSharp.Messages;
 	using StockSharp.Localization;
+	using System.ComponentModel.DataAnnotations;
 
 	/// <summary>
 	/// Quotes pair.
@@ -34,18 +35,10 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Initializes a new instance of the <see cref="MarketDepthPair"/>.
 		/// </summary>
-		/// <param name="security">Security.</param>
 		/// <param name="bid">Bid.</param>
 		/// <param name="ask">Ask.</param>
-		public MarketDepthPair(Security security, Quote bid, Quote ask)
+		public MarketDepthPair(QuoteChange? bid, QuoteChange? ask)
 		{
-			if (bid != null && bid.OrderDirection != Sides.Buy)
-				throw new ArgumentException(LocalizedStrings.Str492, nameof(bid));
-
-			if (ask != null && ask.OrderDirection != Sides.Sell)
-				throw new ArgumentException(LocalizedStrings.Str493, nameof(ask));
-
-			Security = security ?? throw new ArgumentNullException(nameof(security));
 			Bid = bid;
 			Ask = ask;
 
@@ -53,54 +46,58 @@ namespace StockSharp.BusinessEntities
 		}
 
 		/// <summary>
-		/// Security.
-		/// </summary>
-		public Security Security { get; }
-
-		/// <summary>
 		/// Bid.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.BidKey)]
-		[DescriptionLoc(LocalizedStrings.Str494Key)]
-		public Quote Bid { get; }
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.BidKey,
+			Description = LocalizedStrings.QuoteBuyKey,
+			GroupName = LocalizedStrings.CommonKey)]
+		public QuoteChange? Bid { get; }
 
 		/// <summary>
 		/// Ask.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.AskKey)]
-		[DescriptionLoc(LocalizedStrings.Str495Key)]
-		public Quote Ask { get; }
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.AskKey,
+			Description = LocalizedStrings.QuoteSellKey,
+			GroupName = LocalizedStrings.CommonKey)]
+		public QuoteChange? Ask { get; }
 
 		/// <summary>
 		/// Spread by price. Is <see langword="null" />, if one of the quotes is empty.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str496Key)]
-		[DescriptionLoc(LocalizedStrings.Str497Key)]
-		public decimal? SpreadPrice => _isFull ? Ask.Security.ShrinkPrice(Ask.Price - Bid.Price) : (decimal?)null;
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SpreadPriceKey,
+			Description = LocalizedStrings.SpreadPriceDescKey,
+			GroupName = LocalizedStrings.CommonKey)]
+		public decimal? SpreadPrice => _isFull ? (Ask.Value.Price - Bid.Value.Price) : null;
 
 		/// <summary>
 		/// Spread by volume. If negative, it best ask has a greater volume than the best bid. Is <see langword="null" />, if one of the quotes is empty.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str498Key)]
-		[DescriptionLoc(LocalizedStrings.Str499Key)]
-		public decimal? SpreadVolume => _isFull ? (Ask.Volume - Bid.Volume).Abs() : (decimal?)null;
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SpreadVolumeKey,
+			Description = LocalizedStrings.SpreadVolumeDescKey,
+			GroupName = LocalizedStrings.CommonKey)]
+		public decimal? SpreadVolume => _isFull ? (Ask.Value.Volume - Bid.Value.Volume).Abs() : null;
 
 		/// <summary>
-		/// The middle of spread. Is <see langword="null" />, if quotes are empty.
+		/// Get middle price.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.SpreadKey)]
-		[DescriptionLoc(LocalizedStrings.SpreadMiddleKey, true)]
-		public decimal? MiddlePrice => (Bid?.Price).GetSpreadMiddle(Ask?.Price);
+		/// <param name="priceStep"><see cref="Security.PriceStep"/></param>
+		/// <returns>The middle of spread. Is <see langword="null" />, if quotes are empty.</returns>
+		public decimal? GetMiddlePrice(decimal? priceStep) => (Bid?.Price).GetSpreadMiddle(Ask?.Price, priceStep);
 
 		/// <summary>
 		/// Quotes pair has <see cref="Bid"/> and <see cref="Ask"/>.
 		/// </summary>
 		public bool IsFull => _isFull;
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
 			return "{{{0}}} {{{1}}}".Put(Bid, Ask);

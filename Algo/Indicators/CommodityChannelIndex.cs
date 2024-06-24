@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,20 +15,28 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
+	using StockSharp.Messages;
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Commodity Channel Index.
 	/// </summary>
-	[DisplayName("CCI")]
-	[DescriptionLoc(LocalizedStrings.Str760Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/cci.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.CCIKey,
+		Description = LocalizedStrings.CommodityChannelIndexKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/cci.html")]
 	public class CommodityChannelIndex : LengthIndicator<decimal>
 	{
-		private readonly MeanDeviation _mean = new MeanDeviation();
+		private readonly MeanDeviation _mean = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CommodityChannelIndex"/>.
@@ -38,32 +46,27 @@ namespace StockSharp.Algo.Indicators
 			Length = 15;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Percent;
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_mean.Length = Length;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _mean.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _mean.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var (_, high, low, close) = input.GetOhlc();
 
-			var aveP = (candle.HighPrice + candle.LowPrice + candle.ClosePrice) / 3m;
+			var aveP = (high + low + close) / 3m;
 
-			var meanValue = _mean.Process(new DecimalIndicatorValue(this, aveP) {IsFinal = input.IsFinal});
+			var meanValue = _mean.Process(new DecimalIndicatorValue(this, aveP) { IsFinal = input.IsFinal });
 
 			if (IsFormed && meanValue.GetValue<decimal>() != 0)
 				return new DecimalIndicatorValue(this, ((aveP - _mean.Sma.GetCurrentValue()) / (0.015m * meanValue.GetValue<decimal>())));

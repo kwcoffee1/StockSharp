@@ -23,10 +23,7 @@ namespace StockSharp.Logging
 
 	using Ecng.Collections;
 	using Ecng.Common;
-	using Ecng.Configuration;
 	using Ecng.Serialization;
-
-	using MoreLinq;
 
 	using StockSharp.Localization;
 
@@ -35,13 +32,6 @@ namespace StockSharp.Logging
 	/// </summary>
 	public class LogManager : Disposable, IPersistable
 	{
-		private static readonly MemoryStatisticsValue<LogMessage> _logMsgStat = new MemoryStatisticsValue<LogMessage>(LocalizedStrings.MessageLog);
-
-		static LogManager()
-		{
-			MemoryStatistics.Instance.Values.Add(_logMsgStat);
-		}
-
 		private sealed class ApplicationReceiver : BaseLogReceiver
 		{
 			public ApplicationReceiver()
@@ -83,7 +73,7 @@ namespace StockSharp.Logging
 
 		private sealed class DisposeLogMessage : LogMessage
 		{
-			private readonly SyncObject _syncRoot = new SyncObject();
+			private readonly SyncObject _syncRoot = new();
 
 			public DisposeLogMessage()
 				: base(new ApplicationReceiver(), DateTimeOffset.MinValue, LogLevels.Off, string.Empty)
@@ -102,25 +92,45 @@ namespace StockSharp.Logging
 			}
 		}
 
-		private static readonly DisposeLogMessage _disposeMessage = new DisposeLogMessage();
+		private static readonly DisposeLogMessage _disposeMessage = new();
 
-		private readonly object _syncRoot = new object();
-		private readonly List<LogMessage> _pendingMessages = new List<LogMessage>();
+		private readonly object _syncRoot = new();
+		private readonly List<LogMessage> _pendingMessages = new();
 		private readonly Timer _flushTimer;
 		private bool _isFlusing;
+		private readonly bool _asyncMode;
+
+		/// <summary>
+		/// Instance.
+		/// </summary>
+		public static LogManager Instance { get; private set; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="LogManager"/>.
 		/// </summary>
 		public LogManager()
+			: this(true)
 		{
-			ConfigManager.TryRegisterService(this);
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="LogManager"/>.
+		/// </summary>
+		/// <param name="asyncMode">Asynchronous mode.</param>
+		public LogManager(bool asyncMode)
+		{
+			Instance ??= this;
 
 			Sources = new LogSourceList(this)
 			{
 				Application,
 				new UnhandledExceptionSource()
 			};
+
+			_asyncMode = asyncMode;
+
+			if (!_asyncMode)
+				return;
 
 			_flushTimer = ThreadingHelper.Timer(Flush);
 
@@ -148,8 +158,6 @@ namespace StockSharp.Logging
 
 				_isFlusing = true;
 			}
-
-			_logMsgStat.Remove(temp);
 
 			try
 			{
@@ -217,10 +225,10 @@ namespace StockSharp.Logging
 			}
 		}
 
-		private readonly CachedSynchronizedSet<ILogListener> _listeners = new CachedSynchronizedSet<ILogListener>();
+		private readonly CachedSynchronizedSet<ILogListener> _listeners = new(true);
 
 		/// <summary>
-		/// Messages loggers arriving from <see cref="LogManager.Sources"/>.
+		/// Messages loggers arriving from <see cref="Sources"/>.
 		/// </summary>
 		public IList<ILogListener> Listeners => _listeners;
 
@@ -230,13 +238,16 @@ namespace StockSharp.Logging
 		public IList<ILogSource> Sources { get; }
 
 		/// <summary>
-		/// Sending interval of messages collected from <see cref="LogManager.Sources"/> to the <see cref="LogManager.Listeners"/>. The default is 500 ms.
+		/// Sending interval of messages collected from <see cref="Sources"/> to the <see cref="Listeners"/>. The default is 500 ms.
 		/// </summary>
 		public TimeSpan FlushInterval
 		{
-			get => _flushTimer.Interval();
+			get => _flushTimer?.Interval() ?? TimeSpan.MaxValue;
 			set
 			{
+				if (!_asyncMode)
+					return;
+
 				if (value < TimeSpan.FromMilliseconds(1))
 					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.IntervalMustBePositive);
 
@@ -244,39 +255,23 @@ namespace StockSharp.Logging
 			}
 		}
 
-		//private int _maxMessageCount = 1000;
-
-		///// <summary>
-		///// Максимальное количество накопленных от <see cref="Sources"/> сообщений, прежде чем они будут отправлены в <see cref="Listeners"/>.
-		///// По умолчанию равно 1000.
-		///// </summary>
-		///// <remarks>Значение 0 означает бесконечный размер буфера. Значение -1 означает отсутствие буферизации.</remarks>
-		//public int MaxMessageCount
-		//{
-		//	get { return _maxMessageCount; }
-		//	set
-		//	{
-		//		if (value < -1) 
-		//			throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str2796);
-
-		//		_maxMessageCount = value;
-		//	}
-		//}
-
 		private void SourceLog(LogMessage message)
 		{
 			if (message == null)
 				throw new ArgumentNullException(nameof(message));
 
-			_logMsgStat.Add(message);
-
 			lock (_syncRoot)
 			{
 				_pendingMessages.Add(message);
-				
-				// mika: force flush in case too many messages
-				if (_pendingMessages.Count > 1000000)
-					ImmediateFlush();
+
+				if (!_asyncMode)
+					Flush();
+				else
+				{
+					// mika: force flush in case too many messages
+					if (_pendingMessages.Count > 1000000)
+						ImmediateFlush();
+				}
 			}
 		}
 
@@ -297,20 +292,23 @@ namespace StockSharp.Logging
 		{
 			Sources.Clear();
 
-			lock (_syncRoot)
+			if (_asyncMode)
 			{
-				if (ClearPendingOnDispose)
-					_pendingMessages.Clear();
+				lock (_syncRoot)
+				{
+					if (ClearPendingOnDispose)
+						_pendingMessages.Clear();
 
-				_pendingMessages.Add(_disposeMessage);
+					_pendingMessages.Add(_disposeMessage);
+				}
+
+				// flushing accumulated messages and closing the timer
+
+				ImmediateFlush();
+
+				_disposeMessage.Wait();
+				_flushTimer.Dispose();
 			}
-
-			// flushing accumulated messages and closing the timer
-
-			ImmediateFlush();
-
-			_disposeMessage.Wait();
-			_flushTimer.Dispose();
 
 			base.DisposeManaged();
 		}
@@ -329,7 +327,7 @@ namespace StockSharp.Logging
 				LocalTimeZone = storage.GetValue<TimeZoneInfo>(nameof(LocalTimeZone));
 
 			if (storage.Contains(nameof(Application)) && Application is IPersistable appPers)
-				appPers.Load(storage.GetValue<SettingsStorage>(nameof(Application)));
+				appPers.Load(storage, nameof(Application));
 		}
 
 		/// <summary>
@@ -340,7 +338,7 @@ namespace StockSharp.Logging
 		{
 			storage.SetValue(nameof(FlushInterval), FlushInterval);
 			//storage.SetValue(nameof(MaxMessageCount), MaxMessageCount);
-			storage.SetValue(nameof(Listeners), Listeners.Select(l => l.SaveEntire(false)).ToArray());
+			storage.SetValue(nameof(Listeners), Listeners.Where(l => l.CanSave).Select(l => l.SaveEntire(false)).ToArray());
 
 			if (LocalTimeZone != null)
 				storage.SetValue(nameof(LocalTimeZone), LocalTimeZone);

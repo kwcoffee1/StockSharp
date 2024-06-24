@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -16,21 +16,30 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Relative Vigor Index.
 	/// </summary>
-	[DisplayName("RVI")]
-	[DescriptionLoc(LocalizedStrings.Str771Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/rvi.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.RVIKey,
+		Description = LocalizedStrings.RelativeVigorIndexKey)]
+	[Doc("topics/api/indicators/list_of_indicators/rvi.html")]
 	public class RelativeVigorIndex : BaseComplexIndicator
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="RelativeVigorIndex"/>.
 		/// </summary>
 		public RelativeVigorIndex()
-			: this(new RelativeVigorIndexAverage(), new RelativeVigorIndexSignal())
+			: this(new(), new())
 		{
 		}
 
@@ -48,22 +57,32 @@ namespace StockSharp.Algo.Indicators
 			Mode = ComplexIndicatorModes.Sequence;
 		}
 
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
 		/// <summary>
 		/// Average indicator part.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayNameLoc(LocalizedStrings.AverageKey)]
-		[DescriptionLoc(LocalizedStrings.Str772Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.AverageKey,
+			Description = LocalizedStrings.AveragePartKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public RelativeVigorIndexAverage Average { get; }
 
 		/// <summary>
 		/// Signaling part of indicator.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayNameLoc(LocalizedStrings.SignalKey)]
-		[DescriptionLoc(LocalizedStrings.Str773Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SignalKey,
+			Description = LocalizedStrings.SignalPartKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public RelativeVigorIndexSignal Signal { get; }
+
+		/// <inheritdoc />
+		public override string ToString() => base.ToString() + $" A={Average.Length} S={Signal.Length}";
 	}
 }

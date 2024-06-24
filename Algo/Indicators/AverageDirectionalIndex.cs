@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,18 +15,25 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Welles Wilder Average Directional Index.
 	/// </summary>
-	[DisplayName("ADX")]
-	[DescriptionLoc(LocalizedStrings.Str757Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/adx.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.AdxKey,
+		Description = LocalizedStrings.AverageDirectionalIndexKey)]
+	[Doc("topics/api/indicators/list_of_indicators/adx.html")]
 	public class AverageDirectionalIndex : BaseComplexIndicator
 	{
 		/// <summary>
@@ -43,17 +50,15 @@ namespace StockSharp.Algo.Indicators
 		/// <param name="dx">Welles Wilder Directional Movement Index.</param>
 		/// <param name="movingAverage">Moving Average.</param>
 		public AverageDirectionalIndex(DirectionalIndex dx, LengthIndicator<decimal> movingAverage)
+			: base(dx, movingAverage)
 		{
-			if (dx == null)
-				throw new ArgumentNullException(nameof(dx));
-
-			if (movingAverage == null)
-				throw new ArgumentNullException(nameof(movingAverage));
-
-			InnerIndicators.Add(Dx = dx);
-			InnerIndicators.Add(MovingAverage = movingAverage);
+			Dx = dx;
+			MovingAverage = movingAverage;
 			Mode = ComplexIndicatorModes.Sequence;
 		}
+
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Percent;
 
 		/// <summary>
 		/// Welles Wilder Directional Movement Index.
@@ -70,10 +75,12 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Period length.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str736Key)]
-		[DescriptionLoc(LocalizedStrings.Str737Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		public virtual int Length
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PeriodKey,
+			Description = LocalizedStrings.IndicatorPeriodKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public int Length
 		{
 			get => MovingAverage.Length;
 			set
@@ -83,24 +90,21 @@ namespace StockSharp.Algo.Indicators
 			}
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
-			Length = settings.GetValue<int>(nameof(Length));
+			base.Load(storage);
+			Length = storage.GetValue<int>(nameof(Length));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
-			settings.SetValue(nameof(Length), Length);
+			base.Save(storage);
+			storage.SetValue(nameof(Length), Length);
 		}
+
+		/// <inheritdoc />
+		public override string ToString() => base.ToString() + " " + Length;
 	}
 }

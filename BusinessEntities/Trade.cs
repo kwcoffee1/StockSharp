@@ -16,14 +16,12 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.BusinessEntities
 {
 	using System;
-	using System.Collections.Generic;
 	using System.ComponentModel;
 	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
 	using System.Xml.Serialization;
 
 	using Ecng.Common;
-	using Ecng.Serialization;
 
 	using StockSharp.Messages;
 	using StockSharp.Localization;
@@ -32,10 +30,13 @@ namespace StockSharp.BusinessEntities
 	/// Tick trade.
 	/// </summary>
 	[Serializable]
-	[System.Runtime.Serialization.DataContract]
-	[DisplayNameLoc(LocalizedStrings.Str506Key)]
-	[DescriptionLoc(LocalizedStrings.TickTradeKey)]
-	public class Trade : Cloneable<Trade>, IExtendableEntity
+	[DataContract]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TradeKey,
+		Description = LocalizedStrings.TickTradeKey)]
+	[Obsolete("Use ITickTradeMessage.")]
+	public class Trade : Cloneable<Trade>, ITickTradeMessage
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="Trade"/>.
@@ -44,103 +45,111 @@ namespace StockSharp.BusinessEntities
 		{
 		}
 
-		/// <summary>
-		/// Trade ID.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[Identity]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str361Key,
-			Description = LocalizedStrings.Str145Key,
+			Name = LocalizedStrings.IdentifierKey,
+			Description = LocalizedStrings.TradeIdKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 0)]
-		public long Id { get; set; }
+		public long? Id { get; set; }
 
-		/// <summary>
-		/// Trade ID (as string, if electronic board does not use numeric order ID representation).
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.OrderIdStringKey,
-			Description = LocalizedStrings.Str146Key,
+			Name = LocalizedStrings.IdStringKey,
+			Description = LocalizedStrings.TradeIdStringKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 1)]
 		public string StringId { get; set; }
 
+		private SecurityId? _securityId;
+
+		/// <inheritdoc />
+		SecurityId ISecurityIdMessage.SecurityId
+		{
+			get => _securityId ??= Security?.Id.ToSecurityId() ?? default;
+			set => throw new NotSupportedException();
+		}
+
 		/// <summary>
 		/// The instrument, on which the trade was completed.
 		/// </summary>
-		[RelationSingle(IdentityType = typeof(string))]
 		[XmlIgnore]
 		[Browsable(false)]
 		public Security Security { get; set; }
 
-		/// <summary>
-		/// Trade time.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.TimeKey,
-			Description = LocalizedStrings.Str605Key,
+			Description = LocalizedStrings.TradeTimeKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 3)]
-		public DateTimeOffset Time { get; set; }
+		public DateTimeOffset ServerTime { get; set; }
 
-		/// <summary>
-		/// Trade received local time.
-		/// </summary>
+		/// <inheritdoc />
+		[Browsable(false)]
+		[Obsolete("Use ServerTime property.")]
+		public DateTimeOffset Time
+		{
+			get => ServerTime;
+			set => ServerTime = value;
+		}
+
+		/// <inheritdoc />
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str514Key,
-			Description = LocalizedStrings.Str606Key,
+			Name = LocalizedStrings.LocalTimeKey,
+			Description = LocalizedStrings.TradeLocalTimeKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 9)]
 		public DateTimeOffset LocalTime { get; set; }
 
-		/// <summary>
-		/// Number of contracts in the trade.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.VolumeKey,
-			Description = LocalizedStrings.TradeVolumeKey,
+			Description = LocalizedStrings.TradeVolumeDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 4)]
 		public decimal Volume { get; set; }
 
-		/// <summary>
-		/// Trade price.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.PriceKey,
-			Description = LocalizedStrings.Str147Key,
+			Description = LocalizedStrings.TradePriceDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 3)]
 		public decimal Price { get; set; }
 
-		/// <summary>
-		/// Order side (buy or sell), which led to the trade.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[Nullable]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str128Key,
-			Description = LocalizedStrings.Str608Key,
+			Name = LocalizedStrings.InitiatorKey,
+			Description = LocalizedStrings.DirectionDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 5)]
-		public Sides? OrderDirection { get; set; }
+		public Sides? OriginSide { get; set; }
 
-		/// <summary>
-		/// Is a system trade.
-		/// </summary>
+		/// <inheritdoc />
+		[Browsable(false)]
+		[Obsolete("Use OriginSide property.")]
+		public Sides? OrderDirection
+		{
+			get => OriginSide;
+			set => OriginSide = value;
+		}
+
+		/// <inheritdoc />
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
@@ -148,77 +157,60 @@ namespace StockSharp.BusinessEntities
 			Description = LocalizedStrings.IsSystemTradeKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 6)]
-		[Nullable]
 		public bool? IsSystem { get; set; }
 
-		/// <summary>
-		/// System trade status.
-		/// </summary>
+		/// <inheritdoc />
 		[Browsable(false)]
-		[Nullable]
-		public int? Status { get; set; }
+		public long? Status { get; set; }
 
-		/// <summary>
-		/// Number of open positions (open interest).
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[Nullable]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str150Key,
-			Description = LocalizedStrings.Str151Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.OpenInterestKey,
+			Description = LocalizedStrings.OpenInterestDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 10)]
 		public decimal? OpenInterest { get; set; }
 
-		/// <summary>
-		/// Is tick ascending or descending in price.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[Nullable]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str157Key,
-			Description = LocalizedStrings.Str158Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.UpTrendKey,
+			Description = LocalizedStrings.UpTrendDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 11)]
 		public bool? IsUpTick { get; set; }
 
-		/// <summary>
-		/// Trading security currency.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.CurrencyKey,
-			Description = LocalizedStrings.Str382Key,
+			Description = LocalizedStrings.CurrencyDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 7)]
-		[Nullable]
 		public CurrencyTypes? Currency { get; set; }
 
-		[field: NonSerialized]
-		private IDictionary<string, object> _extensionInfo;
+		/// <inheritdoc />
+		[DataMember]
+		public long SeqNum { get; set; }
 
-		/// <summary>
-		/// Extended trade info.
-		/// </summary>
-		/// <remarks>
-		/// Required if additional information associated with the trade is stored in the program. For example, the operation that results to the trade.
-		/// </remarks>
-		[Ignore]
-		[XmlIgnore]
-		[Display(
-			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.ExtendedInfoKey,
-			Description = LocalizedStrings.Str427Key,
-			GroupName = LocalizedStrings.GeneralKey,
-			Order = 8)]
-		public IDictionary<string, object> ExtensionInfo
-		{
-			get => _extensionInfo;
-			set => _extensionInfo = value;
-		}
+		/// <inheritdoc />
+		public Messages.DataType BuildFrom { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		public decimal? Yield { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		public long? OrderBuyId { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		public long? OrderSellId { get; set; }
 
 		/// <summary>
 		/// Create a copy of <see cref="Trade"/>.
@@ -232,15 +224,20 @@ namespace StockSharp.BusinessEntities
 				StringId = StringId,
 				Volume = Volume,
 				Price = Price,
-				Time = Time,
+				ServerTime = ServerTime,
 				LocalTime = LocalTime,
-				OrderDirection = OrderDirection,
+				OriginSide = OriginSide,
 				Security = Security,
 				IsSystem = IsSystem,
 				Status = Status,
 				OpenInterest = OpenInterest,
 				IsUpTick = IsUpTick,
 				Currency = Currency,
+				SeqNum = SeqNum,
+				BuildFrom = BuildFrom,
+				Yield = Yield,
+				OrderBuyId = OrderBuyId,
+				OrderSellId = OrderSellId,
 			};
 		}
 
@@ -250,17 +247,14 @@ namespace StockSharp.BusinessEntities
 		/// <returns>A hash code.</returns>
 		public override int GetHashCode()
 		{
-			return (Security?.GetHashCode() ?? 0) ^ Id.GetHashCode();
+			return (Security?.GetHashCode() ?? 0) ^ (Id ?? default).GetHashCode();
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			var idStr = Id == 0 ? StringId : Id.To<string>();
-			return $"{Time} {idStr} {Price} {Volume}";
+			var idStr = Id is null ? StringId : Id.To<string>();
+			return $"{ServerTime} {idStr} {Price} {Volume}";
 		}
 	}
 }

@@ -56,13 +56,14 @@ namespace StockSharp.Algo
 	public class MarketRuleList : SynchronizedSet<IMarketRule>, IMarketRuleList
 	{
 		private readonly IMarketRuleContainer _container;
-		private readonly Dictionary<object, HashSet<IMarketRule>> _rulesByToken = new Dictionary<object, HashSet<IMarketRule>>(); 
+		private readonly Dictionary<object, HashSet<IMarketRule>> _rulesByToken = new(); 
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="MarketRuleList"/>.
 		/// </summary>
 		/// <param name="container">The rules container.</param>
 		public MarketRuleList(IMarketRuleContainer container)
+			: base(true)
 		{
 			_container = container ?? throw new ArgumentNullException(nameof(container));
 		}
@@ -84,22 +85,9 @@ namespace StockSharp.Algo
 		/// Deleting the element.
 		/// </summary>
 		/// <param name="item">Element.</param>
-		/// <returns>The sign of possible action.</returns>
-		protected override bool OnRemoving(IMarketRule item)
-		{
-			if (!Contains(item))
-				throw new InvalidOperationException(LocalizedStrings.Str906Params.Put(item.Name, _container.Name));
-
-			return base.OnRemoving(item);
-		}
-
-		/// <summary>
-		/// Deleting the element.
-		/// </summary>
-		/// <param name="item">Element.</param>
 		protected override void OnRemoved(IMarketRule item)
 		{
-			item.Container.AddRuleLog(LogLevels.Debug, item, LocalizedStrings.Str907);
+			item.Container.AddRuleLog(LogLevels.Debug, item, LocalizedStrings.Deleting);
 
 			if (item.Token != null)
 			{
@@ -121,7 +109,7 @@ namespace StockSharp.Algo
 		/// <returns>The sign of possible action.</returns>
 		protected override bool OnClearing()
 		{
-			foreach (var item in ToArray())
+			foreach (var item in this.ToArray())
 				Remove(item);
 
 			return base.OnClearing();
@@ -145,9 +133,9 @@ namespace StockSharp.Algo
 		{
 			lock (SyncRoot)
 			{
-				var set = _rulesByToken.TryGetValue(token);
-
-				return set?.ToArray() ?? Enumerable.Empty<IMarketRule>();
+				return _rulesByToken.TryGetValue(token, out var set)
+					? set.ToArray()
+					: Enumerable.Empty<IMarketRule>();
 			}
 		}
 
@@ -157,10 +145,8 @@ namespace StockSharp.Algo
 			{
 				foreach (var rule in GetRulesByToken(token))
 				{
-					if (currentRule == rule)
-						continue;
-
-					Remove(rule);
+					if (currentRule != rule)
+						Remove(rule);
 				}
 			}
 		}

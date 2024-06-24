@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -17,6 +17,9 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
@@ -24,10 +27,13 @@ namespace StockSharp.Algo.Indicators
 	/// Gator oscillator.
 	/// </summary>
 	/// <remarks>
-	/// http://ta.mql4.com/indicators/bills/gator.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/gator_oscillator.html
 	/// </remarks>
-	[DisplayName("Gator")]
-	[DescriptionLoc(LocalizedStrings.Str850Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.GatorKey,
+		Description = LocalizedStrings.GatorOscillatorKey)]
+	[Doc("topics/api/indicators/list_of_indicators/gator_oscillator.html")]
 	public class GatorOscillator : BaseComplexIndicator
 	{
 		private readonly Alligator _alligator;
@@ -38,10 +44,8 @@ namespace StockSharp.Algo.Indicators
 		public GatorOscillator()
 		{
 			_alligator = new Alligator();
-			Histogram1 = new GatorHistogram(_alligator.Jaw, _alligator.Lips, false);
-			Histogram2 = new GatorHistogram(_alligator.Lips, _alligator.Teeth, true);
-			InnerIndicators.Add(Histogram1);
-			InnerIndicators.Add(Histogram2);
+			AddInner(Histogram1 = new(_alligator.Jaw, _alligator.Lips, false));
+			AddInner(Histogram2 = new(_alligator.Lips, _alligator.Teeth, true));
 		}
 
 		/// <summary>
@@ -58,34 +62,35 @@ namespace StockSharp.Algo.Indicators
 			Histogram2 = histogram2;
 		}
 
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
 		/// <summary>
 		/// Top histogram.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName(LocalizedStrings.Str3564Key)]
-		[DescriptionLoc(LocalizedStrings.Str851Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.UpKey,
+			Description = LocalizedStrings.TopHistogramKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public GatorHistogram Histogram1 { get; }
 
 		/// <summary>
 		/// Lower histogram.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName(LocalizedStrings.Str3565Key)]
-		[DescriptionLoc(LocalizedStrings.Str852Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.DownKey,
+			Description = LocalizedStrings.LowHistogramKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public GatorHistogram Histogram2 { get; }
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _alligator.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _alligator.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			_alligator.Process(input);

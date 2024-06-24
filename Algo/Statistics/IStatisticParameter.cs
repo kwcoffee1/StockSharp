@@ -16,20 +16,35 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Statistics
 {
 	using System;
+	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.ComponentModel;
 	using Ecng.Serialization;
 	using Ecng.Common;
 
+	using StockSharp.Messages;
+	using StockSharp.Localization;
+
 	/// <summary>
 	/// The interface, describing statistic parameter.
 	/// </summary>
-	public interface IStatisticParameter : IPersistable
+	public interface IStatisticParameter : IPersistable, INotifyPropertyChanged
 	{
 		/// <summary>
 		/// Parameter name.
 		/// </summary>
-		string Name { get; set; }
+		string Name { get; }
+
+		/// <summary>
+		/// Type.
+		/// </summary>
+		StatisticParameterTypes Type { get; }
+
+		/// <summary>
+		/// <see cref="Value"/> type.
+		/// </summary>
+		Type ValueType { get; }
 
 		/// <summary>
 		/// The current value of the parameter.
@@ -52,7 +67,12 @@ namespace StockSharp.Algo.Statistics
 		string Category { get; }
 
 		/// <summary>
-		/// <see cref="IStatisticParameter.Value"/> change event.
+		/// Order.
+		/// </summary>
+		int Order { get; }
+
+		/// <summary>
+		/// <see cref="Value"/> change event.
 		/// </summary>
 		event Action ValueChanged;
 
@@ -60,6 +80,12 @@ namespace StockSharp.Algo.Statistics
 		/// To reset the parameter value.
 		/// </summary>
 		void Reset();
+
+		/// <summary>
+		/// Init by initial value.
+		/// </summary>
+		/// <param name="beginValue">Initial value.</param>
+		void Init(object beginValue);
 	}
 
 	/// <summary>
@@ -72,6 +98,12 @@ namespace StockSharp.Algo.Statistics
 		/// The current value of the parameter.
 		/// </summary>
 		new TValue Value { get; }
+
+		/// <summary>
+		/// Init by initial value.
+		/// </summary>
+		/// <param name="beginValue">Initial value.</param>
+		void Init(TValue beginValue);
 	}
 
 	/// <summary>
@@ -84,40 +116,50 @@ namespace StockSharp.Algo.Statistics
 		/// <summary>
 		/// Initialize <see cref="BaseStatisticParameter{T}"/>.
 		/// </summary>
-		protected BaseStatisticParameter()
+		/// <param name="type"><see cref="IStatisticParameter.Type"/></param>
+		protected BaseStatisticParameter(StatisticParameterTypes type)
 		{
-			var type = GetType();
-			_name = type.Name.Remove("Parameter");
+			Type = type;
 
-			DisplayName = type.GetDisplayName(GetReadableName(_name));
-			Description = type.GetDescription(DisplayName);
-			Category = type.GetCategory();
+			var type2 = GetType();
+			Name = type2.Name.Remove("Parameter");
+
+			ChangeNameAndDescription();
+			Order = type2.GetAttribute<DisplayAttribute>()?.Order ?? default;
+
+			LocalizedStrings.ActiveLanguageChanged += ChangeNameAndDescription;
 		}
 
-		private string _name;
-
-		/// <inheritdoc />
-		public string Name
+		private void ChangeNameAndDescription()
 		{
-			get => _name;
-			set
-			{
-				if (_name == value)
-					return;
+			var type2 = GetType();
 
-				_name = value;
-				this.Notify(nameof(Name));
-			}
+			DisplayName = type2.GetDisplayName(GetReadableName(Name));
+			Description = type2.GetDescription(DisplayName);
+			Category = type2.GetCategory();
+
+			NotifyChanged(nameof(DisplayName));
+			NotifyChanged(nameof(Description));
+			NotifyChanged(nameof(Category));
 		}
 
 		/// <inheritdoc />
-		public string DisplayName { get; }
+		public string Name { get; }
 
 		/// <inheritdoc />
-		public string Description { get; }
+		public StatisticParameterTypes Type { get; }
 
 		/// <inheritdoc />
-		public string Category { get; }
+		public string DisplayName { get; private set; }
+
+		/// <inheritdoc />
+		public string Description { get; private set; }
+
+		/// <inheritdoc />
+		public string Category { get; private set; }
+
+		/// <inheritdoc />
+		public int Order { get; }
 
 		private TValue _value;
 
@@ -156,13 +198,18 @@ namespace StockSharp.Algo.Statistics
 		object IStatisticParameter.Value => Value;
 
 		/// <inheritdoc />
-		public virtual event Action ValueChanged;
+		public Type ValueType => typeof(TValue);
 
 		/// <inheritdoc />
-		public virtual void Reset()
-		{
-			Value = default(TValue);
-		}
+		public event Action ValueChanged;
+
+		/// <inheritdoc />
+		public virtual void Reset() => Value = default;
+
+		void IStatisticParameter.Init(object beginValue) => Init((TValue)beginValue);
+
+		/// <inheritdoc/>
+		public virtual void Init(TValue beginValue) { }
 
 		/// <summary>
 		/// To call the event <see cref="ValueChanged"/>.

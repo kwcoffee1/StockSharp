@@ -29,9 +29,9 @@ namespace StockSharp.Algo.Storages
 	public interface IEntityRegistry
 	{
 		/// <summary>
-		/// The special interface for direct access to the storage.
 		/// </summary>
-		IStorage Storage { get; }
+		[Obsolete("This property exists only for backward compatibility.")]
+		object Storage { get; }
 
 		/// <summary>
 		/// The time delayed action.

@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -17,17 +17,26 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Bollinger Bands.
 	/// </summary>
-	[DisplayName("Bollinger")]
-	[DescriptionLoc(LocalizedStrings.Str777Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/bollinger_bands.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.BollingerKey,
+		Description = LocalizedStrings.BollingerBandsKey)]
+	[Doc("topics/api/indicators/list_of_indicators/bollinger_bands.html")]
 	public class BollingerBands : BaseComplexIndicator
 	{
-		private readonly StandardDeviation _dev = new StandardDeviation();
+		private readonly StandardDeviation _dev = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="BollingerBands"/>.
@@ -43,9 +52,10 @@ namespace StockSharp.Algo.Indicators
 		/// <param name="ma">Moving Average.</param>
 		public BollingerBands(LengthIndicator<decimal> ma)
 		{
-			InnerIndicators.Add(MovingAverage = ma);
-			InnerIndicators.Add(UpBand = new BollingerBand(MovingAverage, _dev) { Name = "UpBand" });
-			InnerIndicators.Add(LowBand = new BollingerBand(MovingAverage, _dev) { Name = "LowBand" });
+			AddInner(MovingAverage = ma);
+			AddInner(UpBand = new(MovingAverage, _dev) { Name = nameof(UpBand) });
+			AddInner(LowBand = new(MovingAverage, _dev) { Name = nameof(LowBand) });
+			_dev.Length = ma.Length;
 			Width = 2;
 		}
 
@@ -70,10 +80,12 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Period length. By default equal to 1.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str778Key)]
-		[DescriptionLoc(LocalizedStrings.Str779Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		public virtual int Length
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PeriodKey,
+			Description = LocalizedStrings.IndicatorPeriodKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public int Length
 		{
 			get => MovingAverage.Length;
 			set
@@ -86,27 +98,27 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Bollinger Bands channel width. Default value equal to 2.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str780Key)]
-		[DescriptionLoc(LocalizedStrings.Str781Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ChannelWidthKey,
+			Description = LocalizedStrings.ChannelWidthDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal Width
 		{
 			get => UpBand.Width;
 			set
 			{
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str782);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				UpBand.Width = value;
 				LowBand.Width = -value;
- 
+
 				Reset();
 			}
 		}
-		
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -116,25 +128,26 @@ namespace StockSharp.Algo.Indicators
 			//LowBand.Reset();
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => MovingAverage.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => MovingAverage.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			_dev.Process(input);
+
 			var maValue = MovingAverage.Process(input);
+
 			var value = new ComplexIndicatorValue(this);
+
 			value.InnerValues.Add(MovingAverage, maValue);
 			value.InnerValues.Add(UpBand, UpBand.Process(input));
 			value.InnerValues.Add(LowBand, LowBand.Process(input));
+
 			return value;
 		}
+
+		/// <inheritdoc />
+		public override string ToString() => base.ToString() + " " + Length;
 	}
 }

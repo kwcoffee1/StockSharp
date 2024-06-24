@@ -15,27 +15,32 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
+	using StockSharp.Messages;
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Volume weighted moving average.
 	/// </summary>
 	/// <remarks>
-	/// http://www2.wealth-lab.com/WL5Wiki/VMA.ashx http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:vwap_intraday.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/volume_weighted_ma.html
 	/// </remarks>
-	[DisplayName("VMA")]
-	[DescriptionLoc(LocalizedStrings.Str823Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.VMAKey,
+		Description = LocalizedStrings.VolumeWeightedMovingAverageKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/volume_weighted_ma.html")]
 	public class VolumeWeightedMovingAverage : LengthIndicator<decimal>
 	{
 		// Текущее значение числителя
-		private readonly Sum _nominator = new Sum();
+		private readonly Sum _nominator = new();
 
 		// Текущее значение знаменателя
-		private readonly Sum _denominator = new Sum();
+		private readonly Sum _denominator = new();
 
 		/// <summary>
 		/// To create the indicator <see cref="VolumeWeightedMovingAverage"/>.
@@ -45,28 +50,20 @@ namespace StockSharp.Algo.Indicators
 			Length = 32;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
 			_denominator.Length = _nominator.Length = Length;
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _nominator.IsFormed && _denominator.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _nominator.IsFormed && _denominator.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var candle = input.GetValue<ICandleMessage>();
 
 			var shValue = _nominator.Process(input.SetValue(this, candle.ClosePrice * candle.TotalVolume)).GetValue<decimal>();
 			var znValue = _denominator.Process(input.SetValue(this, candle.TotalVolume)).GetValue<decimal>();

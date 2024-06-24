@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -18,26 +18,31 @@ namespace StockSharp.Algo.Indicators
 	using System;
 	using System.Collections.Generic;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
-	using StockSharp.Algo.Candles;
+	using StockSharp.Messages;
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Zig Zag (Metastock).
 	/// </summary>
 	/// <remarks>
-	/// Zig Zag indicator filters fluctuations of prices or indicator values, which are not beyond specific value, presented in % or in absolute numbers. It is done for preliminary analysis of chart, emphasizing only sufficiently big price changes (indicator values).
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/zigzag_metastock.html
 	/// </remarks>
-	[DisplayName("ZigZag Metastock")]
-	[DescriptionLoc(LocalizedStrings.Str826Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ZigZagMetaStockKey,
+		Description = LocalizedStrings.ZigZagDescKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
 	[IndicatorOut(typeof(ShiftedIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/zigzag_metastock.html")]
 	public class ZigZagEquis : BaseIndicator
 	{
 		private readonly IList<decimal> _buffer = new List<decimal>();
-		private readonly List<decimal> _zigZagBuffer = new List<decimal>();
+		private readonly List<decimal> _zigZagBuffer = new();
 
 		private bool _needAdd = true;
 
@@ -48,6 +53,9 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
+		/// <inheritdoc />
+		public override int NumValuesToInitialize => 2;
+
 		private decimal _deviation = 0.45m * 0.01m;
 
 		/// <summary>
@@ -56,9 +64,11 @@ namespace StockSharp.Algo.Indicators
 		/// <remarks>
 		/// It is specified in the range from 0 to 1.
 		/// </remarks>
-		[DisplayNameLoc(LocalizedStrings.Str833Key)]
-		[DescriptionLoc(LocalizedStrings.Str834Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PercentageChangeKey,
+			Description = LocalizedStrings.PercentageChangeDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal Deviation
 		{
 			get => _deviation;
@@ -75,18 +85,22 @@ namespace StockSharp.Algo.Indicators
 			}
 		}
 
-		private Func<Candle, decimal> _byPrice = candle => candle.ClosePrice;
+		private Level1Fields _priceField = Level1Fields.ClosePrice;
 
 		/// <summary>
 		/// The converter, returning from the candle a price for calculations.
 		/// </summary>
-		[Browsable(false)]
-		public Func<Candle, decimal> ByPrice
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ClosingPriceKey,
+			Description = LocalizedStrings.ClosingPriceKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public Level1Fields PriceField
 		{
-			get => _byPrice;
+			get => _priceField;
 			set
 			{
-				_byPrice = value;
+				_priceField = value;
 				Reset();
 			}
 		}
@@ -97,9 +111,7 @@ namespace StockSharp.Algo.Indicators
 		[Browsable(false)]
 		public decimal CurrentValue { get; private set; }
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_needAdd = true;
@@ -109,14 +121,10 @@ namespace StockSharp.Algo.Indicators
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var value = _byPrice(input.GetValue<Candle>());
+			var value = input.GetValue<decimal>(PriceField);
 			if (_needAdd)
 			{
 				_buffer.Add(value);
@@ -125,7 +133,7 @@ namespace StockSharp.Algo.Indicators
 			else
 			{
 				_buffer[_buffer.Count - 1] = value;
-				_zigZagBuffer[_zigZagBuffer.Count - 1] = 0;
+				_zigZagBuffer[^1] = 0;
 			}
 
 			const int level = 3;
@@ -221,29 +229,23 @@ namespace StockSharp.Algo.Indicators
 
 			CurrentValue = last;
 
-			return new ShiftedIndicatorValue(this, valueId - 1, input.SetValue(this, lastButOne));
+			return new ShiftedIndicatorValue(this, lastButOne, valueId - 1);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
+			base.Load(storage);
 
-			Deviation = settings.GetValue<decimal>(nameof(Deviation));
+			Deviation = storage.GetValue<decimal>(nameof(Deviation));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
+			base.Save(storage);
 
-			settings.SetValue(nameof(Deviation), Deviation);
+			storage.SetValue(nameof(Deviation), Deviation);
 		}
 	}
 }

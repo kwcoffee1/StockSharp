@@ -13,11 +13,16 @@ Created: 2015, 11, 11, 2:32 PM
 Copyright 2010 by StockSharp, LLC
 *******************************************************************************************/
 #endregion S# License
+
 namespace StockSharp.Messages
 {
 	using System;
 	using System.ComponentModel.DataAnnotations;
+	using System.Linq;
 	using System.Runtime.Serialization;
+	using System.ComponentModel;
+
+	using Ecng.Common;
 
 	using StockSharp.Localization;
 
@@ -39,7 +44,7 @@ namespace StockSharp.Messages
 		/// Regular.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str1629Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.RegularKey)]
 		Regular,
 
 		/// <summary>
@@ -55,87 +60,97 @@ namespace StockSharp.Messages
 	/// </summary>
 	[Serializable]
 	[DataContract]
-	public class NewsMessage : Message
+	[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.NewsKey)]
+	public class NewsMessage : BaseSubscriptionIdMessage<NewsMessage>,
+		IServerTimeMessage, INullableSecurityIdMessage, ITransactionIdMessage, ISeqNumMessage
 	{
+		/// <inheritdoc />
+		[DataMember]
+		public long TransactionId { get; set; }
+
 		/// <summary>
 		/// News ID.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.IdKey)]
-		[DescriptionLoc(LocalizedStrings.NewsIdKey)]
-		[MainCategory]
-		//[Identity]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.IdKey,
+			Description = LocalizedStrings.NewsIdKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string Id { get; set; }
 
 		/// <summary>
 		/// Electronic board code.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.BoardKey)]
-		[DescriptionLoc(LocalizedStrings.BoardCodeKey, true)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.BoardKey,
+			Description = LocalizedStrings.BoardCodeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string BoardCode { get; set; }
 
-		/// <summary>
-		/// Security ID, for which news have been published.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.SecurityKey)]
-		[DescriptionLoc(LocalizedStrings.Str212Key)]
-		[MainCategory]
-		[Ecng.Serialization.Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SecurityKey,
+			Description = LocalizedStrings.NewsSecurityIdKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public SecurityId? SecurityId { get; set; }
 
 		/// <summary>
 		/// News source.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str213Key)]
-		[DescriptionLoc(LocalizedStrings.Str214Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SourceKey,
+			Description = LocalizedStrings.NewsSourceKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string Source { get; set; }
 
 		/// <summary>
 		/// Header.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str215Key)]
-		[DescriptionLoc(LocalizedStrings.Str215Key, true)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.HeaderKey,
+			Description = LocalizedStrings.HeaderKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string Headline { get; set; }
 
 		/// <summary>
 		/// News text.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str217Key)]
-		[DescriptionLoc(LocalizedStrings.Str218Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TextKey,
+			Description = LocalizedStrings.NewsTextKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string Story { get; set; }
 
-		/// <summary>
-		/// Time of news arrival.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.TimeKey)]
-		[DescriptionLoc(LocalizedStrings.Str220Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TimeKey,
+			Description = LocalizedStrings.NewsTimeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public DateTimeOffset ServerTime { get; set; }
 
 		/// <summary>
 		/// News link in the internet.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str221Key)]
-		[DescriptionLoc(LocalizedStrings.Str222Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LinkKey,
+			Description = LocalizedStrings.NewsLinkKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string Url { get; set; }
-
-		/// <summary>
-		/// ID of the original message <see cref="MarketDataMessage.TransactionId"/> for which this message is a response.
-		/// </summary>
-		[DataMember]
-		public long OriginalTransactionId { get; set; }
 
 		/// <summary>
 		/// News priority.
@@ -146,8 +161,46 @@ namespace StockSharp.Messages
 			Name = LocalizedStrings.PriorityKey,
 			Description = LocalizedStrings.NewsPriorityKey,
 			GroupName = LocalizedStrings.GeneralKey)]
-		[Ecng.Serialization.Nullable]
+		//[Ecng.Serialization.Nullable]
 		public NewsPriorities? Priority { get; set; }
+
+		/// <summary>
+		/// Product id.
+		/// </summary>
+		[DataMember]
+		[Browsable(false)]
+		public long ProductId { get; set; }
+
+		/// <summary>
+		/// Language.
+		/// </summary>
+		[DataMember]
+		public string Language { get; set; }
+
+		/// <summary>
+		/// Expiration date.
+		/// </summary>
+		[DataMember]
+		public DateTimeOffset? ExpiryDate { get; set; }
+
+		/// <inheritdoc />
+		public override DataType DataType => DataType.News;
+
+		private long[] _attachments = Array.Empty<long>();
+
+		/// <summary>
+		/// Attachments.
+		/// </summary>
+		[DataMember]
+		public long[] Attachments
+		{
+			get => _attachments;
+			set => _attachments = value ?? throw new ArgumentNullException(nameof(value));
+		}
+
+		/// <inheritdoc />
+		[DataMember]
+		public long SeqNum { get; set; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="NewsMessage"/>.
@@ -160,28 +213,45 @@ namespace StockSharp.Messages
 		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",Sec={SecurityId},Head={Headline}";
+			var str = base.ToString();
+
+			if (TransactionId > 0)
+				str += $",TrId={TransactionId}";
+
+			str += $",Time={ServerTime:yyyy/MM/dd HH:mm:ss},Sec={SecurityId},Head={Headline}";
+
+			if (Attachments.Length > 0)
+				str += $",Attachments={Attachments.Select(id => id.To<string>()).JoinComma()}";
+
+			if (SeqNum != default)
+				str += $",SQ={SeqNum}";
+
+			if (ProductId != default)
+				str += $",product={ProductId}";
+
+			return str;
 		}
 
-		/// <summary>
-		/// Create a copy of <see cref="NewsMessage"/>.
-		/// </summary>
-		/// <returns>Copy.</returns>
-		public override Message Clone()
+		/// <inheritdoc />
+		public override void CopyTo(NewsMessage destination)
 		{
-			return new NewsMessage
-			{
-				LocalTime = LocalTime,
-				ServerTime = ServerTime,
-				SecurityId = SecurityId,
-				BoardCode = BoardCode,
-				Headline = Headline,
-				Id = Id,
-				Source = Source,
-				Story = Story,
-				Url = Url,
-				Priority = Priority,
-			};
+			base.CopyTo(destination);
+
+			destination.TransactionId = TransactionId;
+			destination.Id = Id;
+			destination.BoardCode = BoardCode;
+			destination.SecurityId = SecurityId;
+			destination.Source = Source;
+			destination.Headline = Headline;
+			destination.Story = Story;
+			destination.ServerTime = ServerTime;
+			destination.Url = Url;
+			destination.Priority = Priority;
+			destination.Language = Language;
+			destination.ExpiryDate = ExpiryDate;
+			destination.Attachments = Attachments.ToArray();
+			destination.SeqNum = SeqNum;
+			destination.ProductId = ProductId;
 		}
 	}
 }

@@ -20,9 +20,7 @@ namespace StockSharp.Algo.Indicators
 	using System.ComponentModel;
 	using System.Linq;
 
-	using MoreLinq;
-
-	using StockSharp.Algo.Candles;
+	using Ecng.Collections;
 
 	/// <summary>
 	/// Senkou (B) line.
@@ -30,7 +28,7 @@ namespace StockSharp.Algo.Indicators
 	[IndicatorIn(typeof(CandleIndicatorValue))]
 	public class IchimokuSenkouBLine : LengthIndicator<decimal>
 	{
-		private readonly List<Candle> _buffer = new List<Candle>();
+		private readonly CircularBuffer<(decimal, decimal)> _buffer;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="IchimokuLine"/>.
@@ -39,69 +37,54 @@ namespace StockSharp.Algo.Indicators
 		public IchimokuSenkouBLine(IchimokuLine kijun)
 		{
 			Kijun = kijun ?? throw new ArgumentNullException(nameof(kijun));
+			_buffer = new(Length);
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
+
 			_buffer.Clear();
+			_buffer.Capacity = Length;
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _buffer.Count >= Length && Buffer.Count >= Kijun.Length;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _buffer.Count >= Length && Buffer.Count >= Kijun.Length;
 
-		//_buffer.Count >= Length &&
-		
 		/// <summary>
 		/// Kijun line.
 		/// </summary>
 		[Browsable(false)]
 		public IchimokuLine Kijun { get; }
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
-			
+			var (_, high, low, _) = input.GetOhlc();
+
 			decimal? result = null;
-			var buff = _buffer;
+			IList<(decimal high, decimal low)> buff = _buffer;
 
 			if (input.IsFinal)
-			{
-				_buffer.Add(candle);
-
-				// если буффер стал достаточно большим (стал больше длины)
-				if (_buffer.Count > Length)
-					_buffer.RemoveAt(0);
-			}
+				_buffer.PushBack((high, low));
 			else
-				buff = _buffer.Skip(1).Concat(candle).ToList();
+				buff = _buffer.Skip(1).Append((high, low)).ToList();
 
 			if (buff.Count >= Length)
 			{
 				// рассчитываем значение
-				var max = buff.Max(t => t.HighPrice);
-				var min = buff.Min(t => t.LowPrice);
+				var max = buff.Max(t => t.high);
+				var min = buff.Min(t => t.low);
 
 				if (Kijun.IsFormed && input.IsFinal)
-				    Buffer.Add((max + min) / 2);
+				   Buffer.PushBack((max + min) / 2);
 
 				if (Buffer.Count >= Kijun.Length)
 					result = Buffer[0];
 
 				if (Buffer.Count > Kijun.Length)
-				{
-					Buffer.RemoveAt(0);
-				}
+					Buffer.PopFront();
 			}
 
 			return result == null ? new DecimalIndicatorValue(this) : new DecimalIndicatorValue(this, result.Value);

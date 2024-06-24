@@ -32,35 +32,35 @@ namespace StockSharp.Messages
 		/// Session assigned. Cannot register new orders, but can cancel.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str399Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.AssignedKey)]
 		Assigned,
 
 		/// <summary>
 		/// Session active. Can register and cancel orders.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str238Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.ActiveKey)]
 		Active,
 
 		/// <summary>
 		/// Suspended. Cannot register new orders, but can cancel.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str400Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.SuspendedKey)]
 		Paused,
 
 		/// <summary>
 		/// Rejected. Cannot register and cancel orders.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str401Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.StoppedKey)]
 		ForceStopped,
 
 		/// <summary>
 		/// Finished. Cannot register and cancel orders.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str402Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.FinishedKey)]
 		Ended,
 	}
 
@@ -69,7 +69,7 @@ namespace StockSharp.Messages
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class BoardStateMessage : Message
+	public class BoardStateMessage : BaseSubscriptionIdMessage<BoardStateMessage>, IServerTimeMessage
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="BoardStateMessage"/>.
@@ -78,6 +78,9 @@ namespace StockSharp.Messages
 			: base(MessageTypes.BoardState)
 		{
 		}
+
+		/// <inheritdoc />
+		public override DataType DataType => DataType.BoardState;
 
 		/// <summary>
 		/// Board code.
@@ -91,24 +94,21 @@ namespace StockSharp.Messages
 		[DataMember]
 		public SessionStates State { get; set; }
 
-		/// <summary>
-		/// Create a copy of <see cref="BoardStateMessage"/>.
-		/// </summary>
-		/// <returns>Copy.</returns>
-		public override Message Clone()
+		/// <inheritdoc />
+		[DataMember]
+		public DateTimeOffset ServerTime { get; set; }
+
+		/// <inheritdoc />
+		public override void CopyTo(BoardStateMessage destination)
 		{
-			return new BoardStateMessage
-			{
-				BoardCode = BoardCode,
-				State = State,
-				LocalTime = LocalTime
-			};
+			base.CopyTo(destination);
+
+			destination.BoardCode = BoardCode;
+			destination.State = State;
+			destination.ServerTime = ServerTime;
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
 			return base.ToString() + $",Board={BoardCode},State={State}";

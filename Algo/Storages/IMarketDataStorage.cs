@@ -16,10 +16,8 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Storages
 {
 	using System;
-	using System.Collections;
 	using System.Collections.Generic;
 
-	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
 
 	/// <summary>
@@ -35,17 +33,12 @@ namespace StockSharp.Algo.Storages
 		/// <summary>
 		/// The type of market-data, operated by given storage.
 		/// </summary>
-		Type DataType { get; }
+		DataType DataType { get; }
 
 		/// <summary>
 		/// The instrument, operated by the external storage.
 		/// </summary>
-		Security Security { get; }
-
-		/// <summary>
-		/// The additional argument, associated with data. For example, <see cref="CandleMessage.Arg"/>.
-		/// </summary>
-		object Arg { get; }
+		SecurityId SecurityId { get; }
 
 		/// <summary>
 		/// The storage (database, file etc.).
@@ -62,13 +55,13 @@ namespace StockSharp.Algo.Storages
 		/// </summary>
 		/// <param name="data">Market data.</param>
 		/// <returns>Count of saved data.</returns>
-		int Save(IEnumerable data);
+		int Save(IEnumerable<Message> data);
 
 		/// <summary>
 		/// To delete market data from storage.
 		/// </summary>
 		/// <param name="data">Market data to be deleted.</param>
-		void Delete(IEnumerable data);
+		void Delete(IEnumerable<Message> data);
 
 		/// <summary>
 		/// To remove market data on specified date from the storage.
@@ -81,7 +74,7 @@ namespace StockSharp.Algo.Storages
 		/// </summary>
 		/// <param name="date">Date, for which data shall be loaded.</param>
 		/// <returns>Data. If there is no data, the empty set will be returned.</returns>
-		IEnumerable Load(DateTime date);
+		IEnumerable<Message> Load(DateTime date);
 
 		/// <summary>
 		/// To get meta-information on data.
@@ -99,32 +92,33 @@ namespace StockSharp.Algo.Storages
 	/// <summary>
 	/// The interface, describing the storage of market data (ticks, order books etc.).
 	/// </summary>
-	/// <typeparam name="TData">Market data type.</typeparam>
-	public interface IMarketDataStorage<TData> : IMarketDataStorage
+	/// <typeparam name="TMessage">Market data type.</typeparam>
+	public interface IMarketDataStorage<TMessage> : IMarketDataStorage
+		where TMessage : Message
 	{
 		/// <summary>
 		/// To save market data in storage.
 		/// </summary>
 		/// <param name="data">Market data.</param>
 		/// <returns>Count of saved data.</returns>
-		int Save(IEnumerable<TData> data);
+		int Save(IEnumerable<TMessage> data);
 
 		/// <summary>
 		/// To delete market data from storage.
 		/// </summary>
 		/// <param name="data">Market data to be deleted.</param>
-		void Delete(IEnumerable<TData> data);
+		void Delete(IEnumerable<TMessage> data);
 
 		/// <summary>
 		/// To load data.
 		/// </summary>
 		/// <param name="date">Date, for which data shall be loaded.</param>
 		/// <returns>Data. If there is no data, the empty set will be returned.</returns>
-		new IEnumerable<TData> Load(DateTime date);
+		new IEnumerable<TMessage> Load(DateTime date);
 
 		/// <summary>
 		/// The serializer.
 		/// </summary>
-		new IMarketDataSerializer<TData> Serializer { get; }
+		new IMarketDataSerializer<TMessage> Serializer { get; }
 	}
 }

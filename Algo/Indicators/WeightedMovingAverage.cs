@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,19 +15,24 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.Collections.Generic;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Linq;
 
-	using Ecng.Collections;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Weighted moving average.
 	/// </summary>
-	[DisplayName("WMA")]
-	[DescriptionLoc(LocalizedStrings.Str824Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/weighted_ma.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.WMAKey,
+		Description = LocalizedStrings.WeightedMovingAverageKey)]
+	[Doc("topics/api/indicators/list_of_indicators/weighted_ma.html")]
 	public class WeightedMovingAverage : LengthIndicator<decimal>
 	{
 		private decimal _denominator = 1;
@@ -40,9 +45,7 @@ namespace StockSharp.Algo.Indicators
 			Length = 32;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -53,30 +56,17 @@ namespace StockSharp.Algo.Indicators
 				_denominator += i;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
 
 			if (input.IsFinal)
 			{
-				Buffer.Add(newValue);
-
-				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
+				Buffer.AddEx(newValue);
 			}
 
-			var buff = Buffer;
-			if (!input.IsFinal)
-			{
-				buff = new List<decimal>();
-				buff.AddRange(Buffer.Skip(1));
-				buff.Add(newValue);
-			}
+			var buff = input.IsFinal ? Buffer : Buffer.Skip(1).Append(newValue);
 
 			var w = 1;
 			return new DecimalIndicatorValue(this, buff.Sum(v => w++ * v) / _denominator);

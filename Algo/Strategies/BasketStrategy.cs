@@ -47,7 +47,7 @@ namespace StockSharp.Algo.Strategies
 	public class BasketStrategy : Strategy
 	{
 		/// <summary>
-		/// Create strategy.
+		/// Initializes a new instance of the <see cref="BasketStrategy"/>.
 		/// </summary>
 		/// <param name="finishMode">The condition of subsidiary strategies operation end.</param>
 		public BasketStrategy(BasketStrategyFinishModes finishMode)
@@ -68,15 +68,13 @@ namespace StockSharp.Algo.Strategies
 		/// </summary>
 		public Strategy FirstFinishStrategy { get; private set; }
 
-		/// <summary>
-		/// The method is called when the <see cref="Strategy.Start"/> method has been called and the <see cref="Strategy.ProcessState"/> state has been taken the <see cref="ProcessStates.Started"/> value.
-		/// </summary>
-		protected override void OnStarted()
+		/// <inheritdoc />
+		protected override void OnStarted(DateTimeOffset time)
 		{
 			if (FinishMode != BasketStrategyFinishModes.None && ChildStrategies.Count == 0)
-				throw new InvalidOperationException(LocalizedStrings.Str1224);
+				throw new InvalidOperationException(LocalizedStrings.NoChildStrategies);
 
-			base.OnStarted();
+			base.OnStarted(time);
 		}
 
 		private void OnChildStrategiesAdded(Strategy strategy)
@@ -102,12 +100,10 @@ namespace StockSharp.Algo.Strategies
 				.Once()
 				.Apply(this);
 
-			rule.UpdateName(rule.Name + " (BasketStrategy.OnChildStrategiesAdded)");
+			rule.UpdateName(rule.Name + $" ({nameof(BasketStrategy)}.{nameof(OnChildStrategiesAdded)})");
 		}
 
-		/// <summary>
-		/// Release resources.
-		/// </summary>
+		/// <inheritdoc />
 		protected override void DisposeManaged()
 		{
 			if (FinishMode != BasketStrategyFinishModes.None)

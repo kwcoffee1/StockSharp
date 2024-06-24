@@ -32,12 +32,9 @@ namespace StockSharp.Algo.Indicators
 		{
 			Tenkan = tenkan ?? throw new ArgumentNullException(nameof(tenkan));
 			Kijun = kijun ?? throw new ArgumentNullException(nameof(kijun));
-		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => Buffer.Count >= Kijun.Length;
+			Reset();
+		}
 
 		/// <summary>
 		/// Tenkan line.
@@ -51,27 +48,25 @@ namespace StockSharp.Algo.Indicators
 		[Browsable(false)]
 		public IchimokuLine Kijun { get; }
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
+		public override int Length
+		{
+			get => Kijun?.Length ?? 1;
+			set => Kijun.Length = value;
+		}
+
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			decimal? result = null;
 
 			if (Tenkan.IsFormed && Kijun.IsFormed)
 			{
-				if (input.IsFinal)
-					Buffer.Add((Tenkan.GetCurrentValue() + Kijun.GetCurrentValue()) / 2);
-
-				if (IsFormed)
+				if (IsFormed || (input.IsFinal && Buffer.Count == (Length - 1)))
 					result = Buffer[0];
 
-				if (Buffer.Count > Kijun.Length && input.IsFinal)
-				{
-					Buffer.RemoveAt(0);
-				}
+				if (input.IsFinal)
+					Buffer.PushBack((Tenkan.GetCurrentValue() + Kijun.GetCurrentValue()) / 2);
 			}
 
 			return result == null ? new DecimalIndicatorValue(this) : new DecimalIndicatorValue(this, result.Value);

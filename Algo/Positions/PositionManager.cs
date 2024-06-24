@@ -17,18 +17,48 @@ namespace StockSharp.Algo.Positions
 {
 	using System;
 	using System.Collections.Generic;
-	using System.Linq;
 
 	using Ecng.Collections;
 
+	using StockSharp.Logging;
 	using StockSharp.Messages;
 
 	/// <summary>
 	/// The position calculation manager.
 	/// </summary>
-	public class PositionManager : IPositionManager
+	public class PositionManager : BaseLogReceiver, IPositionManager
 	{
-		private readonly Dictionary<long, Tuple<Sides, decimal>> _byOrderPositions = new Dictionary<long, Tuple<Sides, decimal>>();
+		private class OrderInfo
+		{
+			public OrderInfo(long transactionId, SecurityId securityId, string portfolioName, Sides side, decimal volume, decimal balance)
+			{
+				TransactionId = transactionId;
+				SecurityId = securityId;
+				PortfolioName = portfolioName;
+				Side = side;
+				Volume = volume;
+				Balance = balance;
+			}
+
+			public long TransactionId { get; }
+			public SecurityId SecurityId { get; }
+			public string PortfolioName { get; }
+			public Sides Side { get; }
+			public decimal Volume { get; }
+			public decimal Balance { get; set; }
+
+			public override string ToString() => $"{TransactionId}: {Balance}/{Volume}";
+		}
+
+		private class PositionInfo
+		{
+			public decimal Value { get; set; }
+
+			public override string ToString() => Value.ToString();
+		}
+
+		private readonly Dictionary<long, OrderInfo> _ordersInfo = new();
+		private readonly Dictionary<Tuple<SecurityId, string>, PositionInfo> _positions = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="PositionManager"/>.
@@ -44,175 +74,146 @@ namespace StockSharp.Algo.Positions
 		/// </summary>
 		public bool ByOrders { get; }
 
-		private SecurityId? _securityId;
-
-		/// <summary>
-		/// The security for which <see cref="Position"/> will be calculated.
-		/// </summary>
-		public SecurityId? SecurityId
+		/// <inheritdoc />
+		public virtual PositionChangeMessage ProcessMessage(Message message)
 		{
-			get => _securityId;
-			set
+			static Tuple<SecurityId, string> CreateKey(SecurityId secId, string pf)
+				=> Tuple.Create(secId, pf.ToLowerInvariant());
+
+			static Tuple<SecurityId, string> CreateKey2<TMessage>(TMessage message)
+				where TMessage : Message, ISecurityIdMessage, IPortfolioNameMessage
+				=> CreateKey(message.SecurityId, message.PortfolioName);
+
+			OrderInfo EnsureGetInfo<TMessage>(TMessage msg, Sides side, decimal volume, decimal balance)
+				where TMessage : Message, ITransactionIdMessage, ISecurityIdMessage, IPortfolioNameMessage
 			{
-				_securityId = value;
-
-				lock (_positions.SyncRoot)
-				{
-					UpdatePositionValue(_positions);
-				}
+				this.AddDebugLog("{0} bal_new {1}/{2}.", msg.TransactionId, balance, volume);
+				return _ordersInfo.SafeAdd(msg.TransactionId, key => new OrderInfo(key, msg.SecurityId, msg.PortfolioName, side, volume, balance));
 			}
-		}
 
-		/// <summary>
-		/// The position aggregate value.
-		/// </summary>
-		public decimal Position { get; set; }
+			void ProcessRegOrder(OrderRegisterMessage regMsg)
+				=> EnsureGetInfo(regMsg, regMsg.Side, regMsg.Volume, regMsg.Volume);
 
-		private readonly CachedSynchronizedDictionary<Tuple<SecurityId, string>, decimal> _positions = new CachedSynchronizedDictionary<Tuple<SecurityId, string>, decimal>();
-
-		/// <summary>
-		/// Positions, grouped by instruments and portfolios.
-		/// </summary>
-		public IEnumerable<KeyValuePair<Tuple<SecurityId, string>, decimal>> Positions
-		{
-			get => _positions.CachedPairs;
-			set
+			PositionChangeMessage UpdatePositions(SecurityId secId, string portfolioName, decimal diff, DateTimeOffset time)
 			{
-				if (value == null)
-					throw new ArgumentNullException(nameof(value));
+				var position = _positions.SafeAdd(CreateKey(secId, portfolioName));
+				position.Value += diff;
 
-				lock (_positions.SyncRoot)
+				return new PositionChangeMessage
 				{
-					_byOrderPositions.Clear();
-
-					_positions.Clear();
-					_positions.AddRange(value);
-
-					UpdatePositionValue(value);
-				}
+					SecurityId = secId,
+					PortfolioName = portfolioName,
+					ServerTime = time,
+					BuildFrom = DataType.Transactions,
+				}.Add(PositionChangeTypes.CurrentValue, position.Value);
 			}
-		}
 
-		private void UpdatePositionValue(IEnumerable<KeyValuePair<Tuple<SecurityId, string>, decimal>> positions)
-		{
-			var secId = SecurityId;
-
-			Position = secId == null
-				? positions.Sum(p => p.Value)
-				: positions.Where(p => p.Key.Item1 == secId.Value).Sum(p => p.Value);
-		}
-
-		/// <summary>
-		/// The event of new position occurrence in <see cref="IPositionManager.Positions"/>.
-		/// </summary>
-		public event Action<Tuple<SecurityId, string>, decimal> NewPosition;
-
-		/// <summary>
-		/// The event of position change in <see cref="IPositionManager.Positions"/>.
-		/// </summary>
-		public event Action<Tuple<SecurityId, string>, decimal> PositionChanged;
-
-		/// <summary>
-		/// To null position.
-		/// </summary>
-		public virtual void Reset()
-		{
-			Positions = Enumerable.Empty<KeyValuePair<Tuple<SecurityId, string>, decimal>>();
-		}
-
-		/// <summary>
-		/// To calculate position.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		/// <returns>The position by order or trade.</returns>
-		public decimal? ProcessMessage(Message message)
-		{
 			switch (message.Type)
 			{
 				case MessageTypes.Reset:
 				{
-					Reset();
+					_ordersInfo.Clear();
+					_positions.Clear();
+
+					break;
+				}
+
+				case MessageTypes.OrderRegister:
+				case MessageTypes.OrderReplace:
+				{
+					ProcessRegOrder((OrderRegisterMessage)message);
+					break;
+				}
+
+				case MessageTypes.OrderPairReplace:
+				{
+					var pairMsg = (OrderPairReplaceMessage)message;
+
+					ProcessRegOrder(pairMsg.Message1);
+					ProcessRegOrder(pairMsg.Message2);
+
 					break;
 				}
 
 				case MessageTypes.Execution:
 				{
 					var execMsg = (ExecutionMessage)message;
-					var key = Tuple.Create(execMsg.SecurityId, execMsg.PortfolioName);
 
-					if (ByOrders && execMsg.HasOrderInfo())
+					if (execMsg.IsMarketData())
+						break;
+
+					var isOrderInfo = execMsg.HasOrderInfo();
+
+					var info =
+						isOrderInfo
+							? execMsg.TransactionId != 0
+								? EnsureGetInfo(execMsg, execMsg.Side, execMsg.OrderVolume ?? 0, execMsg.Balance ?? 0)
+								: _ordersInfo.TryGetValue(execMsg.OriginalTransactionId)
+							: execMsg.OriginalTransactionId != 0 && execMsg.HasTradeInfo()
+								? _ordersInfo.TryGetValue(execMsg.OriginalTransactionId)
+								: null;
+
+					var canUpdateOrder = isOrderInfo && info != null;
+
+					decimal? balDiff = null;
+
+					if (canUpdateOrder)
 					{
-						var orderId = execMsg.OriginalTransactionId;
-						var newPosition = execMsg.GetPosition(true);
-
-						if (newPosition == null)
-							break;
-
-						bool isNew;
-						decimal diff;
-						decimal abs;
-
-						lock (_positions.SyncRoot)
+						var oldBalance = execMsg.TransactionId != 0 ? execMsg.OrderVolume : info.Balance;
+						balDiff = oldBalance - execMsg.Balance;
+						if (balDiff.HasValue && balDiff != 0)
 						{
-							isNew = !_positions.TryGetValue(key, out var prev);
-
-							if (_byOrderPositions.TryGetValue(orderId, out var oldPosition))
-							{
-								if (newPosition.Value != oldPosition.Item2)
-									_byOrderPositions[orderId] = Tuple.Create(execMsg.Side, newPosition.Value);
-
-								diff = newPosition.Value - oldPosition.Item2;
-							}
-							else
-							{
-								_byOrderPositions.Add(orderId, Tuple.Create(execMsg.Side, newPosition.Value));
-								diff = newPosition.Value;
-							}
-
-							abs = prev + diff;
-
-							_positions[key] = abs;
-
-							if (SecurityId == null || SecurityId.Value == execMsg.SecurityId)
-								Position += diff;
+							// ReSharper disable once PossibleInvalidOperationException
+							info.Balance = execMsg.Balance.Value;
+							this.AddDebugLog("{0} bal_upd {1}/{2}.", info.TransactionId, info.Balance, info.Volume);
 						}
-
-						if (isNew)
-							NewPosition?.Invoke(key, abs);
-						else
-							PositionChanged?.Invoke(key, abs);
-
-						return diff;
 					}
 
-					if (!ByOrders && execMsg.HasTradeInfo())
+					if (ByOrders)
 					{
-						var diff = execMsg.GetPosition(false);
-
-						if (diff == null || diff == 0)
+						if (!canUpdateOrder)
 							break;
 
-						bool isNew;
-						decimal abs;
-
-						lock (_positions.SyncRoot)
+						if (balDiff.HasValue && balDiff != 0)
 						{
-							isNew = !_positions.TryGetValue(key, out var prev);
-							abs = prev + diff.Value;
+							var posDiff = info.Side == Sides.Buy ? balDiff.Value : -balDiff.Value;
+							return UpdatePositions(info.SecurityId, info.PortfolioName, posDiff, execMsg.ServerTime);
+						}
+					}
+					else
+					{
+						if (!execMsg.HasTradeInfo())
+							break;
 
-							_positions[key] = abs;
+						var tradeVol = execMsg.TradeVolume;
 
-							if (SecurityId == null || SecurityId.Value == execMsg.SecurityId)
-								Position += diff.Value;
+						if (tradeVol == null)
+							break;
+
+						if (tradeVol == 0)
+						{
+							this.AddWarningLog("Trade {0}/{1} of order {2} has zero volume.", execMsg.TradeId, execMsg.TradeStringId, execMsg.OriginalTransactionId);
+							break;
 						}
 
-						if (isNew)
-							NewPosition?.Invoke(key, abs);
-						else
-							PositionChanged?.Invoke(key, abs);
+						if (execMsg.Side == Sides.Sell)
+							tradeVol = -tradeVol;
 
-						return diff;
+						var secId = info?.SecurityId ?? execMsg.SecurityId;
+						var portfolioName = info?.PortfolioName ?? execMsg.PortfolioName;
+
+						return UpdatePositions(secId, portfolioName, tradeVol.Value, execMsg.ServerTime);
 					}
+
+					break;
+				}
+
+				case MessageTypes.PositionChange:
+				{
+					var posMsg = (PositionChangeMessage)message;
+
+					if (posMsg.Changes.TryGetValue(PositionChangeTypes.CurrentValue, out var curr))
+						_positions.SafeAdd(CreateKey2(posMsg)).Value = (decimal)curr;
 
 					break;
 				}

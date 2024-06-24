@@ -28,20 +28,14 @@ namespace StockSharp.Algo.Candles.Compression
 		/// <summary>
 		/// The candle type.
 		/// </summary>
-		MarketDataTypes CandleType { get; }
+		Type CandleType { get; }
 
 		/// <summary>
 		/// To process the new data.
 		/// </summary>
-		/// <param name="message">Market-data message (uses as a subscribe/unsubscribe in outgoing case, confirmation event in incoming case).</param>
-		/// <param name="currentCandle">The current candle.</param>
+		/// <param name="subscription">Subscription.</param>
 		/// <param name="transform">The data source transformation.</param>
 		/// <returns>A new candles changes.</returns>
-		IEnumerable<CandleMessage> Process(MarketDataMessage message, CandleMessage currentCandle, ICandleBuilderValueTransform transform);
-
-		///// <summary>
-		///// Reset state.
-		///// </summary>
-		//void Reset();
+		IEnumerable<CandleMessage> Process(ICandleBuilderSubscription subscription, ICandleBuilderValueTransform transform);
 	}
 }

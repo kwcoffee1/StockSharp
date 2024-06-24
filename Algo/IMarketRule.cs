@@ -16,7 +16,7 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo
 {
 	using System;
-    
+
 	using Ecng.Collections;
 	using Ecng.Common;
 
@@ -104,16 +104,6 @@ namespace StockSharp.Algo
 		bool CanFinish();
 	}
 
-	class Holder
-	{
-		public static readonly MemoryStatisticsValue<IMarketRule> RuleStat = new MemoryStatisticsValue<IMarketRule>(LocalizedStrings.Str1088);
-
-		static Holder()
-		{
-			MemoryStatistics.Instance.Values.Add(RuleStat);
-		}
-	}
-
 	/// <summary>
 	/// The rule, activating action at market condition occurrence.
 	/// </summary>
@@ -140,8 +130,6 @@ namespace StockSharp.Algo
 			Name = GetType().Name;
 
 			Until(CanFinish);
-
-			Holder.RuleStat.Add(this);
 		}
 
 		/// <summary>
@@ -150,14 +138,12 @@ namespace StockSharp.Algo
 		/// <returns><see langword="true" />, if rule is not required any more. Otherwise, <see langword="false" />.</returns>
 		protected virtual bool CanFinish()
 		{
-			return ReferenceEquals(_container, null) || _container.ProcessState != ProcessStates.Started;
+			return _container is null || _container.ProcessState != ProcessStates.Started;
 		}
 
 		private string _name;
 
-		/// <summary>
-		/// The name of the rule.
-		/// </summary>
+		/// <inheritdoc />
 		public string Name
 		{
 			get => _name;
@@ -170,16 +156,12 @@ namespace StockSharp.Algo
 			}
 		}
 
-		/// <summary>
-		/// The level, at which logging of this rule is performed. The default is <see cref="LogLevels.Inherit"/>.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual LogLevels LogLevel { get; set; } = LogLevels.Inherit;
 
 		private bool _isSuspended;
 
-		/// <summary>
-		/// Is the rule suspended.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual bool IsSuspended
 		{
 			get => _isSuspended;
@@ -187,40 +169,30 @@ namespace StockSharp.Algo
 			{
 				_isSuspended = value;
 
-				_container?.AddRuleLog(LogLevels.Info, this, value ? LocalizedStrings.Str1089 : LocalizedStrings.Str1090);
+				_container?.AddRuleLog(LogLevels.Info, this, value ? LocalizedStrings.Suspended : LocalizedStrings.Resumed);
 			}
 		}
 
 		private readonly TToken _token;
+		object IMarketRule.Token => _token;
 
-		/// <summary>
-		/// Token-rules, it is associated with (for example, for rule <see cref="MarketRuleHelper.WhenRegistered"/> the order will be a token). If rule is not associated with anything, <see langword="null" /> will be returned.
-		/// </summary>
-		public virtual object Token => _token;
+		private readonly SynchronizedSet<IMarketRule> _exclusiveRules = new();
 
-		private readonly SynchronizedSet<IMarketRule> _exclusiveRules = new SynchronizedSet<IMarketRule>();
-
-		/// <summary>
-		/// Rules, opposite to given rule. They are deleted automatically at activation of this rule.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual ISynchronizedCollection<IMarketRule> ExclusiveRules => _exclusiveRules;
 
 		private IMarketRuleContainer _container;
 
-		/// <summary>
-		/// The rules container.
-		/// </summary>
-		public virtual IMarketRuleContainer Container
+		/// <inheritdoc />
+		public IMarketRuleContainer Container
 		{
 			get => _container;
 			set
 			{
-				if (Container != null)
-					throw new ArgumentException(LocalizedStrings.Str1091Params.Put(Name, Container));
+				if (_container != null)
+					throw new ArgumentException(LocalizedStrings.RuleAlreadyExistInContainer.Put(this, _container));
 
 				_container = value ?? throw new ArgumentNullException(nameof(value));
-
-				//_container.AddRuleLog(LogLevels.Info, this, "Добавлено.");
 			}
 		}
 
@@ -339,7 +311,7 @@ namespace StockSharp.Algo
 		}
 
 		/// <summary>
-		/// To add the processor, accepting argument from <see cref="Do{TResult}(System.Func{TResult})"/>, which will be called at action activation.
+		/// To add the processor, accepting argument from <see cref="Do{TResult}(Func{TResult})"/>, which will be called at action activation.
 		/// </summary>
 		/// <typeparam name="TResult">The type of result, returned from the processor.</typeparam>
 		/// <param name="handler">The handler.</param>
@@ -358,13 +330,13 @@ namespace StockSharp.Algo
 		/// </summary>
 		protected void Activate()
 		{
-			Activate(default(TArg));
+			Activate(default);
 		}
 
 		/// <summary>
 		/// To activate the rule.
 		/// </summary>
-		/// <param name="arg">The value, which will be sent to processor, registered through <see cref="Do(System.Action{TArg})"/>.</param>
+		/// <param name="arg">The value, which will be sent to processor, registered through <see cref="Do(Action{TArg})"/>.</param>
 		protected virtual void Activate(TArg arg)
 		{
 			if (!IsReady || IsSuspended)
@@ -386,29 +358,23 @@ namespace StockSharp.Algo
 		private bool ProcessRuleVoid()
 		{
 			_actionVoid(_arg);
+
+			_activatedHandler?.Invoke(null);
+
 			return _canFinish();
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
-		public override string ToString()
-		{
-			return "{0} (0x{1:X})".Put(Name, GetHashCode());
-		}
+		/// <inheritdoc />
+		public override string ToString() => $"{Name} (0x{GetHashCode():X})";
 
 		/// <summary>
 		/// Release resources.
 		/// </summary>
 		protected override void DisposeManaged()
 		{
-			_container.AddRuleLog(LogLevels.Debug, this, LocalizedStrings.Str1092);
 			_container = null;
 
 			base.DisposeManaged();
-
-			Holder.RuleStat.Remove(this);
 		}
 
 		bool IMarketRule.CanFinish()
@@ -416,14 +382,10 @@ namespace StockSharp.Algo
 			return !IsActive && IsReady && _canFinish();
 		}
 
-		/// <summary>
-		/// Is the rule formed.
-		/// </summary>
-		public bool IsReady => !IsDisposed && !ReferenceEquals(_container, null);
+		/// <inheritdoc />
+		public bool IsReady => !IsDisposed && _container is not null;
 
-		/// <summary>
-		/// Is the rule currently activated.
-		/// </summary>
+		/// <inheritdoc />
 		public bool IsActive { get; set; }
 
 		IMarketRule IMarketRule.Until(Func<bool> canFinish)

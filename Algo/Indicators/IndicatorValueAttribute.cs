@@ -2,6 +2,10 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 
+	using Ecng.Common;
+
+	using StockSharp.Localization;
+
 	/// <summary>
 	/// Attribute, applied to indicator, to provide information about type of values <see cref="IIndicatorValue"/>.
 	/// </summary>
@@ -13,25 +17,18 @@ namespace StockSharp.Algo.Indicators
 		public Type Type { get; }
 
 		/// <summary>
-		/// Is input.
-		/// </summary>
-		public bool IsInput { get; }
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="IndicatorValueAttribute"/>.
 		/// </summary>
 		/// <param name="type">Value type.</param>
-		/// <param name="isInput">Is input.</param>
-		protected IndicatorValueAttribute(Type type, bool isInput)
+		protected IndicatorValueAttribute(Type type)
 		{
 			if (type == null)
 				throw new ArgumentNullException(nameof(type));
 
-			if (!typeof(IIndicatorValue).IsAssignableFrom(type))
-				throw new ArgumentException(nameof(type));
+			if (!type.Is<IIndicatorValue>())
+				throw new ArgumentException(LocalizedStrings.TypeNotImplemented.Put(type.Name, nameof(IIndicatorValue)), nameof(type));
 
 			Type = type;
-			IsInput = isInput;
 		}
 	}
 
@@ -46,7 +43,7 @@ namespace StockSharp.Algo.Indicators
 		/// </summary>
 		/// <param name="type">Values type.</param>
 		public IndicatorInAttribute(Type type)
-			: base(type, true)
+			: base(type)
 		{
 		}
 	}
@@ -62,8 +59,16 @@ namespace StockSharp.Algo.Indicators
 		/// </summary>
 		/// <param name="type">Values type.</param>
 		public IndicatorOutAttribute(Type type)
-			: base(type, false)
+			: base(type)
 		{
 		}
+	}
+
+	/// <summary>
+	/// Attribute, applied to indicator that must be hidden from any UI selections.
+	/// </summary>
+	[AttributeUsage(AttributeTargets.Class)]
+	public class IndicatorHiddenAttribute : Attribute
+	{
 	}
 }

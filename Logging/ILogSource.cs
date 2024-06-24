@@ -46,6 +46,11 @@ namespace StockSharp.Logging
 		ILogSource Parent { get; set; }
 
 		/// <summary>
+		/// <see cref="Parent"/> removed.
+		/// </summary>
+		event Action<ILogSource> ParentRemoved;
+
+		/// <summary>
 		/// The logging level for the source.
 		/// </summary>
 		LogLevels LogLevel { get; set; }
@@ -80,7 +85,14 @@ namespace StockSharp.Logging
 		}
 
 		/// <inheritdoc />
-		[Browsable(false)]
+		//[Browsable(false)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.IdKey,
+			Description = LocalizedStrings.IdKey,
+			GroupName = LocalizedStrings.LoggingKey,
+			Order = 1000)]
+		[ReadOnly(true)]
 		public virtual Guid Id { get; set; } = Guid.NewGuid();
 
 		private string _name;
@@ -90,9 +102,9 @@ namespace StockSharp.Logging
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.NameKey,
-			Description = LocalizedStrings.Str7Key,
+			Description = LocalizedStrings.LogSourceNameKey,
 			GroupName = LocalizedStrings.LoggingKey,
-			Order = 0)]
+			Order = 1001)]
 		public virtual string Name
 		{
 			get => _name;
@@ -118,22 +130,28 @@ namespace StockSharp.Logging
 					return;
 
 				if (value != null && _parent != null)
-					throw new ArgumentException(LocalizedStrings.Str8Params.Put(this, _parent), nameof(value));
+					throw new ArgumentException(LocalizedStrings.ParentAlreadySet.Put(this, _parent), nameof(value));
 
 				if (value == this)
 					throw new ArgumentException(LocalizedStrings.CyclicDependency.Put(this), nameof(value));
 
 				_parent = value;
+
+				if (_parent == null)
+					ParentRemoved?.Invoke(this);
 			}
 		}
 
 		/// <inheritdoc />
+		public event Action<ILogSource> ParentRemoved;
+
+		/// <inheritdoc />
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str9Key,
-			Description = LocalizedStrings.Str9Key + LocalizedStrings.Dot,
+			Name = LocalizedStrings.LogLevelKey,
+			Description = LocalizedStrings.LogLevelKey + LocalizedStrings.Dot,
 			GroupName = LocalizedStrings.LoggingKey,
-			Order = 1)]
+			Order = 1001)]
 		public virtual LogLevels LogLevel { get; set; } = LogLevels.Inherit;
 
 		/// <inheritdoc />
@@ -172,10 +190,7 @@ namespace StockSharp.Logging
 			parent?.AddLog(message);
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
 			return Name;

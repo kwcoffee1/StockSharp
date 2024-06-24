@@ -22,7 +22,7 @@ namespace StockSharp.Algo
 	/// <summary>
 	/// The quote with the time mark. It used for CSV files.
 	/// </summary>
-	public class TimeQuoteChange : QuoteChange
+	public class TimeQuoteChange : IServerTimeMessage, ISecurityIdMessage
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="TimeQuoteChange"/>.
@@ -34,32 +34,35 @@ namespace StockSharp.Algo
 		/// <summary>
 		/// Initializes a new instance of the <see cref="TimeQuoteChange"/>.
 		/// </summary>
+		/// <param name="side">Direction (buy or sell).</param>
 		/// <param name="quote">The quote, from which changes will be copied.</param>
 		/// <param name="message">The message with quotes.</param>
-		public TimeQuoteChange(QuoteChange quote, QuoteChangeMessage message)
+		public TimeQuoteChange(Sides side, QuoteChange quote, QuoteChangeMessage message)
 		{
-			if (quote == null)
-				throw new ArgumentNullException(nameof(quote));
-
-			if (message == null)
+			if (message is null)
 				throw new ArgumentNullException(nameof(message));
 
 			SecurityId = message.SecurityId;
 			ServerTime = message.ServerTime;
 			LocalTime = message.LocalTime;
-			Price = quote.Price;
-			Volume = quote.Volume;
-			Side = quote.Side;
+			Quote = quote;
+			Side = side;
 		}
 
 		/// <summary>
-		/// Security ID.
+		/// Market depth quote representing bid or ask.
 		/// </summary>
-		public SecurityId SecurityId { get; set; }
+		public QuoteChange Quote { get; set; }
 
 		/// <summary>
-		/// The server time mark.
+		/// Direction (buy or sell).
 		/// </summary>
+		public Sides Side { get; set; }
+
+		/// <inheritdoc />
+		public SecurityId SecurityId { get; set; }
+
+		/// <inheritdoc />
 		public DateTimeOffset ServerTime { get; set; }
 
 		/// <summary>

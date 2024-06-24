@@ -19,7 +19,7 @@ namespace StockSharp.Algo
 	public abstract class BasketSecurityBaseProcessor<TBasketSecurity> : IBasketSecurityProcessor
 		where TBasketSecurity : BasketSecurity, new()
 	{
-		private readonly CachedSynchronizedSet<SecurityId> _basketLegs = new CachedSynchronizedSet<SecurityId>();
+		private readonly CachedSynchronizedSet<SecurityId> _basketLegs = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="BasketSecurityBaseProcessor{TBasketSecurity}"/>.
@@ -91,67 +91,66 @@ namespace StockSharp.Algo
 			switch (message.Type)
 			{
 				case MessageTypes.QuoteChange:
+				{
 					var quoteMsg = (QuoteChangeMessage)message;
 
-					if (!ContainsLeg(quoteMsg.SecurityId))
+					if (quoteMsg.State != null || !ContainsLeg(quoteMsg.SecurityId))
 						yield break;
 
 					var bestBid = quoteMsg.GetBestBid();
 					var bestAsk = quoteMsg.GetBestAsk();
 
 					var volume = bestBid?.Volume;
-					
-					if (bestAsk?.Volume != null)
-						volume = volume ?? 0 + bestAsk.Volume;
 
-					if (!CanProcess(quoteMsg.SecurityId, quoteMsg.ServerTime, (bestBid?.Price).GetSpreadMiddle(bestAsk?.Price), volume, null))
+					if (bestAsk?.Volume != null)
+						volume = volume ?? 0 + bestAsk?.Volume;
+
+					if (!CanProcess(quoteMsg.SecurityId, quoteMsg.ServerTime, (bestBid?.Price).GetSpreadMiddle(bestAsk?.Price, Security.PriceStep), volume, null))
 						yield break;
 
 					break;
+				}
 
 				case MessageTypes.Execution:
+				{
 					var execMsg = (ExecutionMessage)message;
 
 					if (!ContainsLeg(execMsg.SecurityId))
 						yield break;
 
-					switch (execMsg.ExecutionType)
+					if (execMsg.DataType == DataType.Ticks)
 					{
-						case ExecutionTypes.Tick:
-							if (!CanProcess(execMsg.SecurityId, execMsg.ServerTime, execMsg.TradePrice, execMsg.TradeVolume, execMsg.OpenInterest))
-								yield break;
-
-							break;
-
-						case ExecutionTypes.OrderLog:
-							if (!CanProcess(execMsg.SecurityId, execMsg.ServerTime, execMsg.OrderPrice, execMsg.OrderVolume, execMsg.OpenInterest))
-								yield break;
-
-							break;
+						if (!CanProcess(execMsg.SecurityId, execMsg.ServerTime, execMsg.TradePrice, execMsg.TradeVolume, execMsg.OpenInterest))
+							yield break;
+					}
+					else if (execMsg.DataType == DataType.OrderLog)
+					{
+						if (!CanProcess(execMsg.SecurityId, execMsg.ServerTime, execMsg.OrderPrice, execMsg.OrderVolume, execMsg.OpenInterest))
+							yield break;
 					}
 
 					break;
-
-				case MessageTypes.CandleTimeFrame:
-				case MessageTypes.CandlePnF:
-				case MessageTypes.CandleRange:
-				case MessageTypes.CandleRenko:
-				case MessageTypes.CandleTick:
-				case MessageTypes.CandleVolume:
-					var candleMsg = (CandleMessage)message;
-
-					if (!ContainsLeg(candleMsg.SecurityId))
-						yield break;
-
-					if (!CanProcess(candleMsg.SecurityId, candleMsg.OpenTime, candleMsg.ClosePrice, candleMsg.TotalVolume, candleMsg.OpenInterest))
-						yield break;
-
-					break;
+				}
 
 				default:
-					throw new ArgumentOutOfRangeException(nameof(message), LocalizedStrings.Str2142Params.Put(message.Type));
+				{
+					if (message is CandleMessage candleMsg)
+					{
+						if (!ContainsLeg(candleMsg.SecurityId))
+							yield break;
+
+						if (!CanProcess(candleMsg.SecurityId, candleMsg.OpenTime, candleMsg.ClosePrice, candleMsg.TotalVolume, candleMsg.OpenInterest))
+							yield break;
+
+						break;
+					}
+
+					throw new ArgumentOutOfRangeException(nameof(message), LocalizedStrings.UnknownType.Put(message.Type));
+				}
 			}
 
+			message = message.Clone();
+			message.ReplaceSecurityId(SecurityId);
 			yield return message;
 		}
 
@@ -287,16 +286,12 @@ namespace StockSharp.Algo
 	public abstract class IndexSecurityBaseProcessor<TBasketSecurity> : BasketSecurityBaseProcessor<TBasketSecurity>
 		where TBasketSecurity : IndexSecurity, new()
 	{
-		private static class Holder<TMessage>
-			where TMessage : Message
-		{
-			public static readonly Dictionary<SecurityId, TMessage> Messages = new Dictionary<SecurityId, TMessage>();
-		}
+		private readonly SynchronizedDictionary<MessageTypes, object> _messages = new();
 
-		private readonly Dictionary<SecurityId, ExecutionMessage> _ticks = new Dictionary<SecurityId, ExecutionMessage>();
-		private readonly Dictionary<SecurityId, ExecutionMessage> _ol = new Dictionary<SecurityId, ExecutionMessage>();
+		private readonly Dictionary<SecurityId, ExecutionMessage> _ticks = new();
+		private readonly Dictionary<SecurityId, ExecutionMessage> _ol = new();
 
-		private readonly SortedDictionary<DateTimeOffset, Dictionary<SecurityId, CandleMessage>> _candles = new SortedDictionary<DateTimeOffset, Dictionary<SecurityId, CandleMessage>>();
+		private readonly SortedDictionary<DateTimeOffset, Dictionary<SecurityId, CandleMessage>> _candles = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="IndexSecurityBaseProcessor{TBasketSecurity}"/>.
@@ -315,10 +310,10 @@ namespace StockSharp.Algo
 				case MessageTypes.QuoteChange:
 					var quotesMsg = (QuoteChangeMessage)message;
 
-					if (!ContainsLeg(quotesMsg.SecurityId))
+					if (quotesMsg.State != null || !ContainsLeg(quotesMsg.SecurityId))
 						yield break;
 
-					foreach (var msg in ProcessMessage(Holder<QuoteChangeMessage>.Messages, quotesMsg.SecurityId, quotesMsg, quotes => new QuoteChangeMessage
+					foreach (var msg in ProcessMessage(GetDict<QuoteChangeMessage>(message.Type), quotesMsg.SecurityId, quotesMsg, quotes => new QuoteChangeMessage
 					{
 						SecurityId = SecurityId,
 						ServerTime = quotesMsg.ServerTime,
@@ -333,65 +328,57 @@ namespace StockSharp.Algo
 					if (!ContainsLeg(execMsg.SecurityId))
 						yield break;
 
-					switch (execMsg.ExecutionType)
+					if (execMsg.DataType == DataType.OrderLog)
 					{
-						case ExecutionTypes.OrderLog:
+						foreach (var msg in ProcessMessage(_ol, execMsg.SecurityId, execMsg, execMsgs =>
 						{
-							foreach (var msg in ProcessMessage(_ol, execMsg.SecurityId, execMsg, execMsgs =>
+							var prices = new decimal[execMsgs.Length];
+							var volumes = new decimal[execMsgs.Length];
+
+							for (var i = 0; i < execMsgs.Length; i++)
 							{
-								var prices = new decimal[execMsgs.Length];
-								var volumes = new decimal[execMsgs.Length];
+								var msg = execMsgs[i];
 
-								for (var i = 0; i < execMsgs.Length; i++)
-								{
-									var msg = execMsgs[i];
+								prices[i] = msg.OrderPrice;
+								volumes[i] = msg.OrderVolume ?? 0;
+							}
 
-									prices[i] = msg.OrderPrice;
-									volumes[i] = msg.OrderVolume ?? 0;
-								}
-
-								return new ExecutionMessage
-								{
-									SecurityId = SecurityId,
-									ServerTime = execMsg.ServerTime,
-									ExecutionType = execMsg.ExecutionType,
-									OrderPrice = Calculate(prices, true),
-									OrderVolume = Calculate(volumes, false),
-								};
-							}))
-								yield return msg;
-
-							break;
-						}
-
-						case ExecutionTypes.Tick:
+							return new ExecutionMessage
+							{
+								SecurityId = SecurityId,
+								ServerTime = execMsg.ServerTime,
+								DataTypeEx = execMsg.DataTypeEx,
+								OrderPrice = Calculate(prices, true),
+								OrderVolume = Calculate(volumes, false),
+							};
+						}))
+							yield return msg;
+					}
+					else if (execMsg.DataType == DataType.Ticks)
+					{
+						foreach (var msg in ProcessMessage(_ticks, execMsg.SecurityId, execMsg, execMsgs =>
 						{
-							foreach (var msg in ProcessMessage(_ticks, execMsg.SecurityId, execMsg, execMsgs =>
+							var prices = new decimal[execMsgs.Length];
+							var volumes = new decimal[execMsgs.Length];
+
+							for (var i = 0; i < execMsgs.Length; i++)
 							{
-								var prices = new decimal[execMsgs.Length];
-								var volumes = new decimal[execMsgs.Length];
+								var msg = execMsgs[i];
 
-								for (var i = 0; i < execMsgs.Length; i++)
-								{
-									var msg = execMsgs[i];
+								prices[i] = msg.TradePrice ?? 0;
+								volumes[i] = msg.TradeVolume ?? 0;
+							}
 
-									prices[i] = msg.TradePrice ?? 0;
-									volumes[i] = msg.TradeVolume ?? 0;
-								}
-
-								return new ExecutionMessage
-								{
-									SecurityId = SecurityId,
-									ServerTime = execMsg.ServerTime,
-									ExecutionType = execMsg.ExecutionType,
-									TradePrice = Calculate(prices, true),
-									TradeVolume = Calculate(volumes, false),
-								};
-							}))
-								yield return msg;
-
-							break;
-						}
+							return new ExecutionMessage
+							{
+								SecurityId = SecurityId,
+								ServerTime = execMsg.ServerTime,
+								DataTypeEx = execMsg.DataTypeEx,
+								TradePrice = Calculate(prices, true),
+								TradeVolume = Calculate(volumes, false),
+							};
+						}))
+							yield return msg;
 					}
 
 					break;
@@ -404,8 +391,8 @@ namespace StockSharp.Algo
 						yield break;
 
 					var dict = _candles.SafeAdd(candleMsg.OpenTime);
-					
-					dict[candleMsg.SecurityId] = (CandleMessage)candleMsg.Clone();
+
+					dict[candleMsg.SecurityId] = candleMsg.TypedClone();
 
 					if (dict.Count == BasketLegs.Length)
 					{
@@ -429,63 +416,16 @@ namespace StockSharp.Algo
 					break;
 				}
 
-				case MessageTypes.CandlePnF:
+				default:
 				{
-					var candleMsg = (PnFCandleMessage)message;
+					if (message is CandleMessage candleMsg)
+					{
+						if (!ContainsLeg(candleMsg.SecurityId))
+							yield break;
 
-					if (!ContainsLeg(candleMsg.SecurityId))
-						yield break;
-
-					foreach (var msg in ProcessMessage(Holder<PnFCandleMessage>.Messages, candleMsg.SecurityId, candleMsg, candles => CreateBasketCandle(candles, candleMsg)))
-						yield return msg;
-
-					break;
-				}
-				case MessageTypes.CandleRange:
-				{
-					var candleMsg = (RangeCandleMessage)message;
-
-					if (!ContainsLeg(candleMsg.SecurityId))
-						yield break;
-
-					foreach (var msg in ProcessMessage(Holder<RangeCandleMessage>.Messages, candleMsg.SecurityId, candleMsg, candles => CreateBasketCandle(candles, candleMsg)))
-						yield return msg;
-
-					break;
-				}
-				case MessageTypes.CandleRenko:
-				{
-					var candleMsg = (RenkoCandleMessage)message;
-
-					if (!ContainsLeg(candleMsg.SecurityId))
-						yield break;
-
-					foreach (var msg in ProcessMessage(Holder<RenkoCandleMessage>.Messages, candleMsg.SecurityId, candleMsg, candles => CreateBasketCandle(candles, candleMsg)))
-						yield return msg;
-
-					break;
-				}
-				case MessageTypes.CandleTick:
-				{
-					var candleMsg = (TickCandleMessage)message;
-
-					if (!ContainsLeg(candleMsg.SecurityId))
-						yield break;
-
-					foreach (var msg in ProcessMessage(Holder<TickCandleMessage>.Messages, candleMsg.SecurityId, candleMsg, candles => CreateBasketCandle(candles, candleMsg)))
-						yield return msg;
-
-					break;
-				}
-				case MessageTypes.CandleVolume:
-				{
-					var candleMsg = (VolumeCandleMessage)message;
-
-					if (!ContainsLeg(candleMsg.SecurityId))
-						yield break;
-
-					foreach (var msg in ProcessMessage(Holder<VolumeCandleMessage>.Messages, candleMsg.SecurityId, candleMsg, candles => CreateBasketCandle(candles, candleMsg)))
-						yield return msg;
+						foreach (var msg in ProcessMessage(GetDict<CandleMessage>(candleMsg.Type), candleMsg.SecurityId, candleMsg, candles => CreateBasketCandle(candles, candleMsg)))
+							yield return msg;
+					}
 
 					break;
 				}
@@ -494,11 +434,15 @@ namespace StockSharp.Algo
 			//return Enumerable.Empty<Message>();
 		}
 
-		private void FillIndexCandle<TCandleMessage>(TCandleMessage indexCandle, TCandleMessage candleMsg, TCandleMessage[] candles)
-			where TCandleMessage : CandleMessage
+		private Dictionary<SecurityId, TMessage> GetDict<TMessage>(MessageTypes type)
+		{
+			return (Dictionary<SecurityId, TMessage>)_messages.SafeAdd(type, key => new Dictionary<SecurityId, TMessage>());
+		}
+
+		private void FillIndexCandle(CandleMessage indexCandle, CandleMessage candleMsg, CandleMessage[] candles)
 		{
 			indexCandle.SecurityId = SecurityId;
-			indexCandle.Arg = candleMsg.CloneArg();
+			indexCandle.DataType = candleMsg.DataType;
 			indexCandle.OpenTime = candleMsg.OpenTime;
 			indexCandle.CloseTime = candleMsg.CloseTime;
 
@@ -561,10 +505,7 @@ namespace StockSharp.Algo
 
 			if (indexCandle.HighPrice < indexCandle.LowPrice)
 			{
-				var high = indexCandle.HighPrice;
-
-				indexCandle.HighPrice = indexCandle.LowPrice;
-				indexCandle.LowPrice = high;
+				(indexCandle.LowPrice, indexCandle.HighPrice) = (indexCandle.HighPrice, indexCandle.LowPrice);
 			}
 
 			if (indexCandle.OpenPrice > indexCandle.HighPrice)
@@ -580,10 +521,12 @@ namespace StockSharp.Algo
 			indexCandle.State = CandleStates.Finished;
 		}
 
-		private TCandleMessage CreateBasketCandle<TCandleMessage>(TCandleMessage[] candles, TCandleMessage last)
-			where TCandleMessage : CandleMessage, new()
+		private CandleMessage CreateBasketCandle(CandleMessage[] candles, CandleMessage last)
 		{
-			var indexCandle = new TCandleMessage();
+			if (last == null)
+				throw new ArgumentNullException(nameof(last));
+
+			var indexCandle = last.GetType().CreateCandleMessage();
 
 			FillIndexCandle(indexCandle, last, candles);
 
@@ -593,7 +536,7 @@ namespace StockSharp.Algo
 		private IEnumerable<Message> ProcessMessage<TMessage>(Dictionary<SecurityId, TMessage> dict, SecurityId securityId, TMessage message, Func<TMessage[], TMessage> convert)
 			where TMessage : Message
 		{
-			dict[securityId] = (TMessage)message.Clone();
+			dict[securityId] = message.TypedClone();
 
 			if (dict.Count != BasketLegs.Length)
 				yield break;
@@ -612,7 +555,7 @@ namespace StockSharp.Algo
 			}
 			catch (ArithmeticException excp)
 			{
-				throw new ArithmeticException(LocalizedStrings.BuildIndexError.Put(SecurityId, BasketLegs.Zip(values, (s, v) => "{0}: {1}".Put(s, v)).Join(", ")), excp);
+				throw new ArithmeticException(LocalizedStrings.BuildIndexError.Put(SecurityId, BasketLegs.Zip(values, (s, v) => $"{s}: {v}").JoinCommaSpace()), excp);
 			}
 		}
 
@@ -632,7 +575,7 @@ namespace StockSharp.Algo
 				var step = Security.VolumeStep;
 
 				if (step != null)
-					value = MathHelper.Round(value, step.Value, step.Value.GetCachedDecimals());
+					value = value.Round(step.Value, step.Value.GetCachedDecimals());
 			}
 
 			return value;

@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,15 +15,24 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
+	using StockSharp.Messages;
 
 	/// <summary>
 	/// Trough.
 	/// </summary>
-	[DisplayName("Trough")]
-	[DescriptionLoc(LocalizedStrings.Str821Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/trough.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TroughKey,
+		Description = LocalizedStrings.TroughDescKey)]
+	[Doc("topics/api/indicators/list_of_indicators/trough.html")]
 	public sealed class Trough : ZigZagEquis
 	{
 		/// <summary>
@@ -31,14 +40,10 @@ namespace StockSharp.Algo.Indicators
 		/// </summary>
 		public Trough()
 		{
-			ByPrice = c => c.LowPrice;
+			PriceField = Level1Fields.LowPrice;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var value = base.OnProcess(input);
@@ -56,7 +61,7 @@ namespace StockSharp.Algo.Indicators
 					if (input.IsFinal)
 						IsFormed = !lastValue.IsEmpty;
 
-					return IsFormed ? new ShiftedIndicatorValue(this, lastValue.Shift + 1, lastValue.Value) : lastValue;
+					return IsFormed ? new ShiftedIndicatorValue(this, lastValue.Value, lastValue.Shift + 1) : lastValue;
 				}
 			}
 

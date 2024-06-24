@@ -29,7 +29,7 @@ namespace StockSharp.Algo.Testing
 	public class OrderLogGenerator : MarketDataGenerator
 	{
 		private decimal _lastOrderPrice;
-		private readonly SynchronizedQueue<ExecutionMessage> _activeOrders = new SynchronizedQueue<ExecutionMessage>(); 
+		private readonly SynchronizedQueue<ExecutionMessage> _activeOrders = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="OrderLogGenerator"/>.
@@ -54,10 +54,8 @@ namespace StockSharp.Algo.Testing
 			IdGenerator = new IncrementalIdGenerator();
 		}
 
-		/// <summary>
-		/// Market data type.
-		/// </summary>
-		public override MarketDataTypes DataType => MarketDataTypes.OrderLog;
+		/// <inheritdoc />
+		public override DataType DataType => DataType.OrderLog;
 
 		/// <summary>
 		/// Tick trades generator using random method.
@@ -80,15 +78,13 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		public override void Init()
 		{
-			TradeGenerator.Init();
 			base.Init();
+
+			_lastOrderPrice = default;
+			TradeGenerator.Init();
 		}
 
-		/// <summary>
-		/// Process message.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		/// <returns>The result of processing. If <see langword="null" /> is returned, then generator has no sufficient data to generate new message.</returns>
+		/// <inheritdoc />
 		public override Message Process(Message message)
 		{
 			if (message.Type == MessageTypes.Security)
@@ -97,11 +93,7 @@ namespace StockSharp.Algo.Testing
 			return base.Process(message);
 		}
 
-		/// <summary>
-		/// Process message.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		/// <returns>The result of processing. If <see langword="null" /> is returned, then generator has no sufficient data to generate new message.</returns>
+		/// <inheritdoc />
 		protected override Message OnProcess(Message message)
 		{
 			DateTimeOffset time;
@@ -112,10 +104,10 @@ namespace StockSharp.Algo.Testing
 				{
 					var l1Msg = (Level1ChangeMessage)message;
 
-					var value = l1Msg.Changes.TryGetValue(Level1Fields.LastTradePrice);
+					var value = l1Msg.TryGetDecimal(Level1Fields.LastTradePrice);
 
 					if (value != null)
-						_lastOrderPrice = (decimal)value;
+						_lastOrderPrice = value.Value;
 
 					TradeGenerator.Process(message);
 
@@ -127,14 +119,10 @@ namespace StockSharp.Algo.Testing
 				{
 					var execMsg = (ExecutionMessage)message;
 
-					switch (execMsg.ExecutionType)
-					{
-						case ExecutionTypes.Tick:
-							_lastOrderPrice = execMsg.GetTradePrice();
-							break;
-						default:
-							return null;
-					}
+					if (execMsg.DataType == DataType.Ticks)
+						_lastOrderPrice = execMsg.GetTradePrice();
+					else
+						return null;
 
 					time = execMsg.ServerTime;
 					break;
@@ -173,25 +161,29 @@ namespace StockSharp.Algo.Testing
 				if (_lastOrderPrice <= 0)
 					_lastOrderPrice = priceStep;
 
+				var v = Volumes.Next();
+				if(v == 0)
+					v = 1;
+
 				item = new ExecutionMessage
 				{
 					OrderId = IdGenerator.GetNextId(),
 					SecurityId = SecurityId,
 					ServerTime = time,
 					OrderState = OrderStates.Active,
-					OrderVolume = Volumes.Next(),
+					OrderVolume = v * (SecurityDefinition.VolumeStep ?? 1m),
 					Side = RandomGen.GetEnum<Sides>(),
 					OrderPrice = _lastOrderPrice,
-					ExecutionType = ExecutionTypes.OrderLog,
+					DataTypeEx = DataType.OrderLog,
 				};
 
-				_activeOrders.Enqueue((ExecutionMessage)item.Clone());
+				_activeOrders.Enqueue(item.TypedClone());
 			}
 			else
 			{
 				var activeOrder = _activeOrders.Peek();
 
-				item = (ExecutionMessage)activeOrder.Clone();
+				item = activeOrder.TypedClone();
 				item.ServerTime = time;
 
 				var isMatched = action == 5;
@@ -231,7 +223,6 @@ namespace StockSharp.Algo.Testing
 				else
 				{
 					item.OrderState = OrderStates.Done;
-					item.IsCancelled = true;
 					_activeOrders.Dequeue();
 				}
 			}
@@ -247,11 +238,15 @@ namespace StockSharp.Algo.Testing
 		/// <returns>Copy.</returns>
 		public override MarketDataGenerator Clone()
 		{
-			return new OrderLogGenerator(SecurityId, (TradeGenerator)TradeGenerator.Clone())
+			var clone = new OrderLogGenerator(SecurityId, TradeGenerator.TypedClone())
 			{
 				_lastOrderPrice = _lastOrderPrice,
 				IdGenerator = IdGenerator
 			};
+
+			CopyTo(clone);
+
+			return clone;
 		}
 	}
 }

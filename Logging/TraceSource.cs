@@ -90,7 +90,7 @@ namespace StockSharp.Logging
 					case TraceEventType.Transfer:
 						return null;
 					default:
-						throw new ArgumentOutOfRangeException(nameof(eventType), eventType, LocalizedStrings.Str1219);
+						throw new ArgumentOutOfRangeException(nameof(eventType), eventType, LocalizedStrings.InvalidValue);
 				}
 			}
 		}
@@ -100,17 +100,18 @@ namespace StockSharp.Logging
 			RaiseLog(new LogMessage(this, TimeHelper.NowWithOffset, LogLevels.Debug, message));
 		}
 
+		private readonly TraceListenerEx _listenerEx;
+
 		/// <summary>
 		/// Initializes a new instance of the <see cref="TraceSource"/>.
 		/// </summary>
 		public TraceSource()
 		{
-			Trace.Listeners.Add(new TraceListenerEx(this));
+			_listenerEx = new TraceListenerEx(this);
+			Trace.Listeners.Add(_listenerEx);
 		}
 
-		/// <summary>
-		/// Name.
-		/// </summary>
+		/// <inheritdoc />
 		public override string Name => "Trace";
 
 		/// <summary>
@@ -118,7 +119,7 @@ namespace StockSharp.Logging
 		/// </summary>
 		protected override void DisposeManaged()
 		{
-			Trace.Listeners.Remove(new TraceListenerEx(this));
+			Trace.Listeners.Remove(_listenerEx);
 			base.DisposeManaged();
 		}
 	}

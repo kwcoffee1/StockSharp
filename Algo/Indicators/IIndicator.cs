@@ -21,6 +21,32 @@ namespace StockSharp.Algo.Indicators
 	using Ecng.Serialization;
 
 	/// <summary>
+	/// Indicator measures.
+	/// </summary>
+	public enum IndicatorMeasures
+	{
+		/// <summary>
+		/// Price.
+		/// </summary>
+		Price,
+
+		/// <summary>
+		/// 0 till 100.
+		/// </summary>
+		Percent,
+
+		/// <summary>
+		/// -1 till +1.
+		/// </summary>
+		MinusOnePlusOne,
+
+		/// <summary>
+		/// Volume.
+		/// </summary>
+		Volume,
+	}
+
+	/// <summary>
 	/// The interface describing indicator.
 	/// </summary>
 	public interface IIndicator : IPersistable, ICloneable<IIndicator>
@@ -39,6 +65,12 @@ namespace StockSharp.Algo.Indicators
 		/// Whether the indicator is set.
 		/// </summary>
 		bool IsFormed { get; }
+
+		/// <summary>
+		/// Number of values that need to be processed in order for the indicator to initialize (be <see cref="IsFormed"/> equals <see langword="true"/>).
+		/// <see langword="null"/> if undefined.
+		/// </summary>
+		int NumValuesToInitialize { get; }
 
 		/// <summary>
 		/// The container storing indicator data.
@@ -76,5 +108,17 @@ namespace StockSharp.Algo.Indicators
 		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
 		/// </summary>
 		void Reset();
+
+		/// <summary>
+		/// <see cref="IndicatorMeasures"/>.
+		/// </summary>
+		IndicatorMeasures Measure { get; }
+
+		/// <summary>
+		/// Convert to indicator value.
+		/// </summary>
+		/// <param name="values"><see cref="IIndicatorValue.ToValues"/></param>
+		/// <returns><see cref="IIndicatorValue"/></returns>
+		IIndicatorValue CreateValue(object[] values);
 	}
 }

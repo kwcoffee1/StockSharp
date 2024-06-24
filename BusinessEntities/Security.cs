@@ -16,16 +16,14 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.BusinessEntities
 {
 	using System;
-	using System.Collections.Generic;
 	using System.ComponentModel;
 	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
 	using System.Xml.Serialization;
+	using System.Runtime.CompilerServices;
 
-	using Ecng.Collections;
 	using Ecng.Common;
 	using Ecng.ComponentModel;
-	using Ecng.Serialization;
 
 	using StockSharp.Messages;
 	using StockSharp.Localization;
@@ -34,10 +32,12 @@ namespace StockSharp.BusinessEntities
 	/// Security (shares, futures, options etc.).
 	/// </summary>
 	[Serializable]
-	[System.Runtime.Serialization.DataContract]
-	[DisplayNameLoc(LocalizedStrings.SecurityKey)]
-	[DescriptionLoc(LocalizedStrings.Str546Key)]
-	public class Security : Cloneable<Security>, IExtendableEntity, INotifyPropertyChanged
+	[DataContract]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.SecurityKey,
+		Description = LocalizedStrings.SecurityDescKey)]
+	public class Security : Cloneable<Security>, INotifyPropertyChanged
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="Security"/>.
@@ -52,11 +52,10 @@ namespace StockSharp.BusinessEntities
 		/// Security ID.
 		/// </summary>
 		[DataMember]
-		[Identity]
 		[ReadOnly(true)]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str361Key,
+			Name = LocalizedStrings.IdentifierKey,
 			Description = LocalizedStrings.SecurityIdKey + LocalizedStrings.Dot,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 0)]
@@ -69,7 +68,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_id = value;
-				Notify(nameof(Id));
+				Notify();
 			}
 		}
 
@@ -82,7 +81,7 @@ namespace StockSharp.BusinessEntities
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.CodeKey,
-			Description = LocalizedStrings.Str349Key + LocalizedStrings.Dot,
+			Description = LocalizedStrings.SecCodeKey + LocalizedStrings.Dot,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 1)]
 		[Required(AllowEmptyStrings = false)]
@@ -95,7 +94,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_code = value;
-				Notify(nameof(Code));
+				Notify();
 			}
 		}
 
@@ -104,12 +103,11 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Exchange board where the security is traded.
 		/// </summary>
-		[RelationSingle(IdentityType = typeof(string))]
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.BoardKey,
-			Description = LocalizedStrings.Str549Key,
+			Description = LocalizedStrings.ExchangeBoardDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 2)]
 		[Required]
@@ -122,7 +120,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_board = value;
-				Notify(nameof(Board));
+				Notify();
 			}
 		}
 
@@ -132,11 +130,10 @@ namespace StockSharp.BusinessEntities
 		/// Security type.
 		/// </summary>
 		[DataMember]
-		[Nullable]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.TypeKey,
-			Description = LocalizedStrings.Str360Key,
+			Description = LocalizedStrings.SecurityTypeDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 3)]
 		public virtual SecurityTypes? Type
@@ -148,7 +145,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_type = value;
-				Notify(nameof(Type));
+				Notify();
 			}
 		}
 
@@ -161,7 +158,7 @@ namespace StockSharp.BusinessEntities
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.NameKey,
-			Description = LocalizedStrings.Str362Key,
+			Description = LocalizedStrings.SecurityNameKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 4)]
 		public string Name
@@ -173,7 +170,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_name = value;
-				Notify(nameof(Name));
+				Notify();
 			}
 		}
 
@@ -185,8 +182,8 @@ namespace StockSharp.BusinessEntities
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str363Key,
-			Description = LocalizedStrings.Str364Key,
+			Name = LocalizedStrings.ShortNameKey,
+			Description = LocalizedStrings.ShortNameDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 5)]
 		public string ShortName
@@ -198,7 +195,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_shortName = value;
-				Notify(nameof(ShortName));
+				Notify();
 			}
 		}
 
@@ -208,24 +205,25 @@ namespace StockSharp.BusinessEntities
 		/// Trading security currency.
 		/// </summary>
 		[DataMember]
-		[Nullable]
+		//[Nullable]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.CurrencyKey,
-			Description = LocalizedStrings.Str382Key,
+			Description = LocalizedStrings.CurrencyDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 6)]
+		[EditorExtension(AutoComplete = true, Sorted = true)]
 		public CurrencyTypes? Currency
 		{
 			get => _currency;
 			set
 			{
 				_currency = value;
-				Notify(nameof(Currency));
+				Notify();
 			}
 		}
 
-		private SecurityExternalId _externalId = new SecurityExternalId();
+		private SecurityExternalId _externalId = new();
 
 		/// <summary>
 		/// Security ID in other systems.
@@ -233,22 +231,18 @@ namespace StockSharp.BusinessEntities
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str553Key,
-			Description = LocalizedStrings.Str554Key,
+			Name = LocalizedStrings.ExternalIdKey,
+			Description = LocalizedStrings.ExternalIdDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 7)]
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[InnerSchema(NullWhenAllEmpty = false)]
 		public SecurityExternalId ExternalId
 		{
 			get => _externalId;
 			set
 			{
-				if (value == null)
-					throw new ArgumentNullException(nameof(value));
-
-				_externalId = value;
-				Notify(nameof(ExternalId));
+				_externalId = value ?? throw new ArgumentNullException(nameof(value));
+				Notify();
 			}
 		}
 
@@ -273,7 +267,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_class = value;
-				Notify(nameof(Class));
+				Notify();
 			}
 		}
 
@@ -289,21 +283,21 @@ namespace StockSharp.BusinessEntities
 			Description = LocalizedStrings.MinPriceStepKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 9)]
-		[Nullable]
+		//[Nullable]
 		[GreaterThanZero]
 		public decimal? PriceStep
 		{
 			get => _priceStep;
 			set
 			{
+				if(!(value > 0))
+					value = null;
+
 				if (_priceStep == value)
 					return;
 
-				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
-
 				_priceStep = value;
-				Notify(nameof(PriceStep));
+				Notify();
 			}
 		}
 
@@ -316,10 +310,9 @@ namespace StockSharp.BusinessEntities
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.VolumeStepKey,
-			Description = LocalizedStrings.Str366Key,
+			Description = LocalizedStrings.MinVolStepKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 10)]
-		[Nullable]
 		[GreaterThanZero]
 		public decimal? VolumeStep
 		{
@@ -330,10 +323,10 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_volumeStep = value;
-				Notify(nameof(VolumeStep));
+				Notify();
 			}
 		}
 
@@ -349,7 +342,6 @@ namespace StockSharp.BusinessEntities
 			Description = LocalizedStrings.MinVolumeDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 10)]
-		[Nullable]
 		//[GreaterThanZero]
 		public decimal? MinVolume
 		{
@@ -360,10 +352,39 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_minVolume = value;
-				Notify(nameof(MinVolume));
+				Notify();
+			}
+		}
+
+		private decimal? _maxVolume;
+
+		/// <summary>
+		/// Maximum volume allowed in order.
+		/// </summary>
+		[DataMember]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.MaxVolumeKey,
+			Description = LocalizedStrings.MaxVolumeDescKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 11)]
+		//[GreaterThanZero]
+		public decimal? MaxVolume
+		{
+			get => _maxVolume;
+			set
+			{
+				if (_maxVolume == value)
+					return;
+
+				if (value < 0)
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
+
+				_maxVolume = value;
+				Notify();
 			}
 		}
 
@@ -375,11 +396,10 @@ namespace StockSharp.BusinessEntities
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str330Key,
+			Name = LocalizedStrings.LotKey,
 			Description = LocalizedStrings.LotVolumeKey,
 			GroupName = LocalizedStrings.GeneralKey,
-			Order = 11)]
-		[Nullable]
+			Order = 12)]
 		public decimal? Multiplier
 		{
 			get => _multiplier;
@@ -389,10 +409,10 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_multiplier = value;
-				Notify(nameof(Multiplier));
+				Notify();
 			}
 		}
 
@@ -405,11 +425,10 @@ namespace StockSharp.BusinessEntities
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.DecimalsKey,
-			Description = LocalizedStrings.Str548Key,
+			Description = LocalizedStrings.DecimalsDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
-			Order = 12)]
+			Order = 13)]
 		//[ReadOnly(true)]
-		[Nullable]
 		public int? Decimals
 		{
 			get => _decimals;
@@ -419,10 +438,10 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_decimals = value;
-				Notify(nameof(Decimals));
+				Notify();
 			}
 		}
 
@@ -432,13 +451,12 @@ namespace StockSharp.BusinessEntities
 		/// Security expiration date (for derivatives - expiration, for bonds — redemption).
 		/// </summary>
 		[DataMember]
-		[Nullable]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.ExpiryDateKey,
-			Description = LocalizedStrings.Str371Key,
+			Description = LocalizedStrings.ExpiryDateDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
-			Order = 13)]
+			Order = 14)]
 		public DateTimeOffset? ExpiryDate
 		{
 			get => _expiryDate;
@@ -448,7 +466,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_expiryDate = value;
-				Notify(nameof(ExpiryDate));
+				Notify();
 			}
 		}
 
@@ -458,13 +476,12 @@ namespace StockSharp.BusinessEntities
 		/// Settlement date for security (for derivatives and bonds).
 		/// </summary>
 		[DataMember]
-		[Nullable]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.SettlementDateKey,
-			Description = LocalizedStrings.Str373Key,
+			Description = LocalizedStrings.SettlementDateForSecurityKey,
 			GroupName = LocalizedStrings.GeneralKey,
-			Order = 14)]
+			Order = 15)]
 		public DateTimeOffset? SettlementDate
 		{
 			get => _settlementDate;
@@ -474,7 +491,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_settlementDate = value;
-				Notify(nameof(SettlementDate));
+				Notify();
 			}
 		}
 
@@ -489,7 +506,7 @@ namespace StockSharp.BusinessEntities
 			Name = LocalizedStrings.CfiCodeKey,
 			Description = LocalizedStrings.CfiCodeDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
-			Order = 15)]
+			Order = 16)]
 		public string CfiCode
 		{
 			get => _cfiCode;
@@ -499,35 +516,107 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_cfiCode = value;
-				Notify(nameof(CfiCode));
+				Notify();
 			}
 		}
 
-		[field: NonSerialized]
-		private SynchronizedDictionary<string, object> _extensionInfo;
+		private decimal? _faceValue;
 
 		/// <summary>
-		/// Extended security info.
+		/// Face value.
 		/// </summary>
-		/// <remarks>
-		/// Required if additional information associated with the instrument is stored in the program. For example, the date of instrument expiration (if it is option) or information about the underlying asset if it is the futures contract.
-		/// </remarks>
-		[XmlIgnore]
-		//[DataMember]
+		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.ExtendedInfoKey,
-			Description = LocalizedStrings.Str427Key,
+			Name = LocalizedStrings.FaceValueKey,
+			Description = LocalizedStrings.FaceValueDescKey,
 			GroupName = LocalizedStrings.GeneralKey,
-			Order = 20)]
-		[Ignore]
-		public IDictionary<string, object> ExtensionInfo
+			Order = 17)]
+		public decimal? FaceValue
 		{
-			get => _extensionInfo;
+			get => _faceValue;
 			set
 			{
-				_extensionInfo = value.Sync();
-				Notify(nameof(ExtensionInfo));
+				if (_faceValue == value)
+					return;
+
+				_faceValue = value;
+				Notify();
+			}
+		}
+
+		private SettlementTypes? _settlementType;
+
+		/// <summary>
+		/// <see cref="SettlementTypes"/>.
+		/// </summary>
+		[DataMember]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SettlementKey,
+			Description = LocalizedStrings.SettlementTypeDescKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 18)]
+		public SettlementTypes? SettlementType
+		{
+			get => _settlementType;
+			set
+			{
+				if (_settlementType == value)
+					return;
+
+				_settlementType = value;
+				Notify();
+			}
+		}
+
+		private OptionStyles? _optionStyle;
+
+		/// <summary>
+		/// <see cref="OptionStyles"/>.
+		/// </summary>
+		[DataMember]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.OptionStyleKey,
+			Description = LocalizedStrings.OptionStyleDescKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 19)]
+		public OptionStyles? OptionStyle
+		{
+			get => _optionStyle;
+			set
+			{
+				if (_optionStyle == value)
+					return;
+
+				_optionStyle = value;
+				Notify();
+			}
+		}
+
+		private string _primaryId;
+
+		/// <summary>
+		/// Identifier on primary exchange.
+		/// </summary>
+		[DataMember]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PrimaryIdKey,
+			Description = LocalizedStrings.PrimaryIdDescKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 20)]
+		public string PrimaryId
+		{
+			get => _primaryId;
+			set
+			{
+				if (_primaryId == value)
+					return;
+
+				_primaryId = value;
+				Notify();
 			}
 		}
 
@@ -537,13 +626,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Step price.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str290Key,
-			Description = LocalizedStrings.Str555Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.StepPriceKey,
+			Description = LocalizedStrings.StepPriceDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 200)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -552,52 +640,65 @@ namespace StockSharp.BusinessEntities
 			get => _stepPrice;
 			set
 			{
-				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str556);
-
 				if (_stepPrice == value)
 					return;
 
 				_stepPrice = value;
-				Notify(nameof(StepPrice));
+				Notify();
 			}
 		}
 
-		private Trade _lastTrade;
+		private ITickTradeMessage _lastTick;
 
-		//[DataMember]
 		/// <summary>
 		/// Information about the last trade. If during the session on the instrument there were no trades, the value equals to <see langword="null" />.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[TypeConverter(typeof(ExpandableObjectConverter))]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str289Key,
-			Description = LocalizedStrings.Str557Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.LastTradeKey,
+			Description = LocalizedStrings.LastTradeDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 201)]
 		[Browsable(false)]
-		//[Obsolete("Use the IConnector.GetSecurityValue.")]
-		public Trade LastTrade
+		public ITickTradeMessage LastTick
 		{
-			get => _lastTrade;
+			get => _lastTick;
 			set
 			{
-				if (_lastTrade == value)
+				if (_lastTick == value)
 					return;
 
-				_lastTrade = value;
+				_lastTick = value;
+				Notify();
+
+#pragma warning disable CS0618 // Type or member is obsolete
 				Notify(nameof(LastTrade));
+#pragma warning restore CS0618 // Type or member is obsolete
 
-			    if (value == null)
-			        return;
+				if (value == null)
+					return;
 
-				if (!value.Time.IsDefault())
-					LastChangeTime = value.Time;
+				if (value.ServerTime != default)
+					LastChangeTime = value.ServerTime;
 			}
 		}
+
+		/// <summary>
+		/// Information about the last trade. If during the session on the instrument there were no trades, the value equals to <see langword="null" />.
+		/// </summary>
+		[XmlIgnore]
+		[TypeConverter(typeof(ExpandableObjectConverter))]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LastTradeKey,
+			Description = LocalizedStrings.LastTradeDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
+			Order = 201)]
+		[Browsable(false)]
+		[Obsolete("Use LastTick property.")]
+		public Trade LastTrade => LastTick is ExecutionMessage execMsg ? execMsg.ToTrade(this) : (Trade)LastTick;
 
 		private decimal? _openPrice;
 
@@ -605,13 +706,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// First trade price for the session.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str558Key,
-			Description = LocalizedStrings.Str559Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.FirstTradePriceKey,
+			Description = LocalizedStrings.FirstTradePriceForSessionKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 202)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -624,7 +724,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_openPrice = value;
-				Notify(nameof(OpenPrice));
+				Notify();
 			}
 		}
 
@@ -634,13 +734,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Last trade price for the previous session.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str560Key,
-			Description = LocalizedStrings.Str561Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.LastTradePriceKey,
+			Description = LocalizedStrings.LastTradePriceDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 203)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -653,7 +752,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_closePrice = value;
-				Notify(nameof(ClosePrice));
+				Notify();
 			}
 		}
 
@@ -663,13 +762,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Lowest price for the session.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str288Key,
-			Description = LocalizedStrings.Str562Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.LowPriceKey,
+			Description = LocalizedStrings.LowPriceForSessionKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 204)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -682,7 +780,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_lowPrice = value;
-				Notify(nameof(LowPrice));
+				Notify();
 			}
 		}
 
@@ -692,13 +790,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Highest price for the session.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str563Key,
-			Description = LocalizedStrings.Str564Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.HighestPriceKey,
+			Description = LocalizedStrings.HighestPriceForSessionKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 205)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -711,27 +808,26 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_highPrice = value;
-				Notify(nameof(HighPrice));
+				Notify();
 			}
 		}
 
-		private Quote _bestBid;
+		private QuoteChange? _bestBid;
 
 		//[DataMember]
 		/// <summary>
 		/// Best bid in market depth.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str565Key,
-			Description = LocalizedStrings.Str566Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.BestBidKey,
+			Description = LocalizedStrings.BestBidDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 206)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
-		public Quote BestBid
+		public QuoteChange? BestBid
 		{
 			get => _bestBid;
 			set
@@ -743,27 +839,26 @@ namespace StockSharp.BusinessEntities
 				//	return;
 
 				_bestBid = value;
-				Notify(nameof(BestBid));
+				Notify();
 			}
 		}
 
-		private Quote _bestAsk;
+		private QuoteChange? _bestAsk;
 
 		//[DataMember]
 		/// <summary>
 		/// Best ask in market depth.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.BestAskKey,
 			Description = LocalizedStrings.BestAskDescKey,
-			GroupName = LocalizedStrings.Str436Key,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 207)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
-		public Quote BestAsk
+		public QuoteChange? BestAsk
 		{
 			get => _bestAsk;
 			set
@@ -772,7 +867,7 @@ namespace StockSharp.BusinessEntities
 				//	return;
 
 				_bestAsk = value;
-				Notify(nameof(BestAsk));
+				Notify();
 			}
 		}
 
@@ -789,9 +884,9 @@ namespace StockSharp.BusinessEntities
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.BestPairKey,
 			Description = LocalizedStrings.BestPairKey + LocalizedStrings.Dot,
-			GroupName = LocalizedStrings.Str436Key,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 208)]
-		public MarketDepthPair BestPair => new MarketDepthPair(this, BestBid, BestAsk);
+		public MarketDepthPair BestPair => new(BestBid, BestAsk);
 
 		private SecurityStates? _state;
 
@@ -803,10 +898,9 @@ namespace StockSharp.BusinessEntities
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.StateKey,
-			Description = LocalizedStrings.Str569Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Description = LocalizedStrings.SecurityStateKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 209)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -819,7 +913,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_state = value;
-				Notify(nameof(State));
+				Notify();
 			}
 		}
 
@@ -833,9 +927,8 @@ namespace StockSharp.BusinessEntities
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.PriceMinKey,
 			Description = LocalizedStrings.PriceMinLimitKey,
-			GroupName = LocalizedStrings.Str436Key,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 210)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -848,7 +941,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_minPrice = value;
-				Notify(nameof(MinPrice));
+				Notify();
 			}
 		}
 
@@ -862,9 +955,8 @@ namespace StockSharp.BusinessEntities
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.PriceMaxKey,
 			Description = LocalizedStrings.PriceMaxLimitKey,
-			GroupName = LocalizedStrings.Str436Key,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 211)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -877,7 +969,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_maxPrice = value;
-				Notify(nameof(MaxPrice));
+				Notify();
 			}
 		}
 
@@ -889,11 +981,10 @@ namespace StockSharp.BusinessEntities
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str304Key,
-			Description = LocalizedStrings.MarginBuyKey,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.MarginBuyKey,
+			Description = LocalizedStrings.MarginBuyDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 212)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -906,7 +997,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_marginBuy = value;
-				Notify(nameof(MarginBuy));
+				Notify();
 			}
 		}
 
@@ -918,11 +1009,10 @@ namespace StockSharp.BusinessEntities
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str305Key,
-			Description = LocalizedStrings.MarginSellKey,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.MarginSellKey,
+			Description = LocalizedStrings.MarginSellDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 213)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -935,32 +1025,9 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_marginSell = value;
-				Notify(nameof(MarginSell));
+				Notify();
 			}
 		}
-
-		//[field: NonSerialized]
-		//private IConnector _connector;
-
-		///// <summary>
-		///// Connection to the trading system, through which this instrument has been downloaded.
-		///// </summary>
-		//[Ignore]
-		//[XmlIgnore]
-		//[Browsable(false)]
-		//[Obsolete("The property Connector was obsoleted and is always null.")]
-		//public IConnector Connector
-		//{
-		//	get { return _connector; }
-		//	set
-		//	{
-		//		if (_connector == value)
-		//			return;
-
-		//		_connector = value;
-		//		Notify(nameof(Trader));
-		//	}
-		//}
 
 		private string _underlyingSecurityId;
 
@@ -971,8 +1038,8 @@ namespace StockSharp.BusinessEntities
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.UnderlyingAssetKey,
-			Description = LocalizedStrings.Str550Key,
-			GroupName = LocalizedStrings.Str437Key,
+			Description = LocalizedStrings.UnderlyingAssetDescKey,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 100)]
 		public string UnderlyingSecurityId
 		{
@@ -983,7 +1050,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_underlyingSecurityId = value;
-				Notify(nameof(UnderlyingSecurityId));
+				Notify();
 			}
 		}
 
@@ -993,12 +1060,12 @@ namespace StockSharp.BusinessEntities
 		/// Option type.
 		/// </summary>
 		[DataMember]
-		[Nullable]
+		//[Nullable]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str551Key,
+			Name = LocalizedStrings.OptionTypeKey,
 			Description = LocalizedStrings.OptionContractTypeKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 101)]
 		public OptionTypes? OptionType
 		{
@@ -1009,7 +1076,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_optionType = value;
-				Notify(nameof(OptionType));
+				Notify();
 			}
 		}
 
@@ -1023,9 +1090,8 @@ namespace StockSharp.BusinessEntities
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.StrikeKey,
 			Description = LocalizedStrings.OptionStrikePriceKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 102)]
-		[Nullable]
 		public decimal? Strike
 		{
 			get => _strike;
@@ -1034,11 +1100,11 @@ namespace StockSharp.BusinessEntities
 				if (_strike == value)
 					return;
 
-				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+				//if (value < 0)
+				//	throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_strike = value;
-				Notify(nameof(Strike));
+				Notify();
 			}
 		}
 
@@ -1050,9 +1116,9 @@ namespace StockSharp.BusinessEntities
 		[DataMember]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str552Key,
+			Name = LocalizedStrings.BinaryKey,
 			Description = LocalizedStrings.TypeBinaryOptionKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 103)]
 		public string BinaryOptionType
 		{
@@ -1063,7 +1129,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_binaryOptionType = value;
-				Notify(nameof(BinaryOptionType));
+				Notify();
 			}
 		}
 
@@ -1073,13 +1139,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Volatility (implied).
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.IVKey,
-			Description = LocalizedStrings.Str293Key + LocalizedStrings.Dot,
-			GroupName = LocalizedStrings.Str437Key,
+			Description = LocalizedStrings.ImpliedVolatilityKey + LocalizedStrings.Dot,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 104)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1092,7 +1157,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_impliedVolatility = value;
-				Notify(nameof(ImpliedVolatility));
+				Notify();
 			}
 		}
 
@@ -1102,13 +1167,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Volatility (historical).
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.HVKey,
-			Description = LocalizedStrings.Str299Key + LocalizedStrings.Dot,
-			GroupName = LocalizedStrings.Str437Key,
+			Description = LocalizedStrings.HistoricalVolatilityKey + LocalizedStrings.Dot,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 105)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1121,7 +1185,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_historicalVolatility = value;
-				Notify(nameof(HistoricalVolatility));
+				Notify();
 			}
 		}
 
@@ -1131,13 +1195,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Theoretical price.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str294Key,
+			Name = LocalizedStrings.TheorPriceKey,
 			Description = LocalizedStrings.TheoreticalPriceKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 106)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1150,7 +1213,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_theorPrice = value;
-				Notify(nameof(TheorPrice));
+				Notify();
 			}
 		}
 
@@ -1164,9 +1227,8 @@ namespace StockSharp.BusinessEntities
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.DeltaKey,
 			Description = LocalizedStrings.OptionDeltaKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 107)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1179,7 +1241,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_delta = value;
-				Notify(nameof(Delta));
+				Notify();
 			}
 		}
 
@@ -1189,13 +1251,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Option gamma.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.GammaKey,
 			Description = LocalizedStrings.OptionGammaKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 108)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1208,7 +1269,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_gamma = value;
-				Notify(nameof(Gamma));
+				Notify();
 			}
 		}
 
@@ -1218,13 +1279,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Option vega.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.VegaKey,
 			Description = LocalizedStrings.OptionVegaKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 109)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1237,7 +1297,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_vega = value;
-				Notify(nameof(Vega));
+				Notify();
 			}
 		}
 
@@ -1247,13 +1307,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Option theta.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.ThetaKey,
 			Description = LocalizedStrings.OptionThetaKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 110)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1266,7 +1325,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_theta = value;
-				Notify(nameof(Theta));
+				Notify();
 			}
 		}
 
@@ -1276,13 +1335,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Option rho.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.RhoKey,
 			Description = LocalizedStrings.OptionRhoKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 111)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1295,7 +1353,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_rho = value;
-				Notify(nameof(Rho));
+				Notify();
 			}
 		}
 
@@ -1307,11 +1365,10 @@ namespace StockSharp.BusinessEntities
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str150Key,
-			Description = LocalizedStrings.Str151Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.OpenInterestKey,
+			Description = LocalizedStrings.OpenInterestDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 220)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1324,7 +1381,7 @@ namespace StockSharp.BusinessEntities
 					return;
 
 				_openInterest = value;
-				Notify(nameof(OpenInterest));
+				Notify();
 			}
 		}
 
@@ -1334,7 +1391,6 @@ namespace StockSharp.BusinessEntities
 		/// Local time of the last instrument change.
 		/// </summary>
 		[Browsable(false)]
-		[Ignore]
 		[XmlIgnore]
 		public DateTimeOffset LocalTime
 		{
@@ -1342,7 +1398,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_localTime = value;
-				Notify(nameof(LocalTime));
+				Notify();
 			}
 		}
 
@@ -1354,7 +1410,6 @@ namespace StockSharp.BusinessEntities
 		/// </summary>
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
-		[Ignore]
 		[XmlIgnore]
 		public DateTimeOffset LastChangeTime
 		{
@@ -1362,7 +1417,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_lastChangeTime = value;
-				Notify(nameof(LastChangeTime));
+				Notify();
 			}
 		}
 
@@ -1372,13 +1427,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Total volume in all buy orders.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str295Key,
-			Description = LocalizedStrings.BidsVolumeKey,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.BidsVolumeKey,
+			Description = LocalizedStrings.BidsVolumeDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 221)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1388,7 +1442,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_bidsVolume = value;
-				Notify(nameof(BidsVolume));
+				Notify();
 			}
 		}
 
@@ -1398,13 +1452,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Number of buy orders.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.BidsKey,
-			Description = LocalizedStrings.BidsCountKey,
-			GroupName = LocalizedStrings.Str436Key,
+			Description = LocalizedStrings.BidsCountDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 222)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1414,7 +1467,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_bidsCount = value;
-				Notify(nameof(BidsCount));
+				Notify();
 			}
 		}
 
@@ -1424,13 +1477,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Total volume in all sell orders.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str297Key,
-			Description = LocalizedStrings.AsksVolumeKey,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.AsksVolumeKey,
+			Description = LocalizedStrings.AsksVolumeDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 223)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1440,7 +1492,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_asksVolume = value;
-				Notify(nameof(AsksVolume));
+				Notify();
 			}
 		}
 
@@ -1450,13 +1502,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Number of sell orders.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.AsksKey,
-			Description = LocalizedStrings.AsksCountKey,
-			GroupName = LocalizedStrings.Str436Key,
+			Description = LocalizedStrings.AsksCountDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 224)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1466,7 +1517,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_asksCount = value;
-				Notify(nameof(AsksCount));
+				Notify();
 			}
 		}
 
@@ -1476,13 +1527,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Number of trades.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.TradesOfKey,
-			Description = LocalizedStrings.Str232Key + LocalizedStrings.Dot,
-			GroupName = LocalizedStrings.Str436Key,
+			Description = LocalizedStrings.LimitOrderTifKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 225)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1492,7 +1542,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_tradesCount = value;
-				Notify(nameof(TradesCount));
+				Notify();
 			}
 		}
 
@@ -1502,13 +1552,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Maximum bid during the session.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str319Key,
-			Description = LocalizedStrings.Str594Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.BidMaxKey,
+			Description = LocalizedStrings.BidMaxDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 226)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1518,7 +1567,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_highBidPrice = value;
-				Notify(nameof(HighBidPrice));
+				Notify();
 			}
 		}
 
@@ -1528,13 +1577,12 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Minimum ask during the session.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str320Key,
-			Description = LocalizedStrings.Str595Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.AskMinKey,
+			Description = LocalizedStrings.AskMinDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 227)]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1544,7 +1592,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_lowAskPrice = value;
-				Notify(nameof(LowAskPrice));
+				Notify();
 			}
 		}
 
@@ -1556,11 +1604,10 @@ namespace StockSharp.BusinessEntities
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str321Key,
-			Description = LocalizedStrings.Str321Key + LocalizedStrings.Dot,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.YieldKey,
+			Description = LocalizedStrings.YieldKey + LocalizedStrings.Dot,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 228)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1570,7 +1617,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_yield = value;
-				Notify(nameof(Yield));
+				Notify();
 			}
 		}
 
@@ -1584,9 +1631,8 @@ namespace StockSharp.BusinessEntities
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.AveragePriceKey,
 			Description = LocalizedStrings.AveragePriceKey + LocalizedStrings.Dot,
-			GroupName = LocalizedStrings.Str436Key,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 229)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1596,7 +1642,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_vwap = value;
-				Notify(nameof(VWAP));
+				Notify();
 			}
 		}
 
@@ -1608,11 +1654,10 @@ namespace StockSharp.BusinessEntities
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str312Key,
-			Description = LocalizedStrings.SettlementPriceKey,
-			GroupName = LocalizedStrings.Str436Key,
+			Name = LocalizedStrings.SettlementPriceKey,
+			Description = LocalizedStrings.SettlementPriceDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 230)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1622,7 +1667,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_settlementPrice = value;
-				Notify(nameof(SettlementPrice));
+				Notify();
 			}
 		}
 
@@ -1635,10 +1680,9 @@ namespace StockSharp.BusinessEntities
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.AveragePriceKey,
-			Description = LocalizedStrings.Str600Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Description = LocalizedStrings.AveragePriceDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 231)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1648,7 +1692,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_averagePrice = value;
-				Notify(nameof(AveragePrice));
+				Notify();
 			}
 		}
 
@@ -1661,10 +1705,9 @@ namespace StockSharp.BusinessEntities
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.VolumeKey,
-			Description = LocalizedStrings.Str601Key,
-			GroupName = LocalizedStrings.Str436Key,
+			Description = LocalizedStrings.VolumeDescKey,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 232)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1674,7 +1717,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_volume = value;
-				Notify(nameof(Volume));
+				Notify();
 			}
 		}
 
@@ -1687,9 +1730,8 @@ namespace StockSharp.BusinessEntities
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.TurnoverKey,
 			Description = LocalizedStrings.TurnoverKey + LocalizedStrings.Dot,
-			GroupName = LocalizedStrings.Str436Key,
+			GroupName = LocalizedStrings.StatisticsKey,
 			Order = 232)]
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		//[Obsolete("Use the IConnector.GetSecurityValue.")]
@@ -1699,7 +1741,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_turnover = value;
-				Notify(nameof(Turnover));
+				Notify();
 			}
 		}
 
@@ -1715,19 +1757,18 @@ namespace StockSharp.BusinessEntities
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 21)]
 		[DataMember]
-		[Nullable]
 		public decimal? IssueSize
 		{
 			get => _issueSize;
 			set
 			{
 				_issueSize = value;
-				Notify(nameof(IssueSize));
+				Notify();
 			}
 		}
 
 		private DateTimeOffset? _issueDate;
-		
+
 		/// <summary>
 		/// Date of issue.
 		/// </summary>
@@ -1738,19 +1779,18 @@ namespace StockSharp.BusinessEntities
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 22)]
 		[DataMember]
-		[Nullable]
 		public DateTimeOffset? IssueDate
 		{
 			get => _issueDate;
 			set
 			{
 				_issueDate = value;
-				Notify(nameof(IssueDate));
+				Notify();
 			}
 		}
 
 		private bool? _shortable;
-		
+
 		/// <summary>
 		/// Can have short positions.
 		/// </summary>
@@ -1761,14 +1801,13 @@ namespace StockSharp.BusinessEntities
 			GroupName = LocalizedStrings.GeneralKey,
 			Order = 22)]
 		[DataMember]
-		[Nullable]
 		public bool? Shortable
 		{
 			get => _shortable;
 			set
 			{
 				_shortable = value;
-				Notify(nameof(Shortable));
+				Notify();
 			}
 		}
 
@@ -1781,17 +1820,16 @@ namespace StockSharp.BusinessEntities
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.AssetTypeKey,
 			Description = LocalizedStrings.UnderlyingSecurityTypeKey + LocalizedStrings.Dot,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 103)]
 		[DataMember]
-		[Nullable]
 		public SecurityTypes? UnderlyingSecurityType
 		{
 			get => _underlyingSecurityType;
 			set
 			{
 				_underlyingSecurityType = value;
-				Notify(nameof(UnderlyingSecurityType));
+				Notify();
 			}
 		}
 
@@ -1804,17 +1842,16 @@ namespace StockSharp.BusinessEntities
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.UnderlyingMinVolumeKey,
 			Description = LocalizedStrings.UnderlyingMinVolumeDescKey,
-			GroupName = LocalizedStrings.Str437Key,
+			GroupName = LocalizedStrings.DerivativesKey,
 			Order = 104)]
 		[DataMember]
-		[Nullable]
 		public decimal? UnderlyingSecurityMinVolume
 		{
 			get => _underlyingSecurityMinVolume;
 			set
 			{
 				_underlyingSecurityMinVolume = value;
-				Notify(nameof(UnderlyingSecurityMinVolume));
+				Notify();
 			}
 		}
 
@@ -1823,7 +1860,6 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// BuyBack price.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		public decimal? BuyBackPrice
@@ -1832,16 +1868,15 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_buyBackPrice = value;
-				Notify(nameof(BuyBackPrice));
+				Notify();
 			}
 		}
 
 		private DateTimeOffset? _buyBackDate;
-		
+
 		/// <summary>
 		/// BuyBack date.
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		public DateTimeOffset? BuyBackDate
@@ -1850,7 +1885,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_buyBackDate = value;
-				Notify(nameof(BuyBackDate));
+				Notify();
 			}
 		}
 
@@ -1883,7 +1918,6 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Commission (taker).
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		public decimal? CommissionTaker
@@ -1892,7 +1926,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_commissionTaker = value;
-				Notify(nameof(CommissionTaker));
+				Notify();
 			}
 		}
 
@@ -1901,7 +1935,6 @@ namespace StockSharp.BusinessEntities
 		/// <summary>
 		/// Commission (maker).
 		/// </summary>
-		[Ignore]
 		[XmlIgnore]
 		[Browsable(false)]
 		public decimal? CommissionMaker
@@ -1910,7 +1943,7 @@ namespace StockSharp.BusinessEntities
 			set
 			{
 				_commissionMaker = value;
-				Notify(nameof(CommissionMaker));
+				Notify();
 			}
 		}
 
@@ -1954,6 +1987,7 @@ namespace StockSharp.BusinessEntities
 			destination.ShortName = ShortName;
 			destination.VolumeStep = VolumeStep;
 			destination.MinVolume = MinVolume;
+			destination.MaxVolume = MaxVolume;
 			destination.Multiplier = Multiplier;
 			destination.PriceStep = PriceStep;
 			destination.Decimals = Decimals;
@@ -1997,9 +2031,10 @@ namespace StockSharp.BusinessEntities
 			destination.BasketExpression = BasketExpression;
 			destination.CommissionTaker = CommissionTaker;
 			destination.CommissionMaker = CommissionMaker;
-
-			//if (destination.ExtensionInfo == null)
-			//	destination.ExtensionInfo = new SynchronizedDictionary<object, object>();
+			destination.FaceValue = FaceValue;
+			destination.SettlementType = SettlementType;
+			destination.OptionStyle = OptionStyle;
+			destination.PrimaryId = PrimaryId;
 
 			//if (LastTrade != null)
 			//{
@@ -2024,7 +2059,7 @@ namespace StockSharp.BusinessEntities
 		/// To call the event <see cref="INotifyPropertyChanged.PropertyChanged"/>.
 		/// </summary>
 		/// <param name="propName">Property name.</param>
-		protected void Notify(string propName)
+		protected void Notify([CallerMemberName]string propName = null)
 		{
 			_propertyChanged?.Invoke(this, propName);
 		}

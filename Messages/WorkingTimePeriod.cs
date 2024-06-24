@@ -20,12 +20,12 @@ namespace StockSharp.Messages
 	using System.Linq;
 	using System.Runtime.Serialization;
 	using System.Xml.Serialization;
-
-	using DevExpress.Mvvm.DataAnnotations;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Common;
 	using Ecng.ComponentModel;
 	using Ecng.Serialization;
+	using Ecng.Collections;
 
 	using StockSharp.Localization;
 
@@ -33,43 +33,35 @@ namespace StockSharp.Messages
 	/// Schedule validity period.
 	/// </summary>
 	[Serializable]
-	[System.Runtime.Serialization.DataContract]
-	[DisplayNameLoc(LocalizedStrings.Str416Key)]
-	[DescriptionLoc(LocalizedStrings.Str417Key)]
+	[DataContract]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ScheduleKey,
+		Description = LocalizedStrings.ScheduleValidityPeriodKey)]
 	public class WorkingTimePeriod : Cloneable<WorkingTimePeriod>, IPersistable
 	{
-		sealed class TimeSpanRangeInitializer : NewItemInstanceInitializerAttribute
-		{
-			public TimeSpanRangeInitializer()
-				: base(typeof(Range<TimeSpan>), "item")
-			{
-			}
-
-			public override object CreateInstance()
-			{
-				return new Range<TimeSpan>(TimeSpan.Zero, TimeSpan.Zero);
-			}
-		}
-
 		/// <summary>
 		/// Schedule expiration date.
 		/// </summary>
 		[DataMember]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		[DisplayNameLoc(LocalizedStrings.Str418Key)]
-		[DescriptionLoc(LocalizedStrings.Str419Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TillKey,
+			Description = LocalizedStrings.WorkingTimeTillKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public DateTime Till { get; set; }
-		
-		private List<Range<TimeSpan>> _times = new List<Range<TimeSpan>>();
+
+		private List<Range<TimeSpan>> _times = new();
 
 		/// <summary>
 		/// Work schedule within day.
 		/// </summary>
 		[DataMember]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		[DisplayNameLoc(LocalizedStrings.Str416Key)]
-		[DescriptionLoc(LocalizedStrings.Str420Key)]
-		[TimeSpanRangeInitializer]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ScheduleKey,
+			Description = LocalizedStrings.WorkScheduleDayKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public List<Range<TimeSpan>> Times
 		{
 			get => _times;
@@ -108,11 +100,13 @@ namespace StockSharp.Messages
 		/// <param name="storage">Settings storage.</param>
 		public void Load(SettingsStorage storage)
 		{
-			Times = storage.GetValue<List<Range<TimeSpan>>>(nameof(Times));
+			Times = storage.GetValue<IEnumerable<SettingsStorage>>(nameof(Times)).Select(s => s.ToRange<TimeSpan>()).ToList();
 			Till = storage.GetValue<DateTime>(nameof(Till));
-
-			if (storage.ContainsKey(nameof(SpecialDays)))
-				SpecialDays = storage.GetValue<IDictionary<DayOfWeek, Range<TimeSpan>[]>>(nameof(SpecialDays));
+			SpecialDays = storage.GetValue<IEnumerable<SettingsStorage>>(nameof(SpecialDays)).Select(s =>
+				new KeyValuePair<DayOfWeek, Range<TimeSpan>[]>(
+					s.GetValue<DayOfWeek>("Day"),
+					s.GetValue<IEnumerable<SettingsStorage>>("Periods").Select(s1 => s1.ToRange<TimeSpan>()).ToArray()))
+			.ToDictionary();
 		}
 
 		/// <summary>
@@ -121,20 +115,18 @@ namespace StockSharp.Messages
 		/// <param name="storage">Settings storage.</param>
 		public void Save(SettingsStorage storage)
 		{
-			storage.SetValue(nameof(Times), Times);
+			storage.SetValue(nameof(Times), Times.Select(r => r.ToStorage()).ToArray());
 			storage.SetValue(nameof(Till), Till);
-			storage.SetValue(nameof(SpecialDays), SpecialDays);
+			storage.SetValue(nameof(SpecialDays), SpecialDays.Select(p => new SettingsStorage()
+				.Set("Day", p.Key)
+				.Set("Periods", p.Value.Select(r => r.ToStorage()).ToArray())
+			).ToArray());
 		}
 
-		/// <summary>
-		/// Returns a <see cref="T:System.String"/> that represents the current <see cref="T:System.Object"/>.
-		/// </summary>
-		/// <returns>
-		/// A <see cref="T:System.String"/> that represents the current <see cref="T:System.Object"/>.
-		/// </returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return Times.Select(t => t.ToString()).Join(",");
+			return Times.Select(t => t.ToString()).JoinComma();
 		}
 	}
 }

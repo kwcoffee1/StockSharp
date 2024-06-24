@@ -18,13 +18,9 @@ namespace StockSharp.Algo.Export
 	using System;
 	using System.Collections;
 	using System.Collections.Generic;
-	using System.Globalization;
-	using System.Linq;
 
 	using Ecng.Common;
 
-	using StockSharp.Algo.Candles;
-	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
 	using StockSharp.Localization;
 
@@ -38,33 +34,23 @@ namespace StockSharp.Algo.Export
 		/// <summary>
 		/// Initialize <see cref="BaseExporter"/>.
 		/// </summary>
-		/// <param name="security">Security.</param>
-		/// <param name="arg">The data parameter.</param>
+		/// <param name="dataType">Data type info.</param>
 		/// <param name="isCancelled">The processor, returning process interruption sign.</param>
 		/// <param name="path">The path to file.</param>
-		protected BaseExporter(Security security, object arg, Func<int, bool> isCancelled, string path)
+		protected BaseExporter(DataType dataType, Func<int, bool> isCancelled, string path)
 		{
-			//if (security == null)
-			//	throw new ArgumentNullException(nameof(security));
-
 			if (path.IsEmpty())
 				throw new ArgumentNullException(nameof(path));
 
-			Security = security;
-			Arg = arg;
+			DataType = dataType ?? throw new ArgumentNullException(nameof(dataType));
 			_isCancelled = isCancelled ?? throw new ArgumentNullException(nameof(isCancelled));
 			Path = path;
 		}
 
 		/// <summary>
-		/// Security.
+		/// Data type info.
 		/// </summary>
-		protected Security Security { get; }
-
-		/// <summary>
-		/// The data parameter.
-		/// </summary>
-		public object Arg { get; }
+		public DataType DataType { get; }
 
 		/// <summary>
 		/// The path to file.
@@ -74,45 +60,39 @@ namespace StockSharp.Algo.Export
 		/// <summary>
 		/// To export values.
 		/// </summary>
-		/// <param name="dataType">Market data type.</param>
 		/// <param name="values">Value.</param>
-		public void Export(Type dataType, IEnumerable values)
+		/// <returns>Count and last time.</returns>
+		public (int, DateTimeOffset?) Export(IEnumerable values)
 		{
 			if (values == null)
 				throw new ArgumentNullException(nameof(values));
 
-			CultureInfo.InvariantCulture.DoInCulture(() =>
+			return Do.Invariant(() =>
 			{
-				if (dataType == typeof(Trade))
-					Export(((IEnumerable<Trade>)values).Select(t => t.ToMessage()));
-				else if (dataType == typeof(MarketDepth))
-					Export(((IEnumerable<MarketDepth>)values).Select(d => d.ToMessage()));
-				else if (dataType == typeof(QuoteChangeMessage))
-					Export((IEnumerable<QuoteChangeMessage>)values);
-				else if (dataType == typeof(Level1ChangeMessage))
-					Export((IEnumerable<Level1ChangeMessage>)values);
-				else if (dataType == typeof(OrderLogItem))
-					Export(((IEnumerable<OrderLogItem>)values).Select(i => i.ToMessage()));
-				else if (dataType == typeof(ExecutionMessage))
-					Export((IEnumerable<ExecutionMessage>)values);
-				else if (dataType.IsCandle())
-					Export(((IEnumerable<Candle>)values).Select(c => c.ToMessage()));
-				else if (dataType.IsCandleMessage())
-					Export((IEnumerable<CandleMessage>)values);
-				else if (dataType == typeof(News))
-					Export(((IEnumerable<News>)values).Select(s => s.ToMessage()));
-				else if (dataType == typeof(NewsMessage))
-					Export((IEnumerable<NewsMessage>)values);
-				else if (dataType == typeof(Security))
-					Export(((IEnumerable<Security>)values).Select(s => s.ToMessage()));
-				else if (dataType == typeof(SecurityMessage))
-					Export((IEnumerable<SecurityMessage>)values);
-				else if (dataType == typeof(PositionChangeMessage))
-					Export((IEnumerable<PositionChangeMessage>)values);
-				else if (dataType == typeof(IndicatorValue))
-					Export((IEnumerable<IndicatorValue>)values);
+				if (DataType == DataType.MarketDepth)
+					return Export((IEnumerable<QuoteChangeMessage>)values);
+				else if (DataType == DataType.Level1)
+					return Export((IEnumerable<Level1ChangeMessage>)values);
+				else if (DataType == DataType.Ticks)
+					return ExportTicks((IEnumerable<ExecutionMessage>)values);
+				else if (DataType == DataType.OrderLog)
+					return ExportOrderLog((IEnumerable<ExecutionMessage>)values);
+				else if (DataType == DataType.Transactions)
+					return ExportTransactions((IEnumerable<ExecutionMessage>)values);
+				else if (DataType.IsCandles)
+					return Export((IEnumerable<CandleMessage>)values);
+				else if (DataType == DataType.News)
+					return Export((IEnumerable<NewsMessage>)values);
+				else if (DataType == DataType.Securities)
+					return Export((IEnumerable<SecurityMessage>)values);
+				else if (DataType == DataType.Securities)
+					return Export((IEnumerable<SecurityMessage>)values);
+				else if (DataType == DataType.PositionChanges)
+					return Export((IEnumerable<PositionChangeMessage>)values);
+				else if (DataType == TraderHelper.IndicatorValue)
+					return Export((IEnumerable<IndicatorValue>)values);
 				else
-					throw new ArgumentOutOfRangeException(nameof(dataType), dataType, LocalizedStrings.Str721);
+					throw new ArgumentOutOfRangeException(nameof(DataType), DataType, LocalizedStrings.InvalidValue);
 			});
 		}
 
@@ -130,48 +110,70 @@ namespace StockSharp.Algo.Export
 		/// To export <see cref="QuoteChangeMessage"/>.
 		/// </summary>
 		/// <param name="messages">Messages.</param>
-		protected abstract void Export(IEnumerable<QuoteChangeMessage> messages);
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) Export(IEnumerable<QuoteChangeMessage> messages);
 
 		/// <summary>
 		/// To export <see cref="Level1ChangeMessage"/>.
 		/// </summary>
 		/// <param name="messages">Messages.</param>
-		protected abstract void Export(IEnumerable<Level1ChangeMessage> messages);
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) Export(IEnumerable<Level1ChangeMessage> messages);
 
 		/// <summary>
-		/// To export <see cref="ExecutionMessage"/>.
+		/// To export <see cref="DataType.Ticks"/>.
 		/// </summary>
 		/// <param name="messages">Messages.</param>
-		protected abstract void Export(IEnumerable<ExecutionMessage> messages);
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) ExportTicks(IEnumerable<ExecutionMessage> messages);
+
+		/// <summary>
+		/// To export <see cref="DataType.OrderLog"/>.
+		/// </summary>
+		/// <param name="messages">Messages.</param>
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) ExportOrderLog(IEnumerable<ExecutionMessage> messages);
+
+		/// <summary>
+		/// To export <see cref="DataType.Transactions"/>.
+		/// </summary>
+		/// <param name="messages">Messages.</param>
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) ExportTransactions(IEnumerable<ExecutionMessage> messages);
 
 		/// <summary>
 		/// To export <see cref="CandleMessage"/>.
 		/// </summary>
 		/// <param name="messages">Messages.</param>
-		protected abstract void Export(IEnumerable<CandleMessage> messages);
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) Export(IEnumerable<CandleMessage> messages);
 
 		/// <summary>
 		/// To export <see cref="NewsMessage"/>.
 		/// </summary>
 		/// <param name="messages">Messages.</param>
-		protected abstract void Export(IEnumerable<NewsMessage> messages);
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) Export(IEnumerable<NewsMessage> messages);
 
 		/// <summary>
 		/// To export <see cref="SecurityMessage"/>.
 		/// </summary>
 		/// <param name="messages">Messages.</param>
-		protected abstract void Export(IEnumerable<SecurityMessage> messages);
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) Export(IEnumerable<SecurityMessage> messages);
 
 		/// <summary>
 		/// To export <see cref="PositionChangeMessage"/>.
 		/// </summary>
 		/// <param name="messages">Messages.</param>
-		protected abstract void Export(IEnumerable<PositionChangeMessage> messages);
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) Export(IEnumerable<PositionChangeMessage> messages);
 
 		/// <summary>
 		/// To export <see cref="IndicatorValue"/>.
 		/// </summary>
 		/// <param name="values">Values.</param>
-		protected abstract void Export(IEnumerable<IndicatorValue> values);
+		/// <returns>Count and last time.</returns>
+		protected abstract (int, DateTimeOffset?) Export(IEnumerable<IndicatorValue> values);
 	}
 }

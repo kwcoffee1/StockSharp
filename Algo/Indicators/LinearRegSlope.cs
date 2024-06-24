@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -16,18 +16,24 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System.Collections.Generic;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Linq;
 
-	using Ecng.Collections;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Linear regression gradient.
 	/// </summary>
-	[DisplayName("LinearRegSlope")]
-	[DescriptionLoc(LocalizedStrings.Str742Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/lrs.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.LRSKey,
+		Description = LocalizedStrings.LinearRegSlopeKey)]
+	[Doc("topics/api/indicators/list_of_indicators/lrs.html")]
 	public class LinearRegSlope : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -38,30 +44,20 @@ namespace StockSharp.Algo.Indicators
 			Length = 11;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
 
 			if (input.IsFinal)
 			{
-				Buffer.Add(newValue);
-
-				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
+				Buffer.AddEx(newValue);
 			}
 
-			var buff = Buffer;
-			if (!input.IsFinal)
-			{
-				buff = new List<decimal>();
-				buff.AddRange(Buffer.Skip(1));
-				buff.Add(newValue);
-			}
+			var buff = input.IsFinal ? Buffer : (IList<decimal>)Buffer.Skip(1).Append(newValue).ToArray();
 
 			//x - независимая переменная, номер значения в буфере
 			//y - зависимая переменная - значения из буфера
@@ -73,8 +69,8 @@ namespace StockSharp.Algo.Indicators
 			for (var i = 0; i < buff.Count; i++)
 			{
 				sumX += i;
-				sumY += buff.ElementAt(i);
-				sumXy += i * buff.ElementAt(i);
+				sumY += buff[i];
+				sumXy += i * buff[i];
 				sumX2 += i * i;
 			}
 

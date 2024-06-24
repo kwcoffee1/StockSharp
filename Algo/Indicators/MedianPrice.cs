@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,17 +15,24 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Median price.
 	/// </summary>
-	[DisplayName("MedianPrice")]
-	[DescriptionLoc(LocalizedStrings.Str745Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/median_price.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MedPrKey,
+		Description = LocalizedStrings.MedianPriceKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/median_price.html")]
 	public class MedianPrice : BaseIndicator
 	{
 		/// <summary>
@@ -35,19 +42,15 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var (_, high, low, _) = input.GetOhlc();
 
 			if (input.IsFinal)
 				IsFormed = true;
 
-			return new DecimalIndicatorValue(this, (candle.HighPrice + candle.LowPrice) / 2);
+			return new DecimalIndicatorValue(this, (high + low) / 2);
 		}
 	}
 }

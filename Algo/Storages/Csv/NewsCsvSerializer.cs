@@ -15,8 +15,6 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Storages.Csv
 {
-	using System;
-
 	using Ecng.Common;
 
 	using StockSharp.Messages;
@@ -26,6 +24,8 @@ namespace StockSharp.Algo.Storages.Csv
 	/// </summary>
 	public class NewsCsvSerializer : CsvMarketDataSerializer<NewsMessage>
 	{
+		private const string _expiryFormat = "yyyyMMddHHmmssfff zzz";
+
 		/// <inheritdoc />
 		protected override void Write(CsvFileWriter writer, NewsMessage data, IMarketDataMetaInfo metaInfo)
 		{
@@ -39,7 +39,11 @@ namespace StockSharp.Algo.Storages.Csv
 				data.Id,
 				data.BoardCode,
 				data.SecurityId?.SecurityCode,
-				data.Priority?.ToString(),
+				data.Priority?.To<string>(),
+				data.Language,
+				data.SecurityId?.BoardCode,
+				data.ExpiryDate?.ToString(_expiryFormat),
+				data.SeqNum.DefaultAsNull().ToString(),
 			});
 
 			metaInfo.LastTime = data.ServerTime.UtcDateTime;
@@ -65,6 +69,27 @@ namespace StockSharp.Algo.Storages.Csv
 
 			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
 				news.Priority = reader.ReadNullableEnum<NewsPriorities>();
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				news.Language = reader.ReadString();
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+			{
+				var boardCode = reader.ReadString();
+
+				if (news.SecurityId != null)
+				{
+					var secId = news.SecurityId.Value;
+					secId.BoardCode = boardCode;
+					news.SecurityId = secId;
+				}
+			}
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				news.ExpiryDate = reader.ReadString().TryToDateTimeOffset(_expiryFormat);
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				news.SeqNum = reader.ReadNullableLong() ?? 0L;
 
 			return news;
 		}

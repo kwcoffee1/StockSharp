@@ -18,9 +18,9 @@ namespace StockSharp.Algo.Indicators
 	using System;
 
 	using Ecng.Common;
-	using Ecng.Serialization;
 
-	using StockSharp.Algo.Candles;
+	using StockSharp.Localization;
+	using StockSharp.Messages;
 
 	/// <summary>
 	/// Extension class for indicators.
@@ -104,34 +104,28 @@ namespace StockSharp.Algo.Indicators
 			var container = indicator.Container;
 
 			if (index >= container.Count)
-			{
-				return default(T);
-				//if (index == 0 && typeof(decimal) == typeof(T))
-				//	return 0m.To<T>();
-				//else
-				//throw new ArgumentOutOfRangeException(nameof(index), index, LocalizedStrings.Str914Params.Put(indicator.Name));
-			}
+				return default;
 
-			var value = container.GetValue(index).Item2;
+			var value = container.GetValue(index).output;
 
 			if (value.IsEmpty)
 			{
 				if (value is T t)
 					return t;
 
-				return default(T);
+				return default;
 			}
 
-			return typeof(IIndicatorValue).IsAssignableFrom(typeof(T)) ? value.To<T>() : value.GetValue<T>();
+			return typeof(T).Is<IIndicatorValue>() ? value.To<T>() : value.GetValue<T>();
 		}
 
 		/// <summary>
-		/// To renew the indicator with candle closing price <see cref="Candle.ClosePrice"/>.
+		/// To renew the indicator with candle closing price <see cref="ICandleMessage.ClosePrice"/>.
 		/// </summary>
 		/// <param name="indicator">Indicator.</param>
 		/// <param name="candle">Candle.</param>
 		/// <returns>The new value of the indicator.</returns>
-		public static IIndicatorValue Process(this IIndicator indicator, Candle candle)
+		public static IIndicatorValue Process(this IIndicator indicator, ICandleMessage candle)
 		{
 			return indicator.Process(new CandleIndicatorValue(indicator, candle));
 		}
@@ -161,31 +155,6 @@ namespace StockSharp.Algo.Indicators
 			return indicator.Process(new PairIndicatorValue<TValue>(indicator, value) { IsFinal = isFinal });
 		}
 
-		internal static void LoadNotNull(this IPersistable obj, SettingsStorage settings, string name)
-		{
-			var value = settings.GetValue<SettingsStorage>(name);
-			if (value != null)
-				obj.Load(value);
-		}
-
-		/// <summary>
-		/// To get the input value for <see cref="IIndicatorValue"/>.
-		/// </summary>
-		/// <typeparam name="T">Value type.</typeparam>
-		/// <param name="indicatorValue">Indicator value.</param>
-		/// <returns>The input value of the specified type.</returns>
-		public static T GetInputValue<T>(this IIndicatorValue indicatorValue)
-		{
-			var input = indicatorValue.InputValue;
-
-			while (input != null && !input.IsSupport(typeof(T)))
-			{
-				input = input.InputValue;
-			}
-
-			return input == null ? default(T) : input.GetValue<T>();
-		}
-
 		/// <summary>
 		/// Get value type for specified indicator.
 		/// </summary>
@@ -197,13 +166,66 @@ namespace StockSharp.Algo.Indicators
 			if (indicatorType == null)
 				throw new ArgumentNullException(nameof(indicatorType));
 
-			if (!typeof(IIndicator).IsAssignableFrom(indicatorType))
-				throw new ArgumentException(nameof(indicatorType));
+			if (!indicatorType.Is<IIndicator>())
+				throw new ArgumentException(LocalizedStrings.TypeNotImplemented.Put(indicatorType.Name, nameof(IIndicator)), nameof(indicatorType));
 
 			return (isInput
 					? (IndicatorValueAttribute)indicatorType.GetAttribute<IndicatorInAttribute>()
 					: indicatorType.GetAttribute<IndicatorOutAttribute>()
 				)?.Type ?? typeof(DecimalIndicatorValue);
+		}
+
+		/// <summary>
+		/// Does value support data type, required for the indicator.
+		/// </summary>
+		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
+		/// <param name="value"><see cref="IIndicatorValue"/></param>
+		/// <returns><see langword="true" />, if data type is supported, otherwise, <see langword="false" />.</returns>
+		public static bool IsSupport<T>(this IIndicatorValue value)
+			=> value.CheckOnNull(nameof(value)).IsSupport(typeof(T));
+
+		/// <summary>
+		/// Get OHLC.
+		/// </summary>
+		/// <param name="value"><see cref="IIndicatorValue"/></param>
+		/// <returns>OHLC.</returns>
+		public static (decimal o, decimal h, decimal l, decimal c) GetOhlc(this IIndicatorValue value)
+		{
+			if (value is null)
+				throw new ArgumentNullException(nameof(value));
+
+			if (value.IsSupport<ICandleMessage>())
+			{
+				var candle = value.GetValue<ICandleMessage>();
+				return (candle.OpenPrice, candle.HighPrice, candle.LowPrice, candle.ClosePrice);
+			}
+			else
+			{
+				var dec = value.GetValue<decimal>();
+				return (dec, dec, dec, dec);
+			}
+		}
+
+		/// <summary>
+		/// Get OHLCV.
+		/// </summary>
+		/// <param name="value"><see cref="IIndicatorValue"/></param>
+		/// <returns>OHLCV.</returns>
+		public static (decimal o, decimal h, decimal l, decimal c, decimal v) GetOhlcv(this IIndicatorValue value)
+		{
+			if (value is null)
+				throw new ArgumentNullException(nameof(value));
+
+			if (value.IsSupport<ICandleMessage>())
+			{
+				var candle = value.GetValue<ICandleMessage>();
+				return (candle.OpenPrice, candle.HighPrice, candle.LowPrice, candle.ClosePrice, candle.TotalVolume);
+			}
+			else
+			{
+				var dec = value.GetValue<decimal>();
+				return (dec, dec, dec, dec, 0);
+			}
 		}
 	}
 }

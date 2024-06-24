@@ -15,7 +15,9 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
@@ -23,10 +25,13 @@ namespace StockSharp.Algo.Indicators
 	/// Momentum.
 	/// </summary>
 	/// <remarks>
-	/// Momentum Simple = C - C-n Where C- closing price of previous period. Where C-n - closing price N periods ago.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/momentum.html
 	/// </remarks>
-	[DisplayName("Momentum")]
-	[DescriptionLoc(LocalizedStrings.Str769Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MomentumKey,
+		Description = LocalizedStrings.MomentumKey)]
+	[Doc("topics/api/indicators/list_of_indicators/momentum.html")]
 	public class Momentum : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -37,26 +42,27 @@ namespace StockSharp.Algo.Indicators
 			Length = 5;
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => Buffer.Count > Length;
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => Buffer.Count > Length;
+
+		/// <inheritdoc />
+		public override void Reset()
+		{
+			base.Reset();
+			Buffer.Capacity = Length + 1;
+		}
+
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
 
 			if (input.IsFinal)
 			{
-				Buffer.Add(newValue);
-				
-				if ((Buffer.Count - 1) > Length)
-					Buffer.RemoveAt(0);
+				Buffer.PushBack(newValue);
 			}
 
 			if (Buffer.Count == 0)

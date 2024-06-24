@@ -15,7 +15,8 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using Ecng.Collections;
+	using System.ComponentModel.DataAnnotations;
+
 	using Ecng.Serialization;
 
 	using StockSharp.Messages;
@@ -24,54 +25,48 @@ namespace StockSharp.Algo.Indicators
 	/// <summary>
 	/// The indicator, built on the market data basis.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.SecurityKey)]
-	[DescriptionLoc(LocalizedStrings.Str747Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.Level1Key,
+		Description = LocalizedStrings.Level1IndicatorKey)]
 	[IndicatorIn(typeof(SingleIndicatorValue<Level1ChangeMessage>))]
 	public class Level1Indicator : BaseIndicator
 	{
 		/// <summary>
 		/// Level one market-data field, which is used as an indicator value.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str748Key)]
-		[DescriptionLoc(LocalizedStrings.Str749Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		public Level1Fields Field { get; set; }
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.FieldKey,
+			Description = LocalizedStrings.Level1FieldKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public Level1Fields Field { get; set; } = Level1Fields.ClosePrice;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var message = input.GetValue<Level1ChangeMessage>();
+			var value = input.GetValue<decimal?>(Field);
 
-			var retVal = message.Changes.TryGetValue(Field);
-
-			if (!IsFormed && retVal != null && input.IsFinal)
+			if (!IsFormed && value != null && input.IsFinal)
 				IsFormed = true;
 
-			return retVal == null ? new DecimalIndicatorValue(this) : new DecimalIndicatorValue(this, (decimal)retVal);
+			return value is decimal d
+				? new DecimalIndicatorValue(this, d)
+				: new DecimalIndicatorValue(this);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
-			Field = settings.GetValue<Level1Fields>(nameof(Field));
+			base.Load(storage);
+			Field = storage.GetValue<Level1Fields>(nameof(Field));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
-			settings.SetValue(nameof(Field), Field);
+			base.Save(storage);
+			storage.SetValue(nameof(Field), Field);
 		}
 	}
 }

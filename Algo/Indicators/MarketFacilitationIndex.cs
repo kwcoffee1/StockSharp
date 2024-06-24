@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,20 +15,24 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Market Facilitation Index.
 	/// </summary>
 	/// <remarks>
-	/// http://ta.mql4.com/indicators/bills/market_facilitation_index.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/market_facilitation_index.html
 	/// </remarks>
-	[DisplayName("MFI")]
-	[DescriptionLoc(LocalizedStrings.Str853Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MFIKey,
+		Description = LocalizedStrings.MarketFacilitationIndexKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/market_facilitation_index.html")]
 	public class MarketFacilitationIndex : BaseIndicator
 	{
 		/// <summary>
@@ -38,22 +42,21 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var (_, high, low, _, vol) = input.GetOhlcv();
 
-			if (candle.TotalVolume == 0)
+			if (vol == 0)
 				return new DecimalIndicatorValue(this);
 
 			if (input.IsFinal)
 				IsFormed = true;
 
-			return new DecimalIndicatorValue(this, (candle.HighPrice - candle.LowPrice) / candle.TotalVolume);
+			return new DecimalIndicatorValue(this, (high - low) / vol);
 		}
 	}
 }

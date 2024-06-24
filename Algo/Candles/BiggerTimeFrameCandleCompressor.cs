@@ -1,7 +1,10 @@
 namespace StockSharp.Algo.Candles
 {
 	using System;
+	using System.Linq;
 	using System.Collections.Generic;
+
+	using Ecng.Common;
 
 	using StockSharp.Algo.Candles.Compression;
 	using StockSharp.Messages;
@@ -9,12 +12,12 @@ namespace StockSharp.Algo.Candles
 	/// <summary>
 	/// Compressor of candles from smaller time-frames to bigger.
 	/// </summary>
-	public class BiggerTimeFrameCandleCompressor
+	public class BiggerTimeFrameCandleCompressor : ICandleBuilderSubscription
 	{
 		private class PartCandleBuilderValueTransform : BaseCandleBuilderValueTransform
 		{
 			public PartCandleBuilderValueTransform()
-				: base(MarketDataTypes.Trades)
+				: base(DataType.Ticks)
 			{
 			}
 
@@ -22,12 +25,13 @@ namespace StockSharp.Algo.Candles
 
 			public override bool Process(Message message)
 			{
-				if (!(message is CandleMessage candle))
+				if (message is not CandleMessage candle)
 					return base.Process(message);
 
 				decimal price;
 				decimal? volume = null;
 				decimal? oi = null;
+				IEnumerable<CandlePriceLevel> priceLevels = null;
 
 				switch (Part)
 				{
@@ -35,6 +39,7 @@ namespace StockSharp.Algo.Candles
 						price = candle.OpenPrice;
 						volume = candle.TotalVolume;
 						oi = candle.OpenInterest;
+						priceLevels = candle.PriceLevels;
 						break;
 
 					case Level1Fields.HighPrice:
@@ -50,50 +55,58 @@ namespace StockSharp.Algo.Candles
 						break;
 
 					default:
-						throw new ArgumentOutOfRangeException();
+						throw new InvalidOperationException(Part.To<string>());
 				}
 
-				Update(candle.OpenTime, price, volume, null, oi);
+				Update(candle.OpenTime, price, volume, null, oi, priceLevels);
 
 				return true;
 			}
 		}
 
 		private readonly PartCandleBuilderValueTransform _transform;
-		private readonly TimeFrameCandleBuilder _builder;
-		private readonly MarketDataMessage _subscription;
+		private readonly ICandleBuilder _builder;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="BiggerTimeFrameCandleCompressor"/>.
 		/// </summary>
-		/// <param name="subscription">Market-data message (uses as a subscribe/unsubscribe in outgoing case, confirmation event in incoming case).</param>
+		/// <param name="message">Market-data message (uses as a subscribe/unsubscribe in outgoing case, confirmation event in incoming case).</param>
 		/// <param name="builder">The builder of candles of <see cref="TimeFrameCandleMessage"/> type.</param>
-		public BiggerTimeFrameCandleCompressor(MarketDataMessage subscription, TimeFrameCandleBuilder builder)
+		public BiggerTimeFrameCandleCompressor(MarketDataMessage message, ICandleBuilder builder)
 		{
-			_subscription = subscription ?? throw new ArgumentNullException(nameof(subscription));
+			Message = message ?? throw new ArgumentNullException(nameof(message));
 			_transform = new PartCandleBuilderValueTransform();
 			_builder = builder ?? throw new ArgumentNullException(nameof(builder));
 		}
 
-		/// <summary>
-		/// Market-data message (uses as a subscribe/unsubscribe in outgoing case, confirmation event in incoming case).
-		/// </summary>
-		public MarketDataMessage Subscription => _subscription;
+		/// <inheritdoc />
+		public MarketDataMessage Message { get; private set; }
 
-		private CandleMessage _currentCandle;
+		/// <inheritdoc />
+		public VolumeProfileBuilder VolumeProfile { get; set; }
 
-		/// <summary>
-		/// The current candle.
-		/// </summary>
-		public CandleMessage CurrentCandle => _currentCandle;
+		/// <inheritdoc />
+		public CandleMessage CurrentCandle { get; set; }
+
+		/// <inheritdoc />
+		public CandleMessage PrevCandle { get; set; }
 
 		/// <summary>
 		/// Reset state.
 		/// </summary>
 		public void Reset()
 		{
-			_currentCandle = null;
+			CurrentCandle = null;
+			PrevCandle = null;
 		}
+
+		private static readonly Level1Fields[] _processParts =
+		{
+			Level1Fields.OpenPrice,
+			Level1Fields.HighPrice,
+			Level1Fields.LowPrice,
+			Level1Fields.ClosePrice,
+		};
 
 		/// <summary>
 		/// To process the new data.
@@ -102,17 +115,16 @@ namespace StockSharp.Algo.Candles
 		/// <returns>A new candles changes.</returns>
 		public IEnumerable<CandleMessage> Process(CandleMessage message)
 		{
-			foreach (var builtCandle in ProcessCandlePart(Level1Fields.OpenPrice, message))
-				yield return (TimeFrameCandleMessage)builtCandle;
+			TimeFrameCandleMessage lastCandle = null;
 
-			foreach (var builtCandle in ProcessCandlePart(Level1Fields.HighPrice, message))
-				yield return (TimeFrameCandleMessage)builtCandle;
-
-			foreach (var builtCandle in ProcessCandlePart(Level1Fields.LowPrice, message))
-				yield return (TimeFrameCandleMessage)builtCandle;
-
-			foreach (var builtCandle in ProcessCandlePart(Level1Fields.ClosePrice, message))
-				yield return (TimeFrameCandleMessage)builtCandle;
+			foreach (var candle in _processParts.SelectMany(p => ProcessCandlePart(p, message)).ToArray().Cast<TimeFrameCandleMessage>())
+			{
+				if (candle != lastCandle)
+				{
+					lastCandle = candle;
+					yield return candle;
+				}
+			}
 		}
 
 		private IEnumerable<CandleMessage> ProcessCandlePart(Level1Fields part, CandleMessage message)
@@ -120,11 +132,7 @@ namespace StockSharp.Algo.Candles
 			_transform.Part = part;
 			_transform.Process(message);
 
-			foreach (var builtCandle in _builder.Process(_subscription, _currentCandle, _transform))
-			{
-				_currentCandle = builtCandle;
-				yield return builtCandle;
-			}
+			return _builder.Process(this, _transform);
 		}
 	}
 }

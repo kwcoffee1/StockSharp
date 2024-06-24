@@ -3,11 +3,12 @@ namespace StockSharp.Algo.Expressions
 	using System;
 	using System.Collections.Generic;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Common;
 	using Ecng.Collections;
-	using Ecng.Configuration;
-	using Ecng.Serialization;
+	using Ecng.Compilation.Expressions;
+	using Ecng.Compilation;
 
 	using StockSharp.BusinessEntities;
 	using StockSharp.Localization;
@@ -17,55 +18,15 @@ namespace StockSharp.Algo.Expressions
 	/// <summary>
 	/// The index, built of combination of several instruments through mathematical formula <see cref="Expression"/>.
 	/// </summary>
-	#region Ignore
-	//[Ignore(FieldName = nameof(Code))]
-	[Ignore(FieldName = nameof(Class))]
-	[Ignore(FieldName = nameof(Name))]
-	[Ignore(FieldName = nameof(ShortName))]
-	//[Ignore(FieldName = nameof(Board))]
-	[Ignore(FieldName = nameof(ExtensionInfo))]
-	[Ignore(FieldName = nameof(Decimals))]
-	[Ignore(FieldName = nameof(VolumeStep))]
-	[Ignore(FieldName = nameof(PriceStep))]
-	[Ignore(FieldName = nameof(StepPrice))]
-	[Ignore(FieldName = nameof(OpenPrice))]
-	[Ignore(FieldName = nameof(ClosePrice))]
-	[Ignore(FieldName = nameof(HighPrice))]
-	[Ignore(FieldName = nameof(LowPrice))]
-	[Ignore(FieldName = nameof(MaxPrice))]
-	[Ignore(FieldName = nameof(MinPrice))]
-	[Ignore(FieldName = nameof(MarginBuy))]
-	[Ignore(FieldName = nameof(MarginSell))]
-	[Ignore(FieldName = nameof(Type))]
-	[Ignore(FieldName = nameof(OptionType))]
-	[Ignore(FieldName = nameof(TheorPrice))]
-	[Ignore(FieldName = nameof(ImpliedVolatility))]
-	[Ignore(FieldName = nameof(HistoricalVolatility))]
-	[Ignore(FieldName = nameof(Strike))]
-	[Ignore(FieldName = nameof(UnderlyingSecurityId))]
-	[Ignore(FieldName = nameof(OpenInterest))]
-	[Ignore(FieldName = nameof(SettlementDate))]
-	[Ignore(FieldName = nameof(ExpiryDate))]
-	[Ignore(FieldName = nameof(State))]
-	[Ignore(FieldName = nameof(LastTrade))]
-	[Ignore(FieldName = nameof(BestBid))]
-	[Ignore(FieldName = nameof(BestAsk))]
-	[Ignore(FieldName = nameof(Currency))]
-	[Ignore(FieldName = nameof(LastChangeTime))]
-	[Ignore(FieldName = nameof(SecurityExternalId.Sedol))]
-	[Ignore(FieldName = nameof(SecurityExternalId.Cusip))]
-	[Ignore(FieldName = nameof(SecurityExternalId.Isin))]
-	[Ignore(FieldName = nameof(SecurityExternalId.Ric))]
-	[Ignore(FieldName = nameof(SecurityExternalId.Bloomberg))]
-	[Ignore(FieldName = nameof(SecurityExternalId.IQFeed))]
-	[Ignore(FieldName = nameof(SecurityExternalId.InteractiveBrokers))]
-	[Ignore(FieldName = nameof(SecurityExternalId.Plaza))]
-	#endregion
-	[DisplayNameLoc(LocalizedStrings.IndexKey)]
-	[DescriptionLoc(LocalizedStrings.Str728Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.IndexKey,
+		Description = LocalizedStrings.IndexSecurityKey)]
 	[BasketCode("EI")]
 	public class ExpressionIndexSecurity : IndexSecurity
 	{
+		private readonly AssemblyLoadContextTracker _context = new();
+
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ExpressionIndexSecurity"/>.
 		/// </summary>
@@ -76,7 +37,7 @@ namespace StockSharp.Algo.Expressions
 		/// <summary>
 		/// Compiled mathematical formula.
 		/// </summary>
-		public ExpressionFormula Formula { get; private set; } = ExpressionHelper.CreateError(LocalizedStrings.ExpressionNotSet);
+		public ExpressionFormula<decimal> Formula { get; private set; } = ExpressionFormula<decimal>.CreateError(LocalizedStrings.ExpressionNotSet);
 
 		/// <summary>
 		/// The mathematical formula of index.
@@ -87,33 +48,35 @@ namespace StockSharp.Algo.Expressions
 			get => Formula.Expression;
 			set
 			{
-				if (value == null)
-					throw new ArgumentNullException(nameof(value));
-
-				var service = ConfigManager.TryGetService<ICompilerService>();
-
-				if (service != null)
+				if (value.IsEmpty())
 				{
-					Formula = service.Compile(value, true);
+					Formula = ExpressionFormula<decimal>.CreateError(LocalizedStrings.ExpressionNotSet);
+					return;
+					//throw new ArgumentNullException(nameof(value));
+				}
+
+				if (ServicesRegistry.TryCompiler is not null)
+				{
+					Formula = value.Compile(_context);
 
 					_innerSecurityIds.Clear();
 
 					if (Formula.Error.IsEmpty())
 					{
-						foreach (var id in Formula.SecurityIds)
+						foreach (var v in Formula.Variables)
 						{
-							_innerSecurityIds.Add(id.ToSecurityId());
+							_innerSecurityIds.Add(v.ToSecurityId());
 						}
 					}
 					else
 						new InvalidOperationException(Formula.Error).LogError();
 				}
 				else
-					new InvalidOperationException($"Service {nameof(ICompilerService)} is not initialized.").LogError();
+					new InvalidOperationException(LocalizedStrings.ServiceNotRegistered.Put(nameof(ICompiler))).LogError();
 			}
 		}
 
-		private readonly CachedSynchronizedList<SecurityId> _innerSecurityIds = new CachedSynchronizedList<SecurityId>();
+		private readonly CachedSynchronizedList<SecurityId> _innerSecurityIds = new();
 
 		/// <inheritdoc />
 		public override IEnumerable<SecurityId> InnerSecurityIds => _innerSecurityIds.Cache;

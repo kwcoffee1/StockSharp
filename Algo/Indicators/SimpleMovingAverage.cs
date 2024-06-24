@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,16 +15,23 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
-	using System.Linq;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Simple moving average.
 	/// </summary>
-	[DisplayName("SMA")]
-	[DescriptionLoc(LocalizedStrings.Str818Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/sma.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.SMAKey,
+		Description = LocalizedStrings.SimpleMovingAverageKey)]
+	[Doc("topics/api/indicators/list_of_indicators/sma.html")]
 	public class SimpleMovingAverage : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -33,29 +40,21 @@ namespace StockSharp.Algo.Indicators
 		public SimpleMovingAverage()
 		{
 			Length = 32;
+			Buffer.Operator = new DecimalOperator();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
 
 			if (input.IsFinal)
 			{
-				Buffer.Add(newValue);
-
-				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
+				Buffer.AddEx(newValue);
+				return new DecimalIndicatorValue(this, Buffer.Sum / Length);
 			}
 
-			if (input.IsFinal)
-				return new DecimalIndicatorValue(this, Buffer.Sum() / Length);
-
-			return new DecimalIndicatorValue(this, (Buffer.Skip(1).Sum() + newValue) / Length);
+			return new DecimalIndicatorValue(this, (Buffer.SumNoFirst + newValue) / Length);
 		}
 	}
 }

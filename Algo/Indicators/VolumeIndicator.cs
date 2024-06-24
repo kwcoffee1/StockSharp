@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,18 +15,26 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
+	using StockSharp.Messages;
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Candle volume.
 	/// </summary>
-	[DisplayName("Volume")]
-	[DescriptionLoc(LocalizedStrings.Str756Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/volume.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.VolumeKey,
+		Description = LocalizedStrings.CandleVolumeKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
 	[IndicatorOut(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/volume.html")]
 	public class VolumeIndicator : BaseIndicator
 	{
 		/// <summary>
@@ -36,17 +44,19 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Volume;
+
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			if (input.IsFinal)
 				IsFormed = true;
 
-			return new CandleIndicatorValue(this, input.GetValue<Candle>(), c => c.TotalVolume);
+			return new DecimalIndicatorValue(this, input.GetValue<ICandleMessage>().TotalVolume)
+			{
+				IsFinal = input.IsFinal,
+			};
 		}
 	}
 }

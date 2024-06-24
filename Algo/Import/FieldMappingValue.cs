@@ -1,5 +1,7 @@
 namespace StockSharp.Algo.Import
 {
+	using System;
+
 	using Ecng.Serialization;
 
 	/// <summary>
@@ -20,13 +22,22 @@ namespace StockSharp.Algo.Import
 		void IPersistable.Load(SettingsStorage storage)
 		{
 			ValueFile = storage.GetValue<string>(nameof(ValueFile));
-			ValueStockSharp = storage.GetValue<object>(nameof(ValueStockSharp));
+
+			try
+			{
+				ValueStockSharp = storage.GetValue<SettingsStorage>(nameof(ValueStockSharp))?.FromStorage();
+			}
+			catch (Exception)
+			{
+				// 2022-08-08 remove 1 year later
+				ValueStockSharp = storage.GetValue<string>(nameof(ValueStockSharp));
+			}
 		}
 
 		void IPersistable.Save(SettingsStorage storage)
 		{
 			storage.SetValue(nameof(ValueFile), ValueFile);
-			storage.SetValue(nameof(ValueStockSharp), ValueStockSharp);
+			storage.SetValue(nameof(ValueStockSharp), ValueStockSharp?.ToStorage());
 		}
 	}
 }

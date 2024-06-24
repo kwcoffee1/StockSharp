@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,23 +15,30 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
 	using System;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Hull Moving Average.
 	/// </summary>
-	[DisplayName("HMA")]
-	[DescriptionLoc(LocalizedStrings.Str786Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/hma.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.HMAKey,
+		Description = LocalizedStrings.HullMovingAverageKey)]
+	[Doc("topics/api/indicators/list_of_indicators/hma.html")]
 	public class HullMovingAverage : LengthIndicator<decimal>
 	{
-		private readonly WeightedMovingAverage _wmaSlow = new WeightedMovingAverage();
-		private readonly WeightedMovingAverage _wmaFast = new WeightedMovingAverage();
-		private readonly WeightedMovingAverage _wmaResult = new WeightedMovingAverage();
+		private readonly WeightedMovingAverage _wmaSlow = new();
+		private readonly WeightedMovingAverage _wmaFast = new();
+		private readonly WeightedMovingAverage _wmaResult = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="HullMovingAverage"/>.
@@ -47,9 +54,11 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Period of resulting average. If equal to 0, period of resulting average is equal to the square root of HMA period. By default equal to 0.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str787Key)]
-		[DescriptionLoc(LocalizedStrings.Str788Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SqrtKey,
+			Description = LocalizedStrings.PeriodResAvgDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public int SqrtPeriod
 		{
 			get => _sqrtPeriod;
@@ -60,14 +69,10 @@ namespace StockSharp.Algo.Indicators
 			}
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _wmaResult.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _wmaResult.IsFormed;
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -77,11 +82,7 @@ namespace StockSharp.Algo.Indicators
 			_wmaResult.Length = SqrtPeriod == 0 ? (int)Math.Sqrt(Length) : SqrtPeriod;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			_wmaSlow.Process(input);
@@ -96,24 +97,18 @@ namespace StockSharp.Algo.Indicators
 			return new DecimalIndicatorValue(this, _wmaResult.GetCurrentValue());
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
-			SqrtPeriod = settings.GetValue<int>(nameof(SqrtPeriod));
+			base.Load(storage);
+			SqrtPeriod = storage.GetValue<int>(nameof(SqrtPeriod));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
-			settings.SetValue(nameof(SqrtPeriod), SqrtPeriod);
+			base.Save(storage);
+			storage.SetValue(nameof(SqrtPeriod), SqrtPeriod);
 		}
 	}
 }

@@ -2,10 +2,10 @@ namespace StockSharp.Algo
 {
 	using System;
 
-	using Ecng.Collections;
 	using Ecng.Common;
 
 	using StockSharp.Algo.Storages;
+	using StockSharp.Logging;
 	using StockSharp.Messages;
 
 	/// <summary>
@@ -13,9 +13,6 @@ namespace StockSharp.Algo
 	/// </summary>
 	public class SecurityMappingMessageAdapter : MessageAdapterWrapper
 	{
-		private readonly PairSet<SecurityId, SecurityId> _securityIds = new PairSet<SecurityId, SecurityId>();
-		private readonly SyncObject _syncRoot = new SyncObject();
-
 		/// <summary>
 		/// Security identifier mappings storage.
 		/// </summary>
@@ -30,68 +27,26 @@ namespace StockSharp.Algo
 			: base(innerAdapter)
 		{
 			Storage = storage ?? throw new ArgumentNullException(nameof(storage));
-			Storage.Changed += OnStorageChanged;
-		}
-
-		/// <inheritdoc />
-		public override void Dispose()
-		{
-			Storage.Changed -= OnStorageChanged;
-			base.Dispose();
 		}
 
 		/// <inheritdoc />
 		protected override void OnInnerAdapterNewOutMessage(Message message)
 		{
-			if (message.IsBack)
-			{
-				base.OnInnerAdapterNewOutMessage(message);
-				return;
-			}
-
 			switch (message.Type)
 			{
-				case MessageTypes.Connect:
-				{
-					var mappings = Storage.Get(StorageName);
-
-					lock (_syncRoot)
-					{
-						foreach (var mapping in mappings)
-						{
-							_securityIds.Add(mapping.StockSharpId, mapping.AdapterId);
-						}
-					}
-
-					base.OnInnerAdapterNewOutMessage(message);
-					break;
-				}
-
-				case MessageTypes.Reset:
-				{
-					lock (_syncRoot)
-					{
-						_securityIds.Clear();
-					}
-
-					base.OnInnerAdapterNewOutMessage(message);
-					break;
-				}
-
 				case MessageTypes.Security:
 				{
 					var secMsg = (SecurityMessage)message;
 
 					var adapterId = secMsg.SecurityId.SetNativeId(null);
 
-					if (adapterId.IsDefault())
+					if (adapterId == default)
 						throw new InvalidOperationException(secMsg.ToString());
 
-					lock (_syncRoot)
-					{
-						if (_securityIds.TryGetValue(adapterId, out var stockSharpId))
-							secMsg.SecurityId = stockSharpId;
-					}
+					var stockSharpId = Storage.TryGetStockSharpId(StorageName, adapterId);
+
+					if (stockSharpId != null)
+						secMsg.SecurityId = stockSharpId.Value;
 
 					base.OnInnerAdapterNewOutMessage(message);
 					break;
@@ -109,6 +64,18 @@ namespace StockSharp.Algo
 					break;
 				}
 
+				case MessageTypes.SecurityMapping:
+				{
+					var mappingMsg = (SecurityMappingMessage)message;
+
+					if (mappingMsg.IsDelete)
+						Storage.Remove(mappingMsg.StorageName, mappingMsg.Mapping.StockSharpId);
+					else
+						Storage.Save(mappingMsg.StorageName, mappingMsg.Mapping);
+
+					return;
+				}
+
 				default:
 				{
 					if (message is ISecurityIdMessage secIdMsg)
@@ -122,12 +89,15 @@ namespace StockSharp.Algo
 		}
 
 		/// <inheritdoc />
-		public override void SendInMessage(Message message)
+		protected override bool OnSendInMessage(Message message)
 		{
 			switch (message)
 			{
-				case ISecurityIdMessage _:
-					ReplaceSecurityId(message);
+				case SecurityLookupMessage _:
+					break;
+
+				case SecurityMessage secMsg:
+					ReplaceSecurityId(secMsg);
 					break;
 
 				case OrderPairReplaceMessage pairMsg:
@@ -136,7 +106,7 @@ namespace StockSharp.Algo
 					break;
 			}
 
-			base.SendInMessage(message);
+			return base.OnSendInMessage(message);
 		}
 
 		/// <summary>
@@ -145,57 +115,38 @@ namespace StockSharp.Algo
 		/// <returns>Copy.</returns>
 		public override IMessageChannel Clone()
 		{
-			return new SecurityMappingMessageAdapter(InnerAdapter, Storage);
+			return new SecurityMappingMessageAdapter(InnerAdapter.TypedClone(), Storage);
 		}
 
-		private void ReplaceSecurityId(Message message)
+		private void ReplaceSecurityId(SecurityMessage secMsg)
 		{
-			var secMsg = (SecurityMessage)message;
-
-			if (secMsg.NotRequiredSecurityId())
+			if (secMsg.SecurityId == default)
 				return;
 
-			SecurityId? adapterId;
 			var stockSharpId = secMsg.SecurityId.SetNativeId(null);
-
-			lock (_syncRoot)
-				adapterId = _securityIds.TryGetValue2(stockSharpId);
+			var adapterId = Storage.TryGetAdapterId(StorageName, stockSharpId);
 
 			if (adapterId != null)
-				message.ReplaceSecurityId(adapterId.Value);
+			{
+				this.AddInfoLog("{0}->{1}, {2}", stockSharpId, adapterId.Value, secMsg);
+				secMsg.ReplaceSecurityId(adapterId.Value);
+			}
 		}
 
 		private void ProcessMessage(SecurityId adapterId, Message message)
 		{
-			adapterId.SetNativeId(null);
+			if (!adapterId.IsSpecial)
+				adapterId.SetNativeId(null);
 
-			if (!adapterId.IsDefault())
+			if (adapterId != default)
 			{
-				SecurityId? stockSharpId;
-
-				lock (_syncRoot)
-					stockSharpId = _securityIds.TryGetKey2(adapterId);
+				var stockSharpId = Storage.TryGetStockSharpId(StorageName, adapterId);
 
 				if (stockSharpId != null)
 					message.ReplaceSecurityId(stockSharpId.Value);
 			}
 
 			base.OnInnerAdapterNewOutMessage(message);
-		}
-
-		private void OnStorageChanged(string storageName, SecurityIdMapping mapping)
-		{
-			if (!StorageName.CompareIgnoreCase(storageName))
-				return;
-
-			// if adapter code is empty means mapping removed
-			// also mapping can be changed (new adapter code for old security code)
-
-			lock (_syncRoot)
-			{
-				_securityIds.RemoveByValue(mapping.StockSharpId);
-				_securityIds.Add(mapping.StockSharpId, mapping.AdapterId);	
-			}
 		}
 	}
 }

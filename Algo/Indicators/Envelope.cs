@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -17,16 +17,23 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
+	using Ecng.Common;
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Envelope.
 	/// </summary>
-	[DisplayName("Envelope")]
-	[Description("Envelope.")]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/envelope.html
+	/// </remarks>
+	[Display(ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.EnvelopeKey)]
+	[Doc("topics/api/indicators/list_of_indicators/envelope.html")]
 	public class Envelope : BaseComplexIndicator
 	{
 		/// <summary>
@@ -43,12 +50,12 @@ namespace StockSharp.Algo.Indicators
 		/// <param name="ma">Middle line.</param>
 		public Envelope(LengthIndicator<decimal> ma)
 		{
-			InnerIndicators.Add(Middle = ma);
-			InnerIndicators.Add(Upper = (LengthIndicator<decimal>)ma.Clone());
-			InnerIndicators.Add(Lower = (LengthIndicator<decimal>)ma.Clone());
+			AddInner(Middle = ma);
+			AddInner(Upper = ma.TypedClone());
+			AddInner(Lower = ma.TypedClone());
 
-			Upper.Name = "Upper";
-			Lower.Name = "Lower";
+			Upper.Name = nameof(Upper);
+			Lower.Name = nameof(Lower);
 		}
 
 		/// <summary>
@@ -72,10 +79,12 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Period length. By default equal to 1.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str778Key)]
-		[DescriptionLoc(LocalizedStrings.Str779Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		public virtual int Length
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PeriodKey,
+			Description = LocalizedStrings.IndicatorPeriodKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public int Length
 		{
 			get => Middle.Length;
 			set
@@ -90,9 +99,11 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// The shift width. Specified as percentage from 0 to 1. The default equals to 0.01.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str783Key)]
-		[DescriptionLoc(LocalizedStrings.Str784Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ThresholdKey,
+			Description = LocalizedStrings.ThresholdDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal Shift
 		{
 			get => _shift;
@@ -106,16 +117,10 @@ namespace StockSharp.Algo.Indicators
 			}
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => Middle.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => Middle.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var value = (ComplexIndicatorValue)base.OnProcess(input);
@@ -129,24 +134,21 @@ namespace StockSharp.Algo.Indicators
 			return value;
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
-			Shift = settings.GetValue<decimal>(nameof(Shift));
+			base.Load(storage);
+			Shift = storage.GetValue<decimal>(nameof(Shift));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
-			settings.SetValue(nameof(Shift), Shift);
+			base.Save(storage);
+			storage.SetValue(nameof(Shift), Shift);
 		}
+
+		/// <inheritdoc />
+		public override string ToString() => base.ToString() + " " + Length;
 	}
 }

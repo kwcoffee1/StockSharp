@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -16,11 +16,11 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
-	using StockSharp.Algo.Candles;
 	using StockSharp.Localization;
 	using StockSharp.Messages;
 
@@ -28,11 +28,14 @@ namespace StockSharp.Algo.Indicators
 	/// TroughBar.
 	/// </summary>
 	/// <remarks>
-	/// http://www2.wealth-lab.com/WL5Wiki/TroughBar.ashx.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/troughbar.html
 	/// </remarks>
-	[DisplayName("TroughBar")]
-	[DescriptionLoc(LocalizedStrings.Str822Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TroughBarKey,
+		Description = LocalizedStrings.TroughBarDescKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/troughbar.html")]
 	public class TroughBar : BaseIndicator
 	{
 		private decimal _currentMinimum = decimal.MaxValue;
@@ -46,50 +49,48 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
-		private Unit _reversalAmount = new Unit();
+		private Unit _reversalAmount = new();
 
 		/// <summary>
 		/// Indicator changes threshold.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str783Key)]
-		[DescriptionLoc(LocalizedStrings.Str784Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ThresholdKey,
+			Description = LocalizedStrings.ThresholdDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public Unit ReversalAmount
 		{
 			get => _reversalAmount;
 			set
 			{
-				if (value == null)
-					throw new ArgumentNullException(nameof(value));
-
-				_reversalAmount = value;
+				_reversalAmount = value ?? throw new ArgumentNullException(nameof(value));
 
 				Reset();
 			}
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var (_, high, low, _) = input.GetOhlc();
+
+			var cm = _currentMinimum;
+			var vbc = _valueBarCount;
 
 			try
 			{
-				if (candle.LowPrice < _currentMinimum)
+				if (low < cm)
 				{
-					_currentMinimum = candle.LowPrice;
-					_valueBarCount = _currentBarCount;
+					cm = low;
+					vbc = _currentBarCount;
 				}
-				else if (candle.HighPrice >= _currentMinimum + ReversalAmount.Value)
+				else if (high >= (cm + ReversalAmount.Value))
 				{
 					if (input.IsFinal)
 						IsFormed = true;
 
-					return new DecimalIndicatorValue(this, _valueBarCount);
+					return new DecimalIndicatorValue(this, vbc);
 				}
 
 				return new DecimalIndicatorValue(this, this.GetCurrentValue());
@@ -97,30 +98,28 @@ namespace StockSharp.Algo.Indicators
 			finally
 			{
 				if(input.IsFinal)
+				{
 					_currentBarCount++;
+					_currentMinimum = cm;
+					_valueBarCount = vbc;
+				}
 			}
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
+			base.Load(storage);
 
-			ReversalAmount.Load(settings.GetValue<SettingsStorage>(nameof(ReversalAmount)));
+			ReversalAmount.Load(storage, nameof(ReversalAmount));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
+			base.Save(storage);
 
-			settings.SetValue(nameof(ReversalAmount), ReversalAmount.Save());
+			storage.SetValue(nameof(ReversalAmount), ReversalAmount.Save());
 		}
 	}
 }

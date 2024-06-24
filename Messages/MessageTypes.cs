@@ -17,53 +17,56 @@ namespace StockSharp.Messages
 {
 	using System;
 
+	using Ecng.Common;
+	using Ecng.ComponentModel;
+
 	/// <summary>
 	/// The types of messages.
 	/// </summary>
 	public enum MessageTypes
 	{
 		/// <summary>
-		/// Security info.
+		/// <see cref="SecurityMessage"/>.
 		/// </summary>
 		Security,
 
 		/// <summary>
-		/// Level1 market-data changes.
+		/// <see cref="Level1ChangeMessage"/>.
 		/// </summary>
 		Level1Change,
 
 		/// <summary>
-		/// Register new order.
+		/// <see cref="OrderRegisterMessage"/>.
 		/// </summary>
 		OrderRegister,
 
 		/// <summary>
-		/// Modify order.
+		/// <see cref="OrderReplaceMessage"/>.
 		/// </summary>
 		OrderReplace,
 
 		/// <summary>
-		/// Pair order move.
+		/// <see cref="OrderPairReplaceMessage"/>.
 		/// </summary>
 		OrderPairReplace,
 
 		/// <summary>
-		/// Cancel order.
+		/// <see cref="OrderCancelMessage"/>.
 		/// </summary>
 		OrderCancel,
 
 		/// <summary>
-		/// Order group cancel.
+		/// <see cref="OrderGroupCancelMessage"/>.
 		/// </summary>
 		OrderGroupCancel,
 
 		/// <summary>
-		/// Time change.
+		/// <see cref="TimeMessage"/>.
 		/// </summary>
 		Time,
 
 		/// <summary>
-		/// News.
+		/// <see cref="NewsMessage"/>.
 		/// </summary>
 		News,
 
@@ -74,7 +77,7 @@ namespace StockSharp.Messages
 		OrderError,
 
 		/// <summary>
-		/// Portfolio.
+		/// <see cref="PortfolioMessage"/>.
 		/// </summary>
 		Portfolio,
 
@@ -85,32 +88,33 @@ namespace StockSharp.Messages
 		Position,
 
 		/// <summary>
-		/// Candle (time-frame).
+		/// <see cref="TimeFrameCandleMessage"/>.
 		/// </summary>
 		CandleTimeFrame,
 
 		/// <summary>
-		/// Quotes change.
+		/// <see cref="QuoteChangeMessage"/>.
 		/// </summary>
 		QuoteChange,
 
 		/// <summary>
-		/// Order execution.
+		/// <see cref="ExecutionMessage"/>.
 		/// </summary>
 		Execution,
 
 		/// <summary>
-		/// Position change.
+		/// <see cref="PositionChangeMessage"/>.
 		/// </summary>
 		PositionChange,
 
 		/// <summary>
-		/// Portfolio change.
+		/// Obsolete.
 		/// </summary>
+		[Obsolete]
 		PortfolioChange,
 
 		/// <summary>
-		/// Subscribe/unsubscribe market-data.
+		/// <see cref="MarketDataMessage"/>.
 		/// </summary>
 		MarketData,
 
@@ -121,159 +125,167 @@ namespace StockSharp.Messages
 		NativeSecurityId,
 
 		/// <summary>
-		/// Connect.
+		/// <see cref="ConnectMessage"/>.
 		/// </summary>
 		Connect,
 
 		/// <summary>
-		/// Disconnect.
+		/// <see cref="DisconnectMessage"/>.
 		/// </summary>
 		Disconnect,
 
 		/// <summary>
-		/// Securities search.
+		/// <see cref="SecurityLookupMessage"/>.
 		/// </summary>
 		SecurityLookup,
 
 		/// <summary>
-		/// Portfolio lookup.
+		/// <see cref="PortfolioLookupMessage"/>.
 		/// </summary>
 		PortfolioLookup,
 
 		/// <summary>
-		/// Security lookup result.
+		/// Obsolete.
 		/// </summary>
+		[Obsolete]
 		SecurityLookupResult,
 
 		/// <summary>
-		/// Error.
+		/// <see cref="ErrorMessage"/>.
 		/// </summary>
 		Error,
 
 		/// <summary>
-		/// Session.
+		/// <see cref="BoardStateMessage"/>.
 		/// </summary>
 		BoardState,
 
 		/// <summary>
-		/// Order state request.
+		/// <see cref="OrderStatusMessage"/>.
 		/// </summary>
 		OrderStatus,
 
 		/// <summary>
-		/// Electronic board info.
+		/// <see cref="BoardMessage"/>.
 		/// </summary>
 		Board,
 
 		/// <summary>
-		/// Portfolio lookup result.
+		/// Obsolete.
 		/// </summary>
+		[Obsolete]
 		PortfolioLookupResult,
 
 		/// <summary>
-		/// Password change.
+		/// <see cref="ChangePasswordMessage"/>.
 		/// </summary>
 		ChangePassword,
 
 		/// <summary>
 		/// Clear message queue.
 		/// </summary>
+		[Obsolete]
 		ClearQueue,
 
 		/// <summary>
-		/// Candle (tick).
+		/// <see cref="TickCandleMessage"/>.
 		/// </summary>
 		CandleTick,
 
 		/// <summary>
-		/// Candle (volume).
+		/// <see cref="VolumeCandleMessage"/>.
 		/// </summary>
 		CandleVolume,
 
 		/// <summary>
-		/// Candle (range).
+		/// <see cref="RangeCandleMessage"/>.
 		/// </summary>
 		CandleRange,
 
 		/// <summary>
-		/// Candle (X&amp;0).
+		/// <see cref="PnFCandleMessage"/>.
 		/// </summary>
 		CandlePnF,
 
 		/// <summary>
-		/// Candle (renko).
+		/// <see cref="RenkoCandleMessage"/>.
 		/// </summary>
 		CandleRenko,
 
 		/// <summary>
-		/// Reset state.
+		/// <see cref="ResetMessage"/>.
 		/// </summary>
 		Reset,
 
 		/// <summary>
-		/// Market data request finished.
+		/// <see cref="SubscriptionFinishedMessage"/>.
 		/// </summary>
-		MarketDataFinished,
+		SubscriptionFinished,
 
 		/// <summary>
-		/// Remove object request (security, portfolio etc.).
+		/// <see cref="RemoveMessage"/>.
 		/// </summary>
 		Remove,
 
 		/// <summary>
-		/// User info.
+		/// <see cref="UserInfoMessage"/>.
 		/// </summary>
 		UserInfo,
 
 		/// <summary>
-		/// Users search.
+		/// <see cref="UserLookupMessage"/>.
 		/// </summary>
 		UserLookup,
 
 		/// <summary>
-		/// Users search result.
+		/// Obsolete.
 		/// </summary>
+		[Obsolete]
 		UserLookupResult,
 
 		/// <summary>
 		/// Board subscription request.
 		/// </summary>
+		[Obsolete]
 		BoardRequest,
 
 		/// <summary>
-		/// Boards search.
+		/// <see cref="BoardLookupMessage"/>.
 		/// </summary>
 		BoardLookup,
 
 		/// <summary>
-		/// Boards search result.
+		/// Obsolete.
 		/// </summary>
+		[Obsolete]
 		BoardLookupResult,
 
 		/// <summary>
-		/// User subscription request.
+		/// <see cref="UserRequestMessage"/>.
 		/// </summary>
 		UserRequest,
 
 		/// <summary>
-		/// Time-frames search.
+		/// <see cref="TimeFrameLookupMessage"/>.
 		/// </summary>
 		TimeFrameLookup,
 
 		/// <summary>
-		/// Time-frames search result.
+		/// <see cref="TimeFrameInfoMessage"/>.
 		/// </summary>
-		TimeFrameLookupResult,
+		TimeFrameInfo,
 
 		/// <summary>
-		/// <see cref="SecurityMappingRequestMessage"/>.
+		/// 
 		/// </summary>
+		[Obsolete]
 		SecurityMappingRequest,
 
 		/// <summary>
-		/// <see cref="SecurityMappingResultMessage"/>.
+		/// 
 		/// </summary>
-		SecurityMappingResult,
+		[Obsolete]
+		SecurityMappingInfo,
 
 		/// <summary>
 		/// <see cref="SecurityLegsRequestMessage"/>.
@@ -281,28 +293,31 @@ namespace StockSharp.Messages
 		SecurityLegsRequest,
 
 		/// <summary>
-		/// <see cref="SecurityLegsResultMessage"/>.
+		/// <see cref="SecurityLegsInfoMessage"/>.
 		/// </summary>
-		SecurityLegsResult,
+		SecurityLegsInfo,
 
 		/// <summary>
-		/// <see cref="AdapterListRequestMessage"/>.
+		/// 
 		/// </summary>
+		[Obsolete]
 		AdapterListRequest,
 
 		/// <summary>
-		/// <see cref="AdapterListFinishedMessage"/>.
+		/// Obsolete.
 		/// </summary>
+		[Obsolete]
 		AdapterListFinished,
 
 		/// <summary>
-		/// <see cref="AdapterCommandMessage"/>.
+		/// <see cref="CommandMessage"/>.
 		/// </summary>
-		AdapterCommand,
+		Command,
 
 		/// <summary>
-		/// <see cref="AdapterResponseMessage"/>.
+		/// 
 		/// </summary>
+		[Obsolete]
 		AdapterResponse,
 
 		/// <summary>
@@ -311,8 +326,201 @@ namespace StockSharp.Messages
 		SubscriptionListRequest,
 
 		/// <summary>
-		/// <see cref="SubscriptionListFinishedMessage"/>.
+		/// Obsolete.
 		/// </summary>
+		[Obsolete]
 		SubscriptionListFinished,
+
+		/// <summary>
+		/// 
+		/// </summary>
+		[Obsolete]
+		SecurityRouteListRequest,
+
+		/// <summary>
+		/// 
+		/// </summary>
+		[Obsolete]
+		SecurityRoute,
+
+		/// <summary>
+		/// Obsolete.
+		/// </summary>
+		[Obsolete]
+		SecurityRouteListFinished,
+
+		/// <summary>
+		/// 
+		/// </summary>
+		[Obsolete]
+		PortfolioRouteListRequest,
+
+		/// <summary>
+		///
+		/// </summary>
+		[Obsolete]
+		PortfolioRoute,
+
+		/// <summary>
+		/// Obsolete.
+		/// </summary>
+		[Obsolete]
+		PortfolioRouteListFinished,
+
+		/// <summary>
+		/// <see cref="SecurityMappingMessage"/>.
+		/// </summary>
+		SecurityMapping,
+
+		/// <summary>
+		/// <see cref="SubscriptionOnlineMessage"/>.
+		/// </summary>
+		SubscriptionOnline,
+
+		/// <summary>
+		/// <see cref="SubscriptionResponseMessage"/>.
+		/// </summary>
+		SubscriptionResponse,
+
+		/// <summary>
+		/// <see cref="HeikinAshiCandleMessage"/>.
+		/// </summary>
+		CandleHeikinAshi,
+
+		/// <summary>
+		/// <see cref="ProcessSuspendedMessage"/>.
+		/// </summary>
+		ProcessSuspended,
+
+		/// <summary>
+		/// <see cref="EmulationStateMessage"/>.
+		/// </summary>
+		EmulationState,
+
+		/// <summary>
+		/// 
+		/// </summary>
+		[Obsolete]
+		ChangeTimeInterval,
+
+		/// <summary>
+		/// 
+		/// </summary>
+		[Obsolete]
+		StrategyInfo,
+
+		/// <summary>
+		/// 
+		/// </summary>
+		[Obsolete]
+		StrategyType,
+
+		/// <summary>
+		/// 
+		/// </summary>
+		[Obsolete]
+		StrategyState,
+
+		/// <summary>
+		/// <see cref="RemoteFileMessage"/>.
+		/// </summary>
+		RemoteFile,
+
+		/// <summary>
+		/// <see cref="RemoteFileCommandMessage"/>.
+		/// </summary>
+		RemoteFileCommand,
+
+		/// <summary>
+		/// 
+		/// </summary>
+		[Obsolete]
+		StrategySubscriptionInfo,
+
+		/// <summary>
+		/// 
+		/// </summary>
+		[Obsolete]
+		StrategyBacktestResult,
+
+		/// <summary>
+		/// <see cref="AvailableDataRequestMessage"/>.
+		/// </summary>
+		AvailableDataRequest,
+
+		/// <summary>
+		/// <see cref="AvailableDataInfoMessage"/>.
+		/// </summary>
+		AvailableDataInfo,
+	}
+
+	/// <summary>
+	/// Extended info for <see cref="MessageTypes"/>.
+	/// </summary>
+	public class MessageTypeInfo : Equatable<MessageTypeInfo>
+	{
+		/// <summary>
+		/// Message type.
+		/// </summary>
+		public MessageTypes Type { get; }
+
+		/// <summary>
+		/// <see cref="Type"/> is market-data type.
+		/// </summary>
+		public bool? IsMarketData { get; }
+
+		/// <summary>
+		/// Display name.
+		/// </summary>
+		public string DisplayName { get; }
+
+		/// <summary>
+		/// Description.
+		/// </summary>
+		public string Description { get; }
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="MessageTypeInfo"/>.
+		/// </summary>
+		/// <param name="type">Message type.</param>
+		/// <param name="isMarketData"><see cref="Type"/> is market-data type.</param>
+		public MessageTypeInfo(MessageTypes type, bool? isMarketData)
+			: this(type, isMarketData, type.GetDisplayName(), null)
+		{
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="MessageTypeInfo"/>.
+		/// </summary>
+		/// <param name="type">Message type.</param>
+		/// <param name="isMarketData"><see cref="Type"/> is market-data type.</param>
+		/// <param name="displayName">Display name.</param>
+		/// <param name="description">Description.</param>
+		public MessageTypeInfo(MessageTypes type, bool? isMarketData, string displayName, string description)
+		{
+			Type = type;
+			IsMarketData = isMarketData;
+			DisplayName = displayName;
+			Description = description;
+		}
+
+		/// <inheritdoc />
+		public override string ToString() => DisplayName;
+
+		/// <summary>
+		/// Compare <see cref="MessageTypeInfo"/> on the equivalence.
+		/// </summary>
+		/// <param name="other">Another value with which to compare.</param>
+		/// <returns><see langword="true" />, if the specified object is equal to the current object, otherwise, <see langword="false" />.</returns>
+		protected override bool OnEquals(MessageTypeInfo other) => other.Type == Type;
+
+		/// <inheritdoc cref="object.GetHashCode" />
+		public override int GetHashCode() => Type.GetHashCode();
+
+		/// <summary>
+		/// Create a copy of <see cref="MessageTypeInfo"/>.
+		/// </summary>
+		/// <returns>Copy.</returns>
+		public override MessageTypeInfo Clone() => new(Type, IsMarketData, DisplayName, Description);
 	}
 }

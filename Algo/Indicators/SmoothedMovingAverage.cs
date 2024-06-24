@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,16 +15,23 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
-	using System.Linq;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Smoothed Moving Average.
 	/// </summary>
-	[DisplayName("SMMA")]
-	[DescriptionLoc(LocalizedStrings.Str819Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/smoothed_ma.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.SMMAKey,
+		Description = LocalizedStrings.SmoothedMovingAverageKey)]
+	[Doc("topics/api/indicators/list_of_indicators/smoothed_ma.html")]
 	public class SmoothedMovingAverage : LengthIndicator<decimal>
 	{
 		private decimal _prevFinalValue;
@@ -35,22 +42,17 @@ namespace StockSharp.Algo.Indicators
 		public SmoothedMovingAverage()
 		{
 			Length = 32;
+			Buffer.Operator = new DecimalOperator();
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_prevFinalValue = 0;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
@@ -59,14 +61,14 @@ namespace StockSharp.Algo.Indicators
 			{
 				if (input.IsFinal)
 				{
-					Buffer.Add(newValue);
+					Buffer.AddEx(newValue);
 
-					_prevFinalValue = Buffer.Sum() / Length;
+					_prevFinalValue = Buffer.Sum / Length;
 
 					return new DecimalIndicatorValue(this, _prevFinalValue);
 				}
 
-				return new DecimalIndicatorValue(this, (Buffer.Skip(1).Sum() + newValue) / Length);
+				return new DecimalIndicatorValue(this, (Buffer.SumNoFirst + newValue) / Length);
 			}
 
 			var curValue = (_prevFinalValue * (Length - 1) + newValue) / Length;

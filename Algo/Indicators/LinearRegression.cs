@@ -16,6 +16,7 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Serialization;
 
@@ -24,8 +25,10 @@ namespace StockSharp.Algo.Indicators
 	/// <summary>
 	/// The full class of linear regression, calculates LinearReg, LinearRegSlope, RSquared and StandardError at the same time.
 	/// </summary>
-	[DisplayName("LinearRegression")]
-	[DescriptionLoc(LocalizedStrings.Str735Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.LinearRegressionKey,
+		Description = LocalizedStrings.LinearRegressionDescKey)]
 	[Browsable(false)]
 	public class LinearRegression : BaseComplexIndicator
 	{
@@ -33,7 +36,7 @@ namespace StockSharp.Algo.Indicators
 		/// Initializes a new instance of the <see cref="LinearRegression"/>.
 		/// </summary>
 		public LinearRegression()
-			: this(new LinearReg(), new RSquared(), new LinearRegSlope(), new StandardError())
+			: this(new(), new(), new(), new())
 		{
 			Length = 11;
 		}
@@ -45,7 +48,7 @@ namespace StockSharp.Algo.Indicators
 		/// <param name="rSquared">Regression R-squared.</param>
 		/// <param name="regSlope">Coefficient with independent variable, slope of a straight line.</param>
 		/// <param name="standardError">Standard error.</param>
-		public LinearRegression(LinearReg linearReg, RSquared rSquared, LinearRegSlope regSlope, StandardError standardError)
+		public LinearRegression(LinearReg linearReg, LinearRegRSquared rSquared, LinearRegSlope regSlope, StandardError standardError)
 			: base(linearReg, rSquared, regSlope, standardError)
 		{
 			LinearReg = linearReg;
@@ -59,9 +62,11 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Period length.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str736Key)]
-		[DescriptionLoc(LocalizedStrings.Str737Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PeriodKey,
+			Description = LocalizedStrings.IndicatorPeriodKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public int Length
 		{
 			get => LinearReg.Length;
@@ -76,56 +81,61 @@ namespace StockSharp.Algo.Indicators
 		/// Linear regression.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("LinearReg")]
-		[DescriptionLoc(LocalizedStrings.Str738Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LinearRegressionKey,
+			Description = LocalizedStrings.LinearRegressionKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public LinearReg LinearReg { get; }
 
 		/// <summary>
 		/// Regression R-squared.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("RSquared")]
-		[DescriptionLoc(LocalizedStrings.Str739Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		public RSquared RSquared { get; }
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.RSquaredKey,
+			Description = LocalizedStrings.RSquaredKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public LinearRegRSquared RSquared { get; }
 
 		/// <summary>
 		/// Standard error.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("StdErr")]
-		[DescriptionLoc(LocalizedStrings.Str740Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.StandardErrorKey,
+			Description = LocalizedStrings.StandardErrorLinearRegKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public StandardError StandardError { get; }
 
 		/// <summary>
 		/// Coefficient with independent variable, slope of a straight line.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("LinearRegSlope")]
-		[DescriptionLoc(LocalizedStrings.Str741Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LRSKey,
+			Description = LocalizedStrings.LinearRegSlopeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public LinearRegSlope LinearRegSlope { get; }
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
-			Length = settings.GetValue<int>(nameof(Length));
+			base.Load(storage);
+			Length = storage.GetValue<int>(nameof(Length));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
-			settings.SetValue(nameof(Length), Length);
+			base.Save(storage);
+			storage.SetValue(nameof(Length), Length);
 		}
+
+		/// <inheritdoc />
+		public override string ToString() => base.ToString() + " " + Length;
 	}
 }

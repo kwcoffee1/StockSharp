@@ -25,14 +25,9 @@ namespace StockSharp.Algo.Commissions
 	public interface ICommissionRule : IPersistable
 	{
 		/// <summary>
-		/// Header.
+		/// Title.
 		/// </summary>
 		string Title { get; }
-
-		/// <summary>
-		/// Total commission.
-		/// </summary>
-		decimal Commission { get; }
 
 		/// <summary>
 		/// Commission value.
@@ -49,6 +44,6 @@ namespace StockSharp.Algo.Commissions
 		/// </summary>
 		/// <param name="message">The message containing the information about the order or own trade.</param>
 		/// <returns>The commission. If the commission cannot be calculated then <see langword="null" /> will be returned.</returns>
-		decimal? Process(Message message);
+		decimal? Process(ExecutionMessage message);
 	}
 }

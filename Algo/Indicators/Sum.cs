@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,16 +15,23 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
-	using System.Linq;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Sum of N last values.
 	/// </summary>
-	[DisplayName("Sum")]
-	[DescriptionLoc(LocalizedStrings.Str751Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/sum_n.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.SumKey,
+		Description = LocalizedStrings.SumNLastValuesKey)]
+	[Doc("topics/api/indicators/list_of_indicators/sum_n.html")]
 	public class Sum : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -33,32 +40,27 @@ namespace StockSharp.Algo.Indicators
 		public Sum()
 		{
 			Length = 15;
+			Buffer.Operator = new DecimalOperator();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Volume;
+
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
 
 			if (input.IsFinal)
-			{
-				Buffer.Add(newValue);
-
-				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
-			}
+				Buffer.AddEx(newValue);
 
 			if (input.IsFinal)
 			{
-				return new DecimalIndicatorValue(this, Buffer.Sum());
+				return new DecimalIndicatorValue(this, Buffer.Sum);
 			}
 			else
 			{
-				return new DecimalIndicatorValue(this, (Buffer.Skip(1).Sum() + newValue));
+				return new DecimalIndicatorValue(this, (Buffer.SumNoFirst + newValue));
 			}
 		}
 	}

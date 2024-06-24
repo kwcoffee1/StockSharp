@@ -23,6 +23,7 @@ namespace StockSharp.Algo
 	using Ecng.Collections;
 	using Ecng.Common;
 	using Ecng.ComponentModel;
+	using Ecng.Serialization;
 
 	using StockSharp.Algo.Candles;
 	using StockSharp.Algo.Storages;
@@ -35,11 +36,25 @@ namespace StockSharp.Algo
 	/// </summary>
 	public static class MessageConverterHelper
 	{
+		static MessageConverterHelper()
+		{
+#pragma warning disable CS0618 // Type or member is obsolete
+			RegisterCandle(() => new TimeFrameCandle(), () => new TimeFrameCandleMessage());
+			RegisterCandle(() => new TickCandle(), () => new TickCandleMessage());
+			RegisterCandle(() => new VolumeCandle(), () => new VolumeCandleMessage());
+			RegisterCandle(() => new RangeCandle(), () => new RangeCandleMessage());
+			RegisterCandle(() => new PnFCandle(), () => new PnFCandleMessage());
+			RegisterCandle(() => new RenkoCandle(), () => new RenkoCandleMessage());
+			RegisterCandle(() => new HeikinAshiCandle(), () => new HeikinAshiCandleMessage());
+#pragma warning restore CS0618 // Type or member is obsolete
+		}
+
 		/// <summary>
 		/// Cast <see cref="MarketDepth"/> to the <see cref="QuoteChangeMessage"/>.
 		/// </summary>
 		/// <param name="depth"><see cref="MarketDepth"/>.</param>
 		/// <returns><see cref="QuoteChangeMessage"/>.</returns>
+		[Obsolete("Use IOrderBookMessage.")]
 		public static QuoteChangeMessage ToMessage(this MarketDepth depth)
 		{
 			if (depth == null)
@@ -51,23 +66,16 @@ namespace StockSharp.Algo
 			{
 				LocalTime = depth.LocalTime,
 				SecurityId = securityId,
-				Bids = depth.Bids.Select(q => q.ToQuoteChange()).ToArray(),
-				Asks = depth.Asks.Select(q => q.ToQuoteChange()).ToArray(),
-				ServerTime = depth.LastChangeTime,
-				IsSorted = true,
+				Bids = depth.Bids.ToArray(),
+				Asks = depth.Asks.ToArray(),
+				ServerTime = depth.ServerTime,
 				Currency = depth.Currency,
+				SeqNum = depth.SeqNum,
+				BuildFrom = depth.BuildFrom,
 			};
 		}
 
-		private static readonly PairSet<Type, Type> _candleTypes = new PairSet<Type, Type>
-		{
-			{ typeof(TimeFrameCandle), typeof(TimeFrameCandleMessage) },
-			{ typeof(TickCandle), typeof(TickCandleMessage) },
-			{ typeof(VolumeCandle), typeof(VolumeCandleMessage) },
-			{ typeof(RangeCandle), typeof(RangeCandleMessage) },
-			{ typeof(PnFCandle), typeof(PnFCandleMessage) },
-			{ typeof(RenkoCandle), typeof(RenkoCandleMessage) },
-		};
+		private static readonly CachedSynchronizedPairSet<Type, Type> _candleTypes = new();
 
 		/// <summary>
 		/// Cast candle type <see cref="Candle"/> to the message <see cref="CandleMessage"/>.
@@ -76,12 +84,10 @@ namespace StockSharp.Algo
 		/// <returns>The type of the message <see cref="CandleMessage"/>.</returns>
 		public static Type ToCandleMessageType(this Type candleType)
 		{
-			if (candleType == null)
+			if (candleType is null)
 				throw new ArgumentNullException(nameof(candleType));
 
-			var messageType = _candleTypes.TryGetValue(candleType);
-
-			if (messageType == null)
+			if (!_candleTypes.TryGetValue(candleType, out var messageType))
 				throw new ArgumentOutOfRangeException(nameof(candleType), candleType, LocalizedStrings.WrongCandleType);
 
 			return messageType;
@@ -94,12 +100,10 @@ namespace StockSharp.Algo
 		/// <returns>The type of the candle <see cref="Candle"/>.</returns>
 		public static Type ToCandleType(this Type messageType)
 		{
-			if (messageType == null)
+			if (messageType is null)
 				throw new ArgumentNullException(nameof(messageType));
 
-			var candleType = _candleTypes.TryGetKey(messageType);
-
-			if (candleType == null)
+			if (!_candleTypes.TryGetKey(messageType, out var candleType))
 				throw new ArgumentOutOfRangeException(nameof(messageType), messageType, LocalizedStrings.WrongCandleType);
 
 			return candleType;
@@ -110,27 +114,16 @@ namespace StockSharp.Algo
 		/// </summary>
 		/// <param name="candle">Candle.</param>
 		/// <returns>Message.</returns>
+		[Obsolete("Conversion reduce performance.")]
 		public static CandleMessage ToMessage(this Candle candle)
 		{
 			if (candle == null)
 				throw new ArgumentNullException(nameof(candle));
 
-			CandleMessage message;
-
-			if (candle is TimeFrameCandle)
-				message = new TimeFrameCandleMessage();
-			else if (candle is TickCandle)
-				message = new TickCandleMessage();
-			else if (candle is VolumeCandle)
-				message = new VolumeCandleMessage();
-			else if (candle is RangeCandle)
-				message = new RangeCandleMessage();
-			else if (candle is PnFCandle)
-				message = new PnFCandleMessage();
-			else if (candle is RenkoCandle)
-				message = new RenkoCandleMessage();
-			else
+			if (!_candleTypes.TryGetValue(candle.GetType(), out var messageType))
 				throw new ArgumentException(LocalizedStrings.UnknownCandleType.Put(candle.GetType()), nameof(candle));
+
+			var message = CreateCandleMessage(messageType);
 
 			message.LocalTime = candle.OpenTime;
 			message.SecurityId = candle.Security.ToSecurityId();
@@ -143,15 +136,19 @@ namespace StockSharp.Algo
 			message.LowPrice = candle.LowPrice;
 			message.ClosePrice = candle.ClosePrice;
 			message.TotalVolume = candle.TotalVolume;
+			message.BuyVolume = candle.BuyVolume;
+			message.SellVolume = candle.SellVolume;
 			message.OpenInterest = candle.OpenInterest;
 			message.OpenVolume = candle.OpenVolume;
 			message.HighVolume = candle.HighVolume;
 			message.LowVolume = candle.LowVolume;
 			message.CloseVolume = candle.CloseVolume;
 			message.RelativeVolume = candle.RelativeVolume;
-			message.Arg = candle.Arg;
-			message.PriceLevels = candle.PriceLevels?.Select(l => l.Clone()).ToArray();
+			message.DataType = DataType.Create(messageType, candle.Arg);
+			message.PriceLevels = candle.PriceLevels?/*.Select(l => l.Clone())*/.ToArray();
 			message.State = candle.State;
+			message.SeqNum = candle.SeqNum;
+			message.BuildFrom = candle.BuildFrom;
 
 			return message;
 		}
@@ -179,21 +176,24 @@ namespace StockSharp.Algo
 				OrderId = order.Id,
 				OrderStringId = order.StringId,
 				OrderType = order.Type,
-				Side = order.Direction,
+				Side = order.Side,
 				OrderPrice = order.Price,
 				SecurityId = order.Security.ToSecurityId(),
 				PortfolioName = order.Portfolio.Name,
-				ExecutionType = ExecutionTypes.Transaction,
+				DataTypeEx = DataType.Transactions,
 				HasOrderInfo = true,
-				HasTradeInfo = true,
-				ServerTime = tick.Time,
-				OriginSide = tick.OrderDirection,
+				ServerTime = tick.ServerTime,
+				LocalTime = tick.LocalTime,
+				OriginSide = tick.OriginSide,
 				Currency = tick.Currency,
 				Position = trade.Position,
 				PnL = trade.PnL,
 				Slippage = trade.Slippage,
 				Commission = trade.Commission,
 				CommissionCurrency = trade.CommissionCurrency,
+				SeqNum = trade.Trade.SeqNum,
+				OrderBuyId = trade.Trade.OrderBuyId,
+				OrderSellId = trade.Trade.OrderSellId,
 			};
 		}
 
@@ -215,26 +215,28 @@ namespace StockSharp.Algo
 				OriginalTransactionId = order.TransactionId,
 				SecurityId = order.Security.ToSecurityId(),
 				PortfolioName = order.Portfolio.Name,
-				ExecutionType = ExecutionTypes.Transaction,
+				DataTypeEx = DataType.Transactions,
 				HasOrderInfo = true,
 				OrderPrice = order.Price,
 				OrderType = order.Type,
 				OrderVolume = order.Volume,
 				Balance = order.Balance,
-				Side = order.Direction,
+				Side = order.Side,
 				OrderState = order.State,
 				OrderStatus = order.Status,
 				TimeInForce = order.TimeInForce,
-				ServerTime = order.LastChangeTime,
+				ServerTime = order.ServerTime,
 				LocalTime = order.LocalTime,
 				ExpiryDate = order.ExpiryDate,
 				UserOrderId = order.UserOrderId,
+				StrategyId = order.StrategyId,
 				Commission = order.Commission,
 				CommissionCurrency = order.CommissionCurrency,
 				IsSystem = order.IsSystem,
 				Comment = order.Comment,
 				VisibleVolume = order.VisibleVolume,
 				Currency = order.Currency,
+				SeqNum = order.SeqNum,
 			};
 
 			return message;
@@ -251,10 +253,7 @@ namespace StockSharp.Algo
 			if (fail == null)
 				throw new ArgumentNullException(nameof(fail));
 
-			var order = fail.Order;
-
-			if (order == null)
-				throw new InvalidOperationException();
+			var order = fail.Order ?? throw new InvalidOperationException();
 
 			return new ExecutionMessage
 			{
@@ -262,14 +261,15 @@ namespace StockSharp.Algo
 				OrderStringId = order.StringId,
 				TransactionId = order.TransactionId,
 				OriginalTransactionId = originalTransactionId,
-				SecurityId = order.Security?.ToSecurityId() ?? default(SecurityId),
+				SecurityId = order.Security?.ToSecurityId() ?? default,
 				PortfolioName = order.Portfolio?.Name,
 				Error = fail.Error,
-				ExecutionType = ExecutionTypes.Transaction,
+				DataTypeEx = DataType.Transactions,
 				HasOrderInfo = true,
 				OrderState = OrderStates.Failed,
 				ServerTime = fail.ServerTime,
 				LocalTime = fail.LocalTime,
+				SeqNum = fail.SeqNum,
 			};
 		}
 
@@ -278,6 +278,7 @@ namespace StockSharp.Algo
 		/// </summary>
 		/// <param name="trade">Tick trade.</param>
 		/// <returns>Message.</returns>
+		[Obsolete("Use ITickTradeMessage.")]
 		public static ExecutionMessage ToMessage(this Trade trade)
 		{
 			if (trade == null)
@@ -285,18 +286,25 @@ namespace StockSharp.Algo
 
 			return new ExecutionMessage
 			{
+				DataTypeEx = DataType.Ticks,
 				LocalTime = trade.LocalTime,
+				ServerTime = trade.ServerTime,
 				SecurityId = trade.Security.ToSecurityId(),
 				TradeId = trade.Id,
-				ServerTime = trade.Time,
+				TradeStringId = trade.StringId,
 				TradePrice = trade.Price,
 				TradeVolume = trade.Volume,
 				IsSystem = trade.IsSystem,
 				TradeStatus = trade.Status,
 				OpenInterest = trade.OpenInterest,
-				OriginSide = trade.OrderDirection,
-				ExecutionType = ExecutionTypes.Tick,
+				OriginSide = trade.OriginSide,
+				IsUpTick = trade.IsUpTick,
 				Currency = trade.Currency,
+				SeqNum = trade.SeqNum,
+				BuildFrom = trade.BuildFrom,
+				Yield = trade.Yield,
+				OrderBuyId = trade.OrderBuyId,
+				OrderSellId = trade.OrderSellId,
 			};
 		}
 
@@ -305,6 +313,7 @@ namespace StockSharp.Algo
 		/// </summary>
 		/// <param name="item">Order log item.</param>
 		/// <returns>Message.</returns>
+		[Obsolete("Use OrderLogMessage.")]
 		public static ExecutionMessage ToMessage(this OrderLogItem item)
 		{
 			if (item == null)
@@ -325,18 +334,26 @@ namespace StockSharp.Algo
 				OrderPrice = order.Price,
 				OrderVolume = order.Volume,
 				Balance = order.Balance,
-				Side = order.Direction,
+				Side = order.Side,
 				IsSystem = order.IsSystem,
 				OrderState = order.State,
 				OrderStatus = order.Status,
 				TimeInForce = order.TimeInForce,
 				ExpiryDate = order.ExpiryDate,
 				PortfolioName = order.Portfolio?.Name,
-				ExecutionType = ExecutionTypes.OrderLog,
-				IsCancelled = (order.State == OrderStates.Done && trade == null),
+				DataTypeEx = DataType.OrderLog,
 				TradeId = trade?.Id,
+				TradeStringId = trade?.StringId,
 				TradePrice = trade?.Price,
 				Currency = order.Currency,
+				SeqNum = order.SeqNum,
+				OrderBuyId = trade?.OrderBuyId,
+				OrderSellId = trade?.OrderSellId,
+				TradeStatus = trade?.Status,
+				IsUpTick = trade?.IsUpTick,
+				Yield = trade?.Yield,
+				OpenInterest = trade?.OpenInterest,
+				OriginSide = trade?.OriginSide,
 			};
 		}
 
@@ -355,24 +372,29 @@ namespace StockSharp.Algo
 			{
 				TransactionId = order.TransactionId,
 				PortfolioName = order.Portfolio.Name,
-				Side = order.Direction,
+				Side = order.Side,
 				Price = order.Price,
 				Volume = order.Volume,
 				VisibleVolume = order.VisibleVolume,
 				OrderType = order.Type,
 				Comment = order.Comment,
-				Condition = order.Condition,
+				Condition = order.Condition?.TypedClone(),
 				TimeInForce = order.TimeInForce,
 				TillDate = order.ExpiryDate,
 				//IsSystem = order.IsSystem,
 				UserOrderId = order.UserOrderId,
+				StrategyId = order.StrategyId,
 				BrokerCode = order.BrokerCode,
 				ClientCode = order.ClientCode,
 				Currency = order.Currency,
 				IsMarketMaker = order.IsMarketMaker,
-				IsMargin = order.IsMargin,
+				MarginMode = order.MarginMode,
 				Slippage = order.Slippage,
 				IsManual = order.IsManual,
+				MinOrderVolume = order.MinVolume,
+				PositionEffect = order.PositionEffect,
+				PostOnly = order.PostOnly,
+				Leverage = order.Leverage,
 			};
 
 			order.Security.ToMessage(securityId).CopyTo(msg, false);
@@ -386,26 +408,28 @@ namespace StockSharp.Algo
 		/// <param name="order">Order.</param>
 		/// <param name="securityId">Security ID.</param>
 		/// <param name="transactionId">The transaction number.</param>
-		/// <param name="volume">The volume been cancelled.</param>
 		/// <returns>Message.</returns>
-		public static OrderCancelMessage CreateCancelMessage(this Order order, SecurityId securityId, long transactionId, decimal? volume = null)
+		public static OrderCancelMessage CreateCancelMessage(this Order order, SecurityId securityId, long transactionId)
 		{
-			if (order == null)
+			if (order is null)
 				throw new ArgumentNullException(nameof(order));
 
 			var msg = new OrderCancelMessage
 			{
 				PortfolioName = order.Portfolio.Name,
 				OrderType = order.Type,
-				OrderTransactionId = order.TransactionId,
+				OriginalTransactionId = order.TransactionId,
 				TransactionId = transactionId,
-				OrderId = order.Id,
-				OrderStringId = order.StringId,
-				Volume = volume,
 				UserOrderId = order.UserOrderId,
+				StrategyId = order.StrategyId,
 				BrokerCode = order.BrokerCode,
 				ClientCode = order.ClientCode,
-				Side = order.Direction
+				OrderId = order.Id,
+				OrderStringId = order.StringId,
+				Balance = order.Balance,
+				Volume = order.Volume,
+				Side = order.Side,
+				MarginMode = order.MarginMode,
 			};
 
 			order.Security.ToMessage(securityId).CopyTo(msg, false);
@@ -432,7 +456,7 @@ namespace StockSharp.Algo
 			{
 				TransactionId = newOrder.TransactionId,
 				PortfolioName = newOrder.Portfolio.Name,
-				Side = newOrder.Direction,
+				Side = newOrder.Side,
 				Price = newOrder.Price,
 				Volume = newOrder.Volume,
 				VisibleVolume = newOrder.VisibleVolume,
@@ -445,9 +469,13 @@ namespace StockSharp.Algo
 
 				OldOrderId = oldOrder.Id,
 				OldOrderStringId = oldOrder.StringId,
-				OldTransactionId = oldOrder.TransactionId,
+				OriginalTransactionId = oldOrder.TransactionId,
+
+				OldOrderPrice = oldOrder.Price,
+				OldOrderVolume = oldOrder.Volume,
 
 				UserOrderId = oldOrder.UserOrderId,
+				StrategyId = oldOrder.StrategyId,
 
 				BrokerCode = oldOrder.BrokerCode,
 				ClientCode = oldOrder.ClientCode,
@@ -456,9 +484,14 @@ namespace StockSharp.Algo
 
 				IsManual = newOrder.IsManual,
 				IsMarketMaker = newOrder.IsMarketMaker,
-				IsMargin = newOrder.IsMargin,
+				MarginMode = newOrder.MarginMode,
 
 				Slippage = newOrder.Slippage,
+
+				MinOrderVolume = newOrder.MinVolume,
+				PositionEffect = newOrder.PositionEffect,
+				PostOnly = newOrder.PostOnly,
+				Leverage = newOrder.Leverage,
 			};
 
 			oldOrder.Security.ToMessage(securityId).CopyTo(msg, false);
@@ -496,41 +529,77 @@ namespace StockSharp.Algo
 		/// <param name="security">Security.</param>
 		/// <param name="securityId">Security ID.</param>
 		/// <param name="originalTransactionId">ID of original transaction, for which this message is the answer.</param>
+		/// <param name="copyExtendedId">Copy <see cref="Security.ExternalId"/> and <see cref="Security.Type"/>.</param>
 		/// <returns>Message.</returns>
-		public static SecurityMessage ToMessage(this Security security, SecurityId? securityId = null, long originalTransactionId = 0)
+		public static SecurityMessage ToMessage(this Security security, SecurityId? securityId = null, long originalTransactionId = 0, bool copyExtendedId = false)
+		{
+			if (security is null)
+				throw new ArgumentNullException(nameof(security));
+
+			if (security.IsAllSecurity())
+			{
+				return new SecurityMessage();
+
+				// not immutable
+				//return Messages.Extensions.AllSecurity;
+			}
+
+			return security.FillMessage(new SecurityMessage
+			{
+				SecurityId = securityId ?? security.ToSecurityId(copyExtended: copyExtendedId),
+				OriginalTransactionId = originalTransactionId,
+			});
+		}
+
+		/// <summary>
+		/// To convert the instrument into message.
+		/// </summary>
+		/// <typeparam name="TMessage">Message type.</typeparam>
+		/// <param name="security">Security.</param>
+		/// <param name="message">Message.</param>
+		/// <returns>Message.</returns>
+		public static TMessage FillMessage<TMessage>(this Security security, TMessage message)
+			where TMessage : SecurityMessage
 		{
 			if (security == null)
 				throw new ArgumentNullException(nameof(security));
 
-			return new SecurityMessage
-			{
-				SecurityId = securityId ?? security.ToSecurityId(),
-				Name = security.Name,
-				ShortName = security.ShortName,
-				PriceStep = security.PriceStep,
-				Decimals = security.Decimals,
-				VolumeStep = security.VolumeStep,
-				MinVolume = security.MinVolume,
-				Multiplier = security.Multiplier,
-				Currency = security.Currency,
-				SecurityType = security.Type,
-				CfiCode = security.CfiCode,
-				OptionType = security.OptionType,
-				Strike = security.Strike,
-				BinaryOptionType = security.BinaryOptionType,
-				UnderlyingSecurityCode = security.UnderlyingSecurityId.IsEmpty() ? null : security.UnderlyingSecurityId.ToSecurityId().SecurityCode,
-				SettlementDate = security.SettlementDate,
-				ExpiryDate = security.ExpiryDate,
-				IssueSize = security.IssueSize,
-				IssueDate = security.IssueDate,
-				UnderlyingSecurityType = security.UnderlyingSecurityType,
-				UnderlyingSecurityMinVolume = security.UnderlyingSecurityMinVolume,
-				Shortable = security.Shortable,
-				BasketCode = security.BasketCode,
-				BasketExpression = security.BasketExpression,
+			if (message == null)
+				throw new ArgumentNullException(nameof(message));
 
-				OriginalTransactionId = originalTransactionId,
-			};
+			message.Name = security.Name;
+			message.ShortName = security.ShortName;
+			message.PriceStep = security.PriceStep;
+			message.Decimals = security.Decimals;
+			message.VolumeStep = security.VolumeStep;
+			message.MinVolume = security.MinVolume;
+			message.MaxVolume = security.MaxVolume;
+			message.Multiplier = security.Multiplier;
+			message.Currency = security.Currency;
+			message.SecurityType = security.Type;
+			message.Class = security.Class;
+			message.CfiCode = security.CfiCode;
+			message.OptionType = security.OptionType;
+			message.Strike = security.Strike;
+			message.BinaryOptionType = security.BinaryOptionType;
+			message.UnderlyingSecurityId = security.UnderlyingSecurityId.IsEmpty() ? default : security.UnderlyingSecurityId.ToSecurityId();
+			message.SettlementDate = security.SettlementDate;
+			message.ExpiryDate = security.ExpiryDate;
+			message.IssueSize = security.IssueSize;
+			message.IssueDate = security.IssueDate;
+			message.UnderlyingSecurityType = security.UnderlyingSecurityType;
+			message.UnderlyingSecurityMinVolume = security.UnderlyingSecurityMinVolume;
+			message.Shortable = security.Shortable;
+			message.BasketCode = security.BasketCode;
+			message.BasketExpression = security.BasketExpression;
+			message.FaceValue = security.FaceValue;
+			message.OptionStyle = security.OptionStyle;
+			message.SettlementType = security.SettlementType;
+
+			if (!security.PrimaryId.IsEmpty())
+				message.PrimaryId = security.PrimaryId.ToSecurityId();
+
+			return message;
 		}
 
 		/// <summary>
@@ -553,8 +622,7 @@ namespace StockSharp.Algo
 			var criteria = new Security();
 			criteria.ApplyChanges(message, exchangeInfoProvider);
 
-			if (criteria.Type == null)
-				criteria.Type = message.GetSecurityTypes().FirstOr();
+			criteria.Type ??= message.GetSecurityTypes().FirstOr();
 
 			return criteria;
 		}
@@ -563,42 +631,30 @@ namespace StockSharp.Algo
 		/// Convert <see cref="Security"/> criteria to <see cref="SecurityLookupMessage"/>.
 		/// </summary>
 		/// <param name="criteria">Criteria.</param>
-		/// <param name="securityId">Security ID.</param>
 		/// <returns>Message.</returns>
-		public static SecurityLookupMessage ToLookupMessage(this Security criteria, SecurityId? securityId = null)
+		public static SecurityLookupMessage ToLookupMessage(this Security criteria)
 		{
 			if (criteria == null)
 				throw new ArgumentNullException(nameof(criteria));
 
-			return new SecurityLookupMessage
+			var message = new SecurityLookupMessage();
+
+			if (criteria.Id.IsEmpty())
 			{
-				//LocalTime = CurrentTime,
-				SecurityId = securityId ?? (criteria.Id.IsEmpty() && criteria.Code.IsEmpty() ? default(SecurityId) : criteria.ToSecurityId(boardIsRequired: false)),
-				Name = criteria.Name,
-				Class = criteria.Class,
-				SecurityType = criteria.Type,
-				ExpiryDate = criteria.ExpiryDate,
-				ShortName = criteria.ShortName,
-				VolumeStep = criteria.VolumeStep,
-				MinVolume = criteria.MinVolume,
-				Multiplier = criteria.Multiplier,
-				PriceStep = criteria.PriceStep,
-				Decimals = criteria.Decimals,
-				Currency = criteria.Currency,
-				CfiCode = criteria.CfiCode,
-				SettlementDate = criteria.SettlementDate,
-				OptionType = criteria.OptionType,
-				Strike = criteria.Strike,
-				BinaryOptionType = criteria.BinaryOptionType,
-				UnderlyingSecurityCode = criteria.UnderlyingSecurityId.IsEmpty() ? null : _defaultGenerator.Split(criteria.UnderlyingSecurityId).SecurityCode,
-				IssueSize = criteria.IssueSize,
-				IssueDate = criteria.IssueDate,
-				UnderlyingSecurityType = criteria.UnderlyingSecurityType,
-				UnderlyingSecurityMinVolume = criteria.UnderlyingSecurityMinVolume,
-				Shortable = criteria.Shortable,
-				BasketCode = criteria.BasketCode,
-				BasketExpression = criteria.BasketExpression,
-			};
+				message.SecurityId = criteria.ExternalId.ToSecurityId(new()
+				{
+					SecurityCode = criteria.Code,
+					BoardCode = criteria.Board?.Code,
+				});
+
+				criteria.FillMessage(message);
+			}
+			else
+			{
+				message.SecurityId = criteria.Id.ToSecurityId();
+			}
+
+			return message;
 		}
 
 		/// <summary>
@@ -617,48 +673,12 @@ namespace StockSharp.Algo
 
 			var security = new Security
 			{
-				Id = message.SecurityId.IsDefault() ? null : message.SecurityId.ToStringId(nullIfEmpty: message is SecurityLookupMessage)
+				Id = message.SecurityId == default ? null : message.SecurityId.ToStringId(nullIfEmpty: message is SecurityLookupMessage)
 			};
 
 			security.ApplyChanges(message, exchangeInfoProvider);
 
 			return security;
-		}
-
-		private static readonly SecurityIdGenerator _defaultGenerator = new SecurityIdGenerator();
-
-		private static SecurityIdGenerator GetGenerator(SecurityIdGenerator generator) => generator ?? _defaultGenerator;
-
-		/// <summary>
-		/// Convert <see cref="SecurityId"/> to <see cref="Security.Id"/> value.
-		/// </summary>
-		/// <param name="securityId"><see cref="SecurityId"/> value.</param>
-		/// <param name="generator">The instrument identifiers generator <see cref="Security.Id"/>. Can be <see langword="null"/>.</param>
-		/// <param name="nullIfEmpty">Return <see langword="null"/> if <see cref="SecurityId"/> is empty.</param>
-		/// <returns><see cref="Security.Id"/> value.</returns>
-		public static string ToStringId(this SecurityId securityId, SecurityIdGenerator generator = null, bool nullIfEmpty = false)
-		{
-			var secCode = securityId.SecurityCode;
-			var boardCode = securityId.BoardCode;
-
-			if (nullIfEmpty)
-			{
-				if (secCode.IsEmpty() || boardCode.IsEmpty())
-					return null;
-			}
-
-			return GetGenerator(generator).GenerateId(secCode, boardCode);
-		}
-
-		/// <summary>
-		/// Convert <see cref="Security.Id"/> to <see cref="SecurityId"/> value.
-		/// </summary>
-		/// <param name="id"><see cref="Security.Id"/> value.</param>
-		/// <param name="generator">The instrument identifiers generator <see cref="SecurityId"/>. Can be <see langword="null"/>.</param>
-		/// <returns><see cref="SecurityId"/> value.</returns>
-		public static SecurityId ToSecurityId(this string id, SecurityIdGenerator generator = null)
-		{
-			return GetGenerator(generator).Split(id);
 		}
 
 		/// <summary>
@@ -687,15 +707,16 @@ namespace StockSharp.Algo
 		/// </summary>
 		/// <param name="portfolio">Portfolio.</param>
 		/// <returns>Message.</returns>
-		public static PortfolioChangeMessage ToChangeMessage(this Portfolio portfolio)
+		public static PositionChangeMessage ToChangeMessage(this Portfolio portfolio)
 		{
 			if (portfolio == null)
 				throw new ArgumentNullException(nameof(portfolio));
 
-			return new PortfolioChangeMessage
+			return new PositionChangeMessage
 			{
+				SecurityId = SecurityId.Money,
 				PortfolioName = portfolio.Name,
-				BoardCode = portfolio.Board == null ? null : portfolio.Board.Code,
+				BoardCode = portfolio.Board?.Code,
 				LocalTime = portfolio.LocalTime,
 				ServerTime = portfolio.LastChangeTime,
 				ClientCode = portfolio.ClientCode,
@@ -704,24 +725,57 @@ namespace StockSharp.Algo
 			.TryAdd(PositionChangeTypes.CurrentValue, portfolio.CurrentValue, true);
 		}
 
-		///// <summary>
-		///// To convert the position into message.
-		///// </summary>
-		///// <param name="position">Position.</param>
-		///// <returns>Message.</returns>
-		//public static PositionMessage ToMessage(this Position position)
-		//{
-		//	if (position == null)
-		//		throw new ArgumentNullException(nameof(position));
+		/// <summary>
+		/// Convert <see cref="Portfolio"/> to <see cref="PortfolioLookupMessage"/> value.
+		/// </summary>
+		/// <param name="criteria">The criterion which fields will be used as a filter.</param>
+		/// <returns>Message portfolio lookup for specified criteria.</returns>
+		public static PortfolioLookupMessage ToLookupCriteria(this Portfolio criteria)
+		{
+			if (criteria == null)
+				throw new ArgumentNullException(nameof(criteria));
 
-		//	return new PositionMessage
-		//	{
-		//		PortfolioName = position.Portfolio.Name,
-		//		SecurityId = position.Security.ToSecurityId(),
-		//		DepoName = position.DepoName,
-		//		LimitType = position.LimitType,
-		//	};
-		//}
+			return new PortfolioLookupMessage
+			{
+				IsSubscribe = true,
+				BoardCode = criteria.Board?.Code,
+				Currency = criteria.Currency,
+				PortfolioName = criteria.Name,
+				ClientCode = criteria.ClientCode,
+			};
+		}
+
+		/// <summary>
+		/// Convert <see cref="Order"/> to <see cref="OrderStatusMessage"/> value.
+		/// </summary>
+		/// <param name="criteria">The criterion which fields will be used as a filter.</param>
+		/// <param name="volume">Volume.</param>
+		/// <param name="side">Order side.</param>
+		/// <returns>A message requesting current registered orders and trades.</returns>
+		public static OrderStatusMessage ToLookupCriteria(this Order criteria, decimal? volume, Sides? side)
+		{
+			if (criteria == null)
+				throw new ArgumentNullException(nameof(criteria));
+
+			var statusMsg = new OrderStatusMessage
+			{
+				IsSubscribe = true,
+				PortfolioName = criteria.Portfolio?.Name,
+				OrderId = criteria.Id,
+				OrderStringId = criteria.StringId,
+				OrderType = criteria.Type,
+				UserOrderId = criteria.UserOrderId,
+				StrategyId = criteria.StrategyId,
+				BrokerCode = criteria.BrokerCode,
+				ClientCode = criteria.ClientCode,
+				Volume = volume,
+				Side = side,
+			};
+
+			criteria.Security?.ToMessage().CopyTo(statusMsg);
+
+			return statusMsg;
+		}
 
 		/// <summary>
 		/// To convert the position into message.
@@ -731,7 +785,7 @@ namespace StockSharp.Algo
 		/// <returns>Message.</returns>
 		public static PositionChangeMessage ToChangeMessage(this Position position, long originalTransactionId = 0)
 		{
-			if (position == null)
+			if (position is null)
 				throw new ArgumentNullException(nameof(position));
 
 			return new PositionChangeMessage
@@ -741,6 +795,8 @@ namespace StockSharp.Algo
 				PortfolioName = position.Portfolio.Name,
 				SecurityId = position.Security.ToSecurityId(),
 				ClientCode = position.ClientCode,
+				StrategyId = position.StrategyId,
+				Side = position.Side,
 				OriginalTransactionId = originalTransactionId,
 			}
 			.TryAdd(PositionChangeTypes.BeginValue, position.BeginValue, true)
@@ -836,7 +892,7 @@ namespace StockSharp.Algo
 			//board.IsSupportAtomicReRegister = message.IsSupportAtomicReRegister;
 			//board.IsSupportMarketOrders = message.IsSupportMarketOrders;
 
-			if (!message.ExpiryTime.IsDefault())
+			if (message.ExpiryTime != default)
 				board.ExpiryTime = message.ExpiryTime;
 
 			if (message.TimeZone != null)
@@ -845,6 +901,7 @@ namespace StockSharp.Algo
 			return board;
 		}
 
+		[Obsolete]
 		private class ToMessagesEnumerable<TEntity, TMessage> : IEnumerable<TMessage>
 		{
 			private readonly IEnumerable<TEntity> _entities;
@@ -893,11 +950,13 @@ namespace StockSharp.Algo
 		/// <typeparam name="TMessage">Message type.</typeparam>
 		/// <param name="entities">Trading objects.</param>
 		/// <returns>Messages.</returns>
+		[Obsolete("Conversion reduce performance.")]
 		public static IEnumerable<TMessage> ToMessages<TEntity, TMessage>(this IEnumerable<TEntity> entities)
 		{
 			return new ToMessagesEnumerable<TEntity, TMessage>(entities);
 		}
 
+		[Obsolete]
 		private class ToEntitiesEnumerable<TMessage, TEntity> : IEnumerable<TEntity>
 			where TMessage : Message
 		{
@@ -908,11 +967,17 @@ namespace StockSharp.Algo
 
 			public ToEntitiesEnumerable(IEnumerable<TMessage> messages, Security security, IExchangeInfoProvider exchangeInfoProvider)
 			{
+				if (typeof(TMessage) != typeof(NewsMessage))
+				{
+					if (security == null)
+						throw new ArgumentNullException(nameof(security));
+				}
+
 				_messages = messages ?? throw new ArgumentNullException(nameof(messages));
-				_security = security ?? throw new ArgumentNullException(nameof(security));
+				_security = security;
 				_exchangeInfoProvider = exchangeInfoProvider;
 			}
-			
+
 			public IEnumerator<TEntity> GetEnumerator()
 			{
 				return _messages.Select(Convert).GetEnumerator();
@@ -933,20 +998,14 @@ namespace StockSharp.Algo
 					{
 						var execMsg = message.To<ExecutionMessage>();
 
-						switch (execMsg.ExecutionType)
-						{
-							case ExecutionTypes.Tick:
-								return execMsg.ToTrade(_security).To<TEntity>();
-
-							case ExecutionTypes.OrderLog:
-								return execMsg.ToOrderLog(_security).To<TEntity>();
-
-							case ExecutionTypes.Transaction:
-								return execMsg.ToOrder(_security).To<TEntity>();
-
-							default:
-								throw new ArgumentOutOfRangeException(nameof(message), LocalizedStrings.Str1122Params.Put(execMsg.ExecutionType));
-						}
+						if (execMsg.DataType == DataType.Ticks)
+							return execMsg.ToTrade(_security).To<TEntity>();
+						else if (execMsg.DataType == DataType.OrderLog)
+							return execMsg.ToOrderLog(_security).To<TEntity>();
+						else if (execMsg.DataType == DataType.Transactions)
+							return execMsg.ToOrder(_security).To<TEntity>();
+						else
+							throw new ArgumentOutOfRangeException(nameof(message), LocalizedStrings.UnsupportedType.Put(execMsg.DataType));
 					}
 
 					case MessageTypes.QuoteChange:
@@ -955,14 +1014,15 @@ namespace StockSharp.Algo
 					case MessageTypes.News:
 						return message.To<NewsMessage>().ToNews(_exchangeInfoProvider).To<TEntity>();
 
+					case MessageTypes.BoardState:
+						return message.To<TEntity>();
+
 					default:
 					{
-						var candleMsg = message as CandleMessage;
+						if (message is CandleMessage candleMsg)
+							return candleMsg.ToCandle(_security).To<TEntity>();
 
-						if (candleMsg == null)
-							throw new ArgumentOutOfRangeException();
-
-						return candleMsg.ToCandle(_security).To<TEntity>();
+						throw new ArgumentOutOfRangeException(nameof(message), message.Type, LocalizedStrings.InvalidValue);
 					}
 				}
 			}
@@ -977,9 +1037,13 @@ namespace StockSharp.Algo
 		/// <param name="security">Security.</param>
 		/// <param name="exchangeInfoProvider">Exchanges and trading boards provider.</param>
 		/// <returns>Trading objects.</returns>
+		[Obsolete("Conversion reduce performance.")]
 		public static IEnumerable<TEntity> ToEntities<TMessage, TEntity>(this IEnumerable<TMessage> messages, Security security, IExchangeInfoProvider exchangeInfoProvider = null)
 			where TMessage : Message
 		{
+			if (messages is IEnumerable<QuoteChangeMessage> books)
+				messages = books.BuildIfNeed().To<IEnumerable<TMessage>>();
+
 			return new ToEntitiesEnumerable<TMessage, TEntity>(messages, security, exchangeInfoProvider);
 		}
 
@@ -989,9 +1053,9 @@ namespace StockSharp.Algo
 		/// <typeparam name="TCandle">The candle type.</typeparam>
 		/// <param name="messages">Messages.</param>
 		/// <param name="security">Security.</param>
-		/// <param name="candleType">The type of the candle. It is used, if <typeparamref name="TCandle" /> equals to <see cref="Candle"/>.</param>
 		/// <returns>Trading objects.</returns>
-		public static IEnumerable<TCandle> ToCandles<TCandle>(this IEnumerable<CandleMessage> messages, Security security, Type candleType = null)
+		[Obsolete("Conversion reduce performance.")]
+		public static IEnumerable<TCandle> ToCandles<TCandle>(this IEnumerable<CandleMessage> messages, Security security)
 		{
 			return new ToEntitiesEnumerable<CandleMessage, TCandle>(messages, security, null);
 		}
@@ -1003,6 +1067,7 @@ namespace StockSharp.Algo
 		/// <param name="message">Message.</param>
 		/// <param name="series">Series.</param>
 		/// <returns>Candle.</returns>
+		[Obsolete("Conversion reduce performance.")]
 		public static TCandle ToCandle<TCandle>(this CandleMessage message, CandleSeries series)
 			where TCandle : Candle, new()
 		{
@@ -1015,6 +1080,7 @@ namespace StockSharp.Algo
 		/// <param name="message">Message.</param>
 		/// <param name="series">Series.</param>
 		/// <returns>Candle.</returns>
+		[Obsolete("Conversion reduce performance.")]
 		public static Candle ToCandle(this CandleMessage message, CandleSeries series)
 		{
 			if (message == null)
@@ -1032,12 +1098,83 @@ namespace StockSharp.Algo
 			return candle;
 		}
 
+#pragma warning disable CS0618 // Type or member is obsolete
+		private static readonly SynchronizedDictionary<Type, Func<Candle>> _candleCreators = new();
+#pragma warning restore CS0618 // Type or member is obsolete
+		private static readonly SynchronizedDictionary<Type, Func<CandleMessage>> _candleMessageCreators = new();
+
+		/// <summary>
+		/// Create instance of <see cref="CandleMessage"/>.
+		/// </summary>
+		/// <param name="messageType">The type of candle message.</param>
+		/// <returns>Instance of <see cref="CandleMessage"/>.</returns>
+		public static CandleMessage CreateCandleMessage(this Type messageType)
+		{
+			if (messageType == null)
+				throw new ArgumentNullException(nameof(messageType));
+
+			if (!_candleMessageCreators.TryGetValue(messageType, out var creator))
+				throw new ArgumentException(LocalizedStrings.UnknownCandleType.Put(messageType), nameof(messageType));
+
+			return creator();
+		}
+
+		/// <summary>
+		/// All registered candle types.
+		/// </summary>
+		public static IEnumerable<Type> AllCandleTypes => _candleTypes.CachedKeys;
+
+		/// <summary>
+		/// All registered candle message types.
+		/// </summary>
+		public static IEnumerable<Type> AllCandleMessageTypes => _candleTypes.CachedValues;
+
+		/// <summary>
+		/// Register new candle type.
+		/// </summary>
+		/// <typeparam name="TCandle">Candle type.</typeparam>
+		/// <typeparam name="TMessage">The type of candle message.</typeparam>
+		/// <param name="candleCreator"><see cref="Candle"/> instance creator.</param>
+		/// <param name="candleMessageCreator"><see cref="CandleMessage"/> instance creator.</param>
+		[Obsolete("Conversion reduce performance.")]
+		public static void RegisterCandle<TCandle, TMessage>(Func<TCandle> candleCreator, Func<TMessage> candleMessageCreator)
+			where TCandle : Candle
+			where TMessage : CandleMessage
+		{
+			RegisterCandle(typeof(TCandle), typeof(TMessage), candleCreator, candleMessageCreator);
+		}
+
+		/// <summary>
+		/// Register new candle type.
+		/// </summary>
+		/// <param name="candleType">Candle type.</param>
+		/// <param name="messageType">The type of candle message.</param>
+		/// <param name="candleCreator"><see cref="Candle"/> instance creator.</param>
+		/// <param name="candleMessageCreator"><see cref="CandleMessage"/> instance creator.</param>
+		[Obsolete("Conversion reduce performance.")]
+		public static void RegisterCandle(Type candleType, Type messageType, Func<Candle> candleCreator, Func<CandleMessage> candleMessageCreator)
+		{
+			if (messageType == null)
+				throw new ArgumentNullException(nameof(messageType));
+
+			if (candleCreator == null)
+				throw new ArgumentNullException(nameof(candleCreator));
+
+			if (candleMessageCreator == null)
+				throw new ArgumentNullException(nameof(candleMessageCreator));
+
+			_candleTypes.Add(candleType, messageType);
+			_candleCreators.Add(candleType, candleCreator);
+			_candleMessageCreators.Add(messageType, candleMessageCreator);
+		}
+
 		/// <summary>
 		/// To convert <see cref="CandleMessage"/> into candle.
 		/// </summary>
 		/// <param name="message">Message.</param>
 		/// <param name="security">Security.</param>
 		/// <returns>Candle.</returns>
+		[Obsolete("Conversion reduce performance.")]
 		public static Candle ToCandle(this CandleMessage message, Security security)
 		{
 			if (message == null)
@@ -1046,40 +1183,13 @@ namespace StockSharp.Algo
 			if (security == null)
 				throw new ArgumentNullException(nameof(security));
 
-			Candle candle;
+			if (!_candleTypes.TryGetKey(message.GetType(), out var candleType) || !_candleCreators.TryGetValue(candleType, out var creator))
+				throw new ArgumentOutOfRangeException(nameof(message), message.Type, LocalizedStrings.WrongCandleType);
 
-			switch (message.Type)
-			{
-				case MessageTypes.CandleTimeFrame:
-					candle = new TimeFrameCandle();
-					break;
-
-				case MessageTypes.CandleVolume:
-					candle = new VolumeCandle();
-					break;
-
-				case MessageTypes.CandleTick:
-					candle = new TickCandle();
-					break;
-
-				case MessageTypes.CandleRange:
-					candle = new RangeCandle();
-					break;
-
-				case MessageTypes.CandleRenko:
-					candle = new RenkoCandle();
-					break;
-
-				case MessageTypes.CandlePnF:
-					candle = new PnFCandle();
-					break;
-
-				default:
-					throw new ArgumentOutOfRangeException(nameof(message), message.Type, LocalizedStrings.WrongCandleType);
-			}
+			var candle = creator();
 
 			candle.Security = security;
-			candle.Arg = message.Arg;
+			candle.Arg = message.DataType.Arg;
 
 			return candle.Update(message);
 		}
@@ -1090,6 +1200,7 @@ namespace StockSharp.Algo
 		/// <param name="candle">Candle.</param>
 		/// <param name="message">Message.</param>
 		/// <returns>Candle.</returns>
+		[Obsolete("Conversion reduce performance.")]
 		public static Candle Update(this Candle candle, CandleMessage message)
 		{
 			if (candle == null)
@@ -1117,57 +1228,22 @@ namespace StockSharp.Algo
 			candle.TotalVolume = message.TotalVolume;
 			candle.RelativeVolume = message.RelativeVolume;
 
+			candle.BuyVolume = message.BuyVolume;
+			candle.SellVolume = message.SellVolume;
+
 			candle.OpenInterest = message.OpenInterest;
 
 			candle.TotalTicks = message.TotalTicks;
 			candle.UpTicks = message.UpTicks;
 			candle.DownTicks = message.DownTicks;
 
-			candle.PriceLevels = message.PriceLevels?.Select(l => l.Clone()).ToArray();
+			candle.PriceLevels = message.PriceLevels?/*.Select(l => l.Clone())*/.ToArray();
 
 			candle.State = message.State;
+			candle.SeqNum = message.SeqNum;
+			candle.BuildFrom = message.BuildFrom;
 
 			return candle;
-		}
-
-		/// <summary>
-		/// To convert the message into tick trade.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		/// <param name="security">Security.</param>
-		/// <returns>Tick trade.</returns>
-		public static Trade ToTrade(this ExecutionMessage message, Security security)
-		{
-			if (security == null)
-				throw new ArgumentNullException(nameof(security));
-
-			return message.ToTrade(new Trade { Security = security });
-		}
-
-		/// <summary>
-		/// To convert the message into tick trade.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		/// <param name="trade">Tick trade.</param>
-		/// <returns>Tick trade.</returns>
-		public static Trade ToTrade(this ExecutionMessage message, Trade trade)
-		{
-			if (message == null)
-				throw new ArgumentNullException(nameof(message));
-
-			trade.Id = message.TradeId ?? 0;
-			trade.Price = message.TradePrice ?? 0;
-			trade.Volume = message.TradeVolume ?? 0;
-			trade.Status = message.TradeStatus;
-			trade.IsSystem = message.IsSystem;
-			trade.Time = message.ServerTime;
-			trade.LocalTime = message.LocalTime;
-			trade.OpenInterest = message.OpenInterest;
-			trade.OrderDirection = message.OriginSide;
-			trade.IsUpTick = message.IsUpTick;
-			trade.Currency = message.Currency;
-
-			return trade;
 		}
 
 		/// <summary>
@@ -1199,7 +1275,7 @@ namespace StockSharp.Algo
 			order.StringId = message.OrderStringId;
 			order.TransactionId = message.TransactionId;
 			order.Portfolio = new Portfolio { Board = order.Security.Board, Name = message.PortfolioName };
-			order.Direction = message.Side;
+			order.Side = message.Side;
 			order.Price = message.OrderPrice;
 			order.Volume = message.OrderVolume ?? 0;
 			order.Balance = message.Balance ?? 0;
@@ -1208,22 +1284,30 @@ namespace StockSharp.Algo
 			order.Status = message.OrderStatus;
 			order.IsSystem = message.IsSystem;
 			order.Time = message.ServerTime;
-			order.LastChangeTime = message.ServerTime;
+			order.ServerTime = message.ServerTime;
 			order.LocalTime = message.LocalTime;
 			order.TimeInForce = message.TimeInForce;
 			order.ExpiryDate = message.ExpiryDate;
 			order.UserOrderId = message.UserOrderId;
+			order.StrategyId = message.StrategyId;
 			order.Comment = message.Comment;
 			order.Commission = message.Commission;
 			order.CommissionCurrency = message.CommissionCurrency;
 			order.Currency = message.Currency;
 			order.IsMarketMaker = message.IsMarketMaker;
-			order.IsMargin = message.IsMargin;
+			order.MarginMode = message.MarginMode;
 			order.Slippage = message.Slippage;
 			order.IsManual = message.IsManual;
+			order.AveragePrice = message.AveragePrice;
+			order.Yield = message.Yield;
+			order.MinVolume = message.MinVolume;
+			order.PositionEffect = message.PositionEffect;
+			order.PostOnly = message.PostOnly;
+			order.SeqNum = message.SeqNum;
+			order.Leverage = message.Leverage;
 
 			if (message.OrderState != null)
-				order.State = order.State.CheckModification((OrderStates)message.OrderState);
+				order.ApplyNewState(message.OrderState.Value);
 
 			return order;
 		}
@@ -1233,11 +1317,11 @@ namespace StockSharp.Algo
 		/// </summary>
 		/// <param name="message">Message.</param>
 		/// <param name="security">Security.</param>
-		/// <param name="getSecurity">The function for getting instrument.</param>
 		/// <returns>Market depth.</returns>
-		public static MarketDepth ToMarketDepth(this QuoteChangeMessage message, Security security, Func<SecurityId, Security> getSecurity = null)
+		[Obsolete("Use IOrderBookMessage.")]
+		public static MarketDepth ToMarketDepth(this QuoteChangeMessage message, Security security)
 		{
-			return message.ToMarketDepth(new MarketDepth(security), getSecurity);
+			return message.ToMarketDepth(new MarketDepth(security));
 		}
 
 		/// <summary>
@@ -1245,9 +1329,9 @@ namespace StockSharp.Algo
 		/// </summary>
 		/// <param name="message">Message.</param>
 		/// <param name="marketDepth">Market depth.</param>
-		/// <param name="getSecurity">The function for getting instrument.</param>
 		/// <returns>Market depth.</returns>
-		public static MarketDepth ToMarketDepth(this QuoteChangeMessage message, MarketDepth marketDepth, Func<SecurityId, Security> getSecurity = null)
+		[Obsolete("Use IOrderBookMessage.")]
+		public static MarketDepth ToMarketDepth(this QuoteChangeMessage message, MarketDepth marketDepth)
 		{
 			if (message == null)
 				throw new ArgumentNullException(nameof(message));
@@ -1255,44 +1339,17 @@ namespace StockSharp.Algo
 			if (marketDepth == null)
 				throw new ArgumentNullException(nameof(marketDepth));
 
-			var security = marketDepth.Security;
+			marketDepth.Update(
+				message.Bids,
+				message.Asks,
+				message.ServerTime);
 
-			var depth = marketDepth.Update(
-				message.Bids.Select(c => c.ToQuote(security, getSecurity)),
-				message.Asks.Select(c => c.ToQuote(security, getSecurity)),
-				message.IsSorted, message.ServerTime);
+			marketDepth.LocalTime = message.LocalTime;
+			marketDepth.Currency = message.Currency;
+			marketDepth.SeqNum = message.SeqNum;
+			marketDepth.BuildFrom = message.BuildFrom;
 
-			depth.LocalTime = message.LocalTime;
-			depth.Currency = message.Currency;
-
-			return depth;
-		}
-
-		/// <summary>
-		/// To convert the quote into message.
-		/// </summary>
-		/// <param name="quote">Quote.</param>
-		/// <returns>Message.</returns>
-		public static QuoteChange ToQuoteChange(this Quote quote)
-		{
-			return new QuoteChange(quote.OrderDirection, quote.Price, quote.Volume);
-		}
-
-		/// <summary>
-		/// To convert the message into quote.
-		/// </summary>
-		/// <param name="change">Message.</param>
-		/// <param name="security">Security.</param>
-		/// <param name="getSecurity">The function for getting instrument.</param>
-		/// <returns>Quote.</returns>
-		public static Quote ToQuote(this QuoteChange change, Security security, Func<SecurityId, Security> getSecurity = null)
-		{
-			if (!change.BoardCode.IsEmpty() && getSecurity != null)
-				security = getSecurity(new SecurityId { SecurityCode = security.Code, BoardCode = change.BoardCode });
-
-			var quote = new Quote(security, change.Price, change.Volume, change.Side);
-			change.CopyExtensionInfo(quote);
-			return quote;
+			return marketDepth;
 		}
 
 		/// <summary>
@@ -1301,6 +1358,7 @@ namespace StockSharp.Algo
 		/// <param name="message">Message.</param>
 		/// <param name="security">Security.</param>
 		/// <returns>Order log item.</returns>
+		[Obsolete("Use IOrderLogMessage.")]
 		public static OrderLogItem ToOrderLog(this ExecutionMessage message, Security security)
 		{
 			if (security == null)
@@ -1308,8 +1366,8 @@ namespace StockSharp.Algo
 
 			return message.ToOrderLog(new OrderLogItem
 			{
-				Order = new Order { Security = security },
-				Trade = message.TradeId != null ? new Trade { Security = security } : null
+				Order = new() { Security = security },
+				Trade = message.HasTradeInfo ? new() { Security = security } : null
 			});
 		}
 
@@ -1319,6 +1377,7 @@ namespace StockSharp.Algo
 		/// <param name="message">Message.</param>
 		/// <param name="item">Order log item.</param>
 		/// <returns>Order log item.</returns>
+		[Obsolete("Use IOrderLogMessage.")]
 		public static OrderLogItem ToOrderLog(this ExecutionMessage message, OrderLogItem item)
 		{
 			if (message == null)
@@ -1337,31 +1396,36 @@ namespace StockSharp.Algo
 			order.Price = message.OrderPrice;
 			order.Volume = message.OrderVolume ?? 0;
 			order.Balance = message.Balance ?? 0;
-			order.Direction = message.Side;
+			order.Side = message.Side;
 			order.Time = message.ServerTime;
-			order.LastChangeTime = message.ServerTime;
+			order.ServerTime = message.ServerTime;
 			order.LocalTime = message.LocalTime;
-			
+
 			order.Status = message.OrderStatus;
 			order.TimeInForce = message.TimeInForce;
 			order.IsSystem = message.IsSystem;
 			order.Currency = message.Currency;
+			order.SeqNum = message.SeqNum;
 
-			if (message.OrderState != null)
-				order.State = order.State.CheckModification(message.OrderState.Value);
-			else
-				order.State = order.State.CheckModification(message.IsCancelled || message.TradeId != null ? OrderStates.Done : OrderStates.Active);
+			order.ApplyNewState(message.OrderState ?? (message.HasTradeInfo ? OrderStates.Done : OrderStates.Active));
 
-			if (message.TradeId != null)
+			if (message.HasTradeInfo)
 			{
 				var trade = item.Trade;
 
-				trade.Id = message.TradeId ?? 0;
-				trade.Price = message.TradePrice ?? 0;
-				trade.Time = message.ServerTime;
-				trade.Volume = message.OrderVolume ?? 0;
+				trade.Id = message.TradeId;
+				trade.StringId = message.TradeStringId;
+				trade.Price = message.TradePrice ?? default;
+				trade.ServerTime = message.ServerTime;
+				trade.Volume = message.OrderVolume ?? default;
 				trade.IsSystem = message.IsSystem;
 				trade.Status = message.TradeStatus;
+				trade.OrderBuyId = message.OrderBuyId;
+				trade.OrderSellId = message.OrderSellId;
+				trade.OriginSide = message.OriginSide;
+				trade.OpenInterest = message.OpenInterest;
+				trade.IsUpTick = message.IsUpTick;
+				trade.Yield = message.Yield;
 			}
 
 			return item;
@@ -1389,6 +1453,9 @@ namespace StockSharp.Algo
 				BoardCode = news.Board == null ? string.Empty : news.Board.Code,
 				Url = news.Url,
 				Priority = news.Priority,
+				Language = news.Language,
+				ExpiryDate = news.ExpiryDate,
+				SeqNum = news.SeqNum,
 			};
 		}
 
@@ -1398,11 +1465,15 @@ namespace StockSharp.Algo
 		/// <param name="security">Security.</param>
 		/// <param name="idGenerator">The instrument identifiers generator <see cref="Security.Id"/>.</param>
 		/// <param name="boardIsRequired"><see cref="Security.Board"/> is required.</param>
+		/// <param name="copyExtended">Copy <see cref="Security.ExternalId"/> and <see cref="Security.Type"/>.</param>
 		/// <returns>Security ID.</returns>
-		public static SecurityId ToSecurityId(this Security security, SecurityIdGenerator idGenerator = null, bool boardIsRequired = true)
+		public static SecurityId ToSecurityId(this Security security, SecurityIdGenerator idGenerator = null, bool boardIsRequired = true, bool copyExtended = false)
 		{
 			if (security == null)
 				throw new ArgumentNullException(nameof(security));
+
+			if (security.IsAllSecurity())
+				return default;
 
 			string secCode;
 			string boardCode;
@@ -1411,16 +1482,16 @@ namespace StockSharp.Algo
 			// иногда в Security.Code может быть записано неправильное, и необходимо опираться на Security.Id
 			if (!security.Id.IsEmpty())
 			{
-				var id = (idGenerator ?? new SecurityIdGenerator()).Split(security.Id);
+				var id = idGenerator.EnsureGetGenerator().Split(security.Id);
 
 				secCode = id.SecurityCode;
 
 				// http://stocksharp.com/forum/yaf_postst5143findunread_API-4-2-4-0-Nie-vystavliaiutsia-zaiavki-po-niekotorym-instrumientam-FORTS.aspx
 				// для Quik необходимо соблюдение регистра в коде инструмента при выставлении заявок
-				if (secCode.CompareIgnoreCase(security.Code))
+				if (secCode.EqualsIgnoreCase(security.Code))
 					secCode = security.Code;
 
-				//if (!boardCode.CompareIgnoreCase(ExchangeBoard.Test.Code))
+				//if (!boardCode.EqualsIgnoreCase(ExchangeBoard.Test.Code))
 				boardCode = id.BoardCode;
 			}
 			else
@@ -1432,21 +1503,37 @@ namespace StockSharp.Algo
 						return new SecurityId
 						{
 							SecurityCode = security.BasketExpression.Replace('@', '_'),
-							BoardCode = security.Board?.Code ?? MessageAdapter.DefaultAssociatedBoardCode
+							BoardCode = security.Board?.Code ?? SecurityId.AssociatedBoardCode
 						};
 					}
 
-					throw new ArgumentException(LocalizedStrings.Str1123);
+					throw new ArgumentException(LocalizedStrings.SecurityNotContainsId);
 				}
 
 				if (security.Board == null && boardIsRequired)
-					throw new ArgumentException(LocalizedStrings.Str1124Params.Put(security.Code));
+					throw new ArgumentException(LocalizedStrings.SecurityNotContainsBoard.Put(security.Code));
 
 				secCode = security.Code;
 				boardCode = security.Board?.Code;
 			}
 
-			return security.ExternalId.ToSecurityId(secCode, boardCode, security.Type);
+			SecurityId secId;
+
+			if (copyExtended)
+				secId = security.ExternalId.ToSecurityId(secCode, boardCode);
+			else
+			{
+				secId = new()
+				{
+					SecurityCode = secCode,
+					BoardCode = boardCode,
+				};
+			}
+
+			// force hash code caching
+			secId.GetHashCode();
+
+			return secId;
 		}
 
 		/// <summary>
@@ -1482,7 +1569,7 @@ namespace StockSharp.Algo
 				   !securityId.Isin.IsEmpty() ||
 				   !securityId.Ric.IsEmpty() ||
 				   !securityId.Sedol.IsEmpty() ||
-				   !securityId.InteractiveBrokers.IsDefault() ||
+				   securityId.InteractiveBrokers != default ||
 				   !securityId.Plaza.IsEmpty();
 		}
 
@@ -1492,72 +1579,37 @@ namespace StockSharp.Algo
 		/// <param name="externalId"><see cref="SecurityExternalId"/>.</param>
 		/// <param name="securityCode">Security code.</param>
 		/// <param name="boardCode">Board code.</param>
-		/// <param name="securityType">Security type.</param>
 		/// <returns><see cref="SecurityId"/>.</returns>
-		public static SecurityId ToSecurityId(this SecurityExternalId externalId, string securityCode, string boardCode, SecurityTypes? securityType)
+		public static SecurityId ToSecurityId(this SecurityExternalId externalId, string securityCode, string boardCode)
 		{
-			//if (externalId == null)
-			//	throw new ArgumentNullException(nameof(externalId));
-
-			return new SecurityId
+			return externalId.ToSecurityId(new SecurityId
 			{
 				SecurityCode = securityCode,
 				BoardCode = boardCode,
-				SecurityType = securityType,
-				Bloomberg = externalId.Bloomberg,
-				Cusip = externalId.Cusip,
-				IQFeed = externalId.IQFeed,
-				Isin = externalId.Isin,
-				Ric = externalId.Ric,
-				Sedol = externalId.Sedol,
-				InteractiveBrokers = externalId.InteractiveBrokers,
-				Plaza = externalId.Plaza,
-			};
+			});
 		}
 
 		/// <summary>
-		/// To fill the message with information about instrument.
+		/// Cast <see cref="SecurityExternalId"/> to the <see cref="SecurityId"/>.
 		/// </summary>
-		/// <param name="message">The message for market data subscription.</param>
-		/// <param name="security">Security.</param>
-		/// <returns>The message for market data subscription.</returns>
-		public static MarketDataMessage FillSecurityInfo(this MarketDataMessage message, Security security)
+		/// <param name="externalId"><see cref="SecurityExternalId"/>.</param>
+		/// <param name="secId"><see cref="SecurityId"/>.</param>
+		/// <returns><see cref="SecurityId"/>.</returns>
+		public static SecurityId ToSecurityId(this SecurityExternalId externalId, SecurityId secId)
 		{
-			return message.FillSecurityInfo(security.ToSecurityId(), security);
-		}
+			if (externalId == null)
+				throw new ArgumentNullException(nameof(externalId));
 
-		/// <summary>
-		/// To fill the message with information about instrument.
-		/// </summary>
-		/// <param name="message">The message for market data subscription.</param>
-		/// <param name="connector">Connection to the trading system.</param>
-		/// <param name="security">Security.</param>
-		/// <returns>The message for market data subscription.</returns>
-		public static MarketDataMessage FillSecurityInfo(this MarketDataMessage message, IConnector connector, Security security)
-		{
-			if (connector == null)
-				throw new ArgumentNullException(nameof(connector));
+			secId.Bloomberg = externalId.Bloomberg;
+			secId.Cusip = externalId.Cusip;
+			secId.IQFeed = externalId.IQFeed;
+			secId.Isin = externalId.Isin;
+			secId.Ric = externalId.Ric;
+			secId.Sedol = externalId.Sedol;
+			secId.InteractiveBrokers = externalId.InteractiveBrokers;
+			secId.Plaza = externalId.Plaza;
 
-			return message.FillSecurityInfo(connector.GetSecurityId(security), security);
-		}
-
-		/// <summary>
-		/// To fill the message with information about instrument.
-		/// </summary>
-		/// <param name="message">The message for market data subscription.</param>
-		/// <param name="securityId">Security ID.</param>
-		/// <param name="security">Security.</param>
-		/// <returns>The message for market data subscription.</returns>
-		public static MarketDataMessage FillSecurityInfo(this MarketDataMessage message, SecurityId securityId, Security security)
-		{
-			if (message == null)
-				throw new ArgumentNullException(nameof(message));
-
-			if (security == null)
-				throw new ArgumentNullException(nameof(security));
-
-			security.ToMessage(securityId).CopyTo(message, false);
-			return message;
+			return secId;
 		}
 
 		/// <summary>
@@ -1566,18 +1618,19 @@ namespace StockSharp.Algo
 		/// <param name="message">Message.</param>
 		/// <param name="security">Security.</param>
 		/// <returns>Market depth.</returns>
+		[Obsolete("Use IOrderBookMessage.")]
 		public static MarketDepth ToMarketDepth(this Level1ChangeMessage message, Security security)
 		{
 			return new MarketDepth(security) { LocalTime = message.LocalTime }.Update(
-				new[] { message.CreateQuote(security, Sides.Buy, Level1Fields.BestBidPrice, Level1Fields.BestBidVolume) },
-				new[] { message.CreateQuote(security, Sides.Sell, Level1Fields.BestAskPrice, Level1Fields.BestAskVolume) },
-				true, message.ServerTime);
+				new[] { message.CreateQuote(Level1Fields.BestBidPrice, Level1Fields.BestBidVolume) },
+				new[] { message.CreateQuote(Level1Fields.BestAskPrice, Level1Fields.BestAskVolume) },
+				message.ServerTime);
 		}
 
-		private static Quote CreateQuote(this Level1ChangeMessage message, Security security, Sides side, Level1Fields priceField, Level1Fields volumeField)
+		private static QuoteChange CreateQuote(this Level1ChangeMessage message, Level1Fields priceField, Level1Fields volumeField)
 		{
 			var changes = message.Changes;
-			return new Quote(security, (decimal)changes[priceField], (decimal?)changes.TryGetValue(volumeField) ?? 0m, side);
+			return new QuoteChange((decimal)changes[priceField], (decimal?)changes.TryGetValue(volumeField) ?? 0m);
 		}
 
 		/// <summary>
@@ -1599,10 +1652,13 @@ namespace StockSharp.Algo
 				Board = message.BoardCode.IsEmpty() ? null : exchangeInfoProvider?.GetOrCreateBoard(message.BoardCode),
 				LocalTime = message.LocalTime,
 				Priority = message.Priority,
+				Language = message.Language,
+				ExpiryDate = message.ExpiryDate,
 				Security = message.SecurityId == null ? null : new Security
 				{
 					Id = message.SecurityId.Value.SecurityCode
-				}
+				},
+				SeqNum = message.SeqNum,
 			};
 		}
 
@@ -1633,8 +1689,6 @@ namespace StockSharp.Algo
 			//if (message.State != null)
 			//	portfolio.State = message.State;
 
-			message.CopyExtensionInfo(portfolio);
-
 			return portfolio;
 		}
 
@@ -1644,6 +1698,7 @@ namespace StockSharp.Algo
 		/// <param name="dataType">The type of business object.</param>
 		/// <param name="arg">The data parameter.</param>
 		/// <returns>Message type.</returns>
+		[Obsolete("Conversion reduce performance.")]
 		public static Type ToMessageType(this Type dataType, ref object arg)
 		{
 			if (dataType == typeof(Trade))
@@ -1675,18 +1730,18 @@ namespace StockSharp.Algo
 			else if (dataType == typeof(Security))
 				return typeof(SecurityMessage);
 			else
-				throw new ArgumentOutOfRangeException(nameof(dataType), dataType, LocalizedStrings.Str721);
+				throw new ArgumentOutOfRangeException(nameof(dataType), dataType, LocalizedStrings.InvalidValue);
 		}
 
 		/// <summary>
 		/// Cast <see cref="CandleSeries"/> to <see cref="MarketDataMessage"/>.
 		/// </summary>
 		/// <param name="series">Candles series.</param>
-		/// <param name="isSubscribe">The message is market-data subscription.</param>
+		/// <param name="isSubscribe">The message is subscription.</param>
 		/// <param name="from">The initial date from which you need to get data.</param>
 		/// <param name="to">The final date by which you need to get data.</param>
 		/// <param name="count">Candles count.</param>
-		/// <param name="throwIfInvalidType">Throw an error if <see cref="MarketDataMessage.DataType"/> isn't candle type.</param>
+		/// <param name="throwIfInvalidType">Throw an error if <see cref="MarketDataMessage.DataType2"/> isn't candle type.</param>
 		/// <returns>Market-data message (uses as a subscribe/unsubscribe in outgoing case, confirmation event in incoming case).</returns>
 		public static MarketDataMessage ToMarketDataMessage(this CandleSeries series, bool isSubscribe, DateTimeOffset? from = null, DateTimeOffset? to = null, long? count = null, bool throwIfInvalidType = true)
 		{
@@ -1695,19 +1750,17 @@ namespace StockSharp.Algo
 
 			var mdMsg = new MarketDataMessage
 			{
-				Arg = series.Arg,
 				IsSubscribe = isSubscribe,
 				From = from ?? series.From,
 				To = to ?? series.To,
 				Count = count ?? series.Count,
 				BuildMode = series.BuildCandlesMode,
-				BuildFrom = series.BuildCandlesFrom,
+				BuildFrom = series.BuildCandlesFrom2,
 				BuildField = series.BuildCandlesField,
 				IsCalcVolumeProfile = series.IsCalcVolumeProfile,
 				AllowBuildFromSmallerTimeFrame = series.AllowBuildFromSmallerTimeFrame,
 				IsRegularTradingHours = series.IsRegularTradingHours,
-				IsFinished = series.IsFinished,
-				//ExtensionInfo = extensionInfo
+				IsFinishedOnly = series.IsFinishedOnly,
 			};
 
 			if (series.CandleType == null)
@@ -1717,13 +1770,15 @@ namespace StockSharp.Algo
 			}
 			else
 			{
-				mdMsg.DataType = series
+				var msgType = series
 					.CandleType
-					.ToCandleMessageType()
-					.ToCandleMarketDataType();
+					.ToCandleMessageType();
+
+				mdMsg.DataType2 = DataType.Create(msgType, series.Arg);
 			}
 
-			mdMsg.ValidateBounds().FillSecurityInfo(series.Security);
+			mdMsg.ValidateBounds();
+			series.Security?.ToMessage(copyExtendedId: true).CopyTo(mdMsg, false);
 
 			return mdMsg;
 		}
@@ -1733,7 +1788,7 @@ namespace StockSharp.Algo
 		/// </summary>
 		/// <param name="message">Market-data message (uses as a subscribe/unsubscribe in outgoing case, confirmation event in incoming case).</param>
 		/// <param name="security">Security.</param>
-		/// <param name="throwIfInvalidType">Throw an error if <see cref="MarketDataMessage.DataType"/> isn't candle type.</param>
+		/// <param name="throwIfInvalidType">Throw an error if <see cref="MarketDataMessage.DataType2"/> isn't candle type.</param>
 		/// <returns>Candles series.</returns>
 		public static CandleSeries ToCandleSeries(this MarketDataMessage message, Security security, bool throwIfInvalidType)
 		{
@@ -1750,7 +1805,7 @@ namespace StockSharp.Algo
 		/// </summary>
 		/// <param name="message">Market-data message (uses as a subscribe/unsubscribe in outgoing case, confirmation event in incoming case).</param>
 		/// <param name="series">Candles series.</param>
-		/// <param name="throwIfInvalidType">Throw an error if <see cref="MarketDataMessage.DataType"/> isn't candle type.</param>
+		/// <param name="throwIfInvalidType">Throw an error if <see cref="MarketDataMessage.DataType2"/> isn't candle type.</param>
 		public static void ToCandleSeries(this MarketDataMessage message, CandleSeries series, bool throwIfInvalidType)
 		{
 			if (message == null)
@@ -1759,27 +1814,27 @@ namespace StockSharp.Algo
 			if (series == null)
 				throw new ArgumentNullException(nameof(series));
 
-			if (message.DataType.IsCandleDataType())
+			if (message.DataType2.IsCandles)
 			{
-				series.CandleType = message.DataType.ToCandleMessage().ToCandleType();
-				series.Arg = message.Arg;
+				series.CandleType = message.DataType2.MessageType.ToCandleType();
+				series.Arg = message.GetArg();
 			}
 			else
 			{
 				if (throwIfInvalidType)
-					throw new ArgumentException(LocalizedStrings.UnknownCandleType.Put(message.DataType), nameof(message));
+					throw new ArgumentException(LocalizedStrings.UnknownCandleType.Put(message.DataType2), nameof(message));
 			}
-			
+
 			series.From = message.From;
 			series.To = message.To;
 			series.Count = message.Count;
 			series.BuildCandlesMode = message.BuildMode;
-			series.BuildCandlesFrom = message.BuildFrom;
+			series.BuildCandlesFrom2 = message.BuildFrom;
 			series.BuildCandlesField = message.BuildField;
 			series.IsCalcVolumeProfile = message.IsCalcVolumeProfile;
 			series.AllowBuildFromSmallerTimeFrame = message.AllowBuildFromSmallerTimeFrame;
 			series.IsRegularTradingHours = message.IsRegularTradingHours;
-			series.IsFinished = message.IsFinished;
+			series.IsFinishedOnly = message.IsFinishedOnly;
 		}
 
 		/// <summary>
@@ -1792,54 +1847,30 @@ namespace StockSharp.Algo
 			if (message == null)
 				throw new ArgumentNullException(nameof(message));
 
-			var str = message.DataType.GetDisplayName();
+			var str = message.DataType2.MessageType.GetDisplayName();
 
-			if (message.DataType.IsCandleDataType())
-				str += " " + message.Arg;
+			if (message.DataType2.IsCandles)
+				str += " " + message.GetArg();
 
 			return str;
-		}
-
-		/// <summary>
-		/// Convert <see cref="DataType"/> to <see cref="MarketDataTypes"/> value.
-		/// </summary>
-		/// <param name="dataType">Data type info.</param>
-		/// <returns><see cref="MarketDataTypes"/> value or <see langword="null"/> if cannot be converted.</returns>
-		public static MarketDataTypes? ToMarketDataType(this DataType dataType)
-		{
-			if (dataType == null)
-				throw new ArgumentNullException(nameof(dataType));
-
-			if (dataType == DataType.Ticks)
-				return MarketDataTypes.Trades;
-			else if (dataType == DataType.Level1)
-				return MarketDataTypes.Level1;
-			else if (dataType == DataType.OrderLog)
-				return MarketDataTypes.OrderLog;
-			else if (dataType == DataType.MarketDepth)
-				return MarketDataTypes.MarketDepth;
-			else if (dataType == DataType.News)
-				return MarketDataTypes.News;
-			else if (dataType.IsCandles())
-				return dataType.MessageType.ToCandleMarketDataType();
-			else
-				return null;
 		}
 
 		/// <summary>
 		/// Convert <see cref="DataType"/> to <see cref="CandleSeries"/> value.
 		/// </summary>
 		/// <param name="dataType">Data type info.</param>
+		/// <param name="security">The instrument to be used for candles formation.</param>
 		/// <returns>Candles series.</returns>
-		public static CandleSeries ToCandleSeries(this DataType dataType)
+		public static CandleSeries ToCandleSeries(this DataType dataType, Security security)
 		{
-			if (dataType == null)
+			if (dataType is null)
 				throw new ArgumentNullException(nameof(dataType));
 
 			return new CandleSeries
 			{
 				CandleType = dataType.MessageType.ToCandleType(),
 				Arg = dataType.Arg,
+				Security = security,
 			};
 		}
 
@@ -1855,5 +1886,12 @@ namespace StockSharp.Algo
 
 			return DataType.Create(series.CandleType.ToCandleMessageType(), series.Arg);
 		}
+
+		/// <summary>
+		/// Convert <see cref="DataType"/> to <see cref="Subscription"/> value.
+		/// </summary>
+		/// <param name="dataType">Data type info.</param>
+		/// <returns>Subscription.</returns>
+		public static Subscription ToSubscription(this DataType dataType) => new(dataType, (SecurityMessage)null);
 	}
 }

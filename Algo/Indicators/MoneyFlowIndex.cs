@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,22 +15,29 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Money Flow Index.
 	/// </summary>
-	[DisplayName("MFI")]
-	[DescriptionLoc(LocalizedStrings.MoneyFlowIndexKey)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/money_flow_index.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MFIKey,
+		Description = LocalizedStrings.MoneyFlowIndexKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/money_flow_index.html")]
 	public class MoneyFlowIndex : LengthIndicator<decimal>
 	{
 		private decimal _previousPrice;
-		private readonly Sum _positiveFlow = new Sum();
-		private readonly Sum _negativeFlow = new Sum();
+		private readonly Sum _positiveFlow = new();
+		private readonly Sum _negativeFlow = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="MoneyFlowIndex"/>.
@@ -49,9 +56,10 @@ namespace StockSharp.Algo.Indicators
 		    Length = length;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Percent;
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -60,22 +68,16 @@ namespace StockSharp.Algo.Indicators
 			_previousPrice = 0;
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _positiveFlow.IsFormed && _negativeFlow.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _positiveFlow.IsFormed && _negativeFlow.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var (_, high, low, close, vol) = input.GetOhlcv();
 
-			var typicalPrice = (candle.HighPrice + candle.LowPrice + candle.ClosePrice) / 3.0m;
-			var moneyFlow = typicalPrice * candle.TotalVolume;
+			var typicalPrice = (high + low + close) / 3.0m;
+			var moneyFlow = typicalPrice * vol;
 			
 			var positiveFlow = _positiveFlow.Process(input.SetValue(this, typicalPrice > _previousPrice ? moneyFlow : 0.0m)).GetValue<decimal>();
 			var negativeFlow = _negativeFlow.Process(input.SetValue(this, typicalPrice < _previousPrice ? moneyFlow : 0.0m)).GetValue<decimal>();

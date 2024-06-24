@@ -2,7 +2,6 @@ namespace StockSharp.Messages
 {
 	using System;
 	using System.Runtime.Serialization;
-	using System.Xml.Serialization;
 
 	/// <summary>
 	/// Base result message.
@@ -10,7 +9,7 @@ namespace StockSharp.Messages
 	/// <typeparam name="TMessage">Message type.</typeparam>
 	[DataContract]
 	[Serializable]
-	public abstract class BaseResultMessage<TMessage> : Message
+	public abstract class BaseResultMessage<TMessage> : Message, IOriginalTransactionIdMessage
 		where TMessage : BaseResultMessage<TMessage>, new()
 	{
 		/// <summary>
@@ -20,21 +19,11 @@ namespace StockSharp.Messages
 		protected BaseResultMessage(MessageTypes type)
 			: base(type)
 		{
-			
 		}
 
-		/// <summary>
-		/// ID of the original message <see cref="ITransactionIdMessage.TransactionId"/> for which this message is a response.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
 		public long OriginalTransactionId { get; set; }
-
-		/// <summary>
-		/// Error info.
-		/// </summary>
-		[DataMember]
-		[XmlIgnore]
-		public Exception Error { get; set; }
 
 		/// <summary>
 		/// Create a copy of <see cref="BaseResultMessage{TMessage}"/>.
@@ -53,25 +42,12 @@ namespace StockSharp.Messages
 		/// <param name="destination">The object, to which copied information.</param>
 		protected virtual void CopyTo(TMessage destination)
 		{
-			if (destination == null)
-				throw new ArgumentNullException(nameof(destination));
+			base.CopyTo(destination);
 
 			destination.OriginalTransactionId = OriginalTransactionId;
-			destination.LocalTime = LocalTime;
-			destination.Error = Error;
-
-			this.CopyExtensionInfo(destination);
 		}
 
 		/// <inheritdoc />
-		public override string ToString()
-		{
-			var str = base.ToString() + $",Orig={OriginalTransactionId}";
-
-			if (Error != null)
-				str += $",Error={Error.Message}";
-
-			return str;
-		}
+		public override string ToString() => base.ToString() + $",Orig={OriginalTransactionId}";
 	}
 }

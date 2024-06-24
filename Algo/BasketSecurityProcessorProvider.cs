@@ -14,7 +14,7 @@ namespace StockSharp.Algo
 	/// </summary>
 	public class BasketSecurityProcessorProvider : IBasketSecurityProcessorProvider
 	{
-		private readonly SynchronizedDictionary<string, Tuple<Type, Type>> _processors = new SynchronizedDictionary<string, Tuple<Type, Type>>(StringComparer.InvariantCultureIgnoreCase);
+		private readonly SynchronizedDictionary<string, Tuple<Type, Type>> _processors = new(StringComparer.InvariantCultureIgnoreCase);
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="BasketSecurityProcessorProvider"/>.
@@ -79,7 +79,7 @@ namespace StockSharp.Algo
 			if (_processors.TryGetValue(basketCode, out var processor))
 				return processor;
 
-			throw new ArgumentException(LocalizedStrings.Str2140Params.Put(basketCode));
+			throw new ArgumentException(LocalizedStrings.UnknownType.Put(basketCode));
 		}
 
 		Type IBasketSecurityProcessorProvider.GetProcessorType(string basketCode)

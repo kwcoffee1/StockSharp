@@ -25,8 +25,7 @@ namespace StockSharp.Algo
 
 	using Gma.DataStructures.StringSearch;
 
-	using MoreLinq;
-
+	using StockSharp.Messages;
 	using StockSharp.BusinessEntities;
 
 	/// <summary>
@@ -34,16 +33,27 @@ namespace StockSharp.Algo
 	/// </summary>
 	public class SecurityTrie : ICollection<Security>
 	{
-		private readonly SyncObject _sync = new SyncObject();
+		private readonly SyncObject _sync = new();
 
-		private readonly HashSet<Security> _allSecurities = new HashSet<Security>();
-		private readonly ITrie<Security> _trie = new SuffixTrie<Security>(1);
+		private readonly Dictionary<SecurityId, Security> _allSecurities = new();
+		private readonly ITrie<Security> _trie = new PatriciaSuffixTrie<Security>(1);
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="SecurityTrie"/>.
 		/// </summary>
 		public SecurityTrie()
 		{
+		}
+
+		/// <summary>
+		/// To get the instrument by the identifier.
+		/// </summary>
+		/// <param name="id">Security ID.</param>
+		/// <returns>The got instrument. If there is no instrument by given criteria, <see langword="null" /> is returned.</returns>
+		public Security GetById(SecurityId id)
+		{
+			lock (_sync)
+				return _allSecurities.TryGetValue(id);
 		}
 
 		/// <summary>
@@ -89,13 +99,17 @@ namespace StockSharp.Algo
 				AddSuffix(externalId.Ric, security);
 				AddSuffix(externalId.Sedol, security);
 
-				_allSecurities.Add(security);
+				_allSecurities.Add(security.ToSecurityId(), security);
 			}
 		}
 
 		private void AddSuffix(string text, Security security)
 		{
 			if (text.IsEmpty())
+				return;
+
+			// no not trie large strings
+			if (text.Length > 500)
 				return;
 
 			_trie.Add(text.ToLowerInvariant(), security);
@@ -109,7 +123,7 @@ namespace StockSharp.Algo
 		public IEnumerable<Security> Retrieve(string filter)
 		{
 			lock (_sync)
-				return (filter.IsEmpty() ? _allSecurities : _trie.Retrieve(filter.ToLowerInvariant())).ToArray();
+				return (filter.IsEmpty() ? _allSecurities.Values : _trie.Retrieve(filter.ToLowerInvariant())).ToArray();
 		}
 
 		/// <summary>
@@ -120,7 +134,7 @@ namespace StockSharp.Algo
 		public void CopyTo(Security[] array, int arrayIndex)
 		{
 			lock (_sync)
-				_allSecurities.CopyTo(array, arrayIndex);
+				_allSecurities.Values.CopyTo(array, arrayIndex);
 		}
 
 		/// <summary>
@@ -130,10 +144,13 @@ namespace StockSharp.Algo
 		/// <returns><see langword="true"/> if <paramref name="security"/> was successfully removed from the <see cref="SecurityTrie"/>; otherwise, <see langword="false"/>.</returns>
 		public bool Remove(Security security)
 		{
+			if (security is null)
+				throw new ArgumentNullException(nameof(security));
+
 			lock (_sync)
 			{
 				_trie.Remove(security);
-				return _allSecurities.Remove(security);
+				return _allSecurities.Remove(security.ToSecurityId());
 			}
 		}
 
@@ -152,9 +169,10 @@ namespace StockSharp.Algo
 			{
 				if (securities.Count() > 1000 || (_allSecurities.Count > 1000 && securities.Count() > _allSecurities.Count * 0.1))
 				{
-					_allSecurities.RemoveRange(securities);
+					foreach (var security in securities)
+						_allSecurities.Remove(security.ToSecurityId());	
 
-					securities = _allSecurities.ToArray();
+					securities = _allSecurities.Values.ToArray();
 
 					_allSecurities.Clear();
 					_trie.Clear();
@@ -164,7 +182,9 @@ namespace StockSharp.Algo
 				else
 				{
 					_trie.RemoveRange(securities);
-					_allSecurities.RemoveRange(securities);
+					
+					foreach (var security in securities)
+						_allSecurities.Remove(security.ToSecurityId());	
 				}
 			}
 		}
@@ -190,8 +210,11 @@ namespace StockSharp.Algo
 		/// <param name="item">The object to locate in the <see cref="T:System.Collections.Generic.ICollection`1"/>.</param>
 		public bool Contains(Security item)
 		{
+			if (item is null)
+				throw new ArgumentNullException(nameof(item));
+
 			lock (_sync)
-				return _allSecurities.Contains(item);
+				return _allSecurities.ContainsKey(item.ToSecurityId());
 		}
 
 		/// <summary>
@@ -203,7 +226,7 @@ namespace StockSharp.Algo
 		public IEnumerator<Security> GetEnumerator()
 		{
 			lock (_sync)
-				return _allSecurities.GetEnumerator();
+				return _allSecurities.Values.GetEnumerator();
 		}
 
 		/// <summary>

@@ -21,8 +21,8 @@ namespace StockSharp.Algo.Indicators
 	using System.Linq;
 
 	using Ecng.Serialization;
-
-	using MoreLinq;
+	using Ecng.Collections;
+	using Ecng.Common;
 
 	/// <summary>
 	/// Embedded indicators processing modes.
@@ -54,10 +54,8 @@ namespace StockSharp.Algo.Indicators
 			if (innerIndicators == null)
 				throw new ArgumentNullException(nameof(innerIndicators));
 
-			if (innerIndicators.Any(i => i == null))
-				throw new ArgumentException(nameof(innerIndicators));
-
-			InnerIndicators = new List<IIndicator>(innerIndicators);
+			foreach (var inner in innerIndicators)
+				AddInner(inner);
 
 			Mode = ComplexIndicatorModes.Parallel;
 		}
@@ -68,32 +66,58 @@ namespace StockSharp.Algo.Indicators
 		[Browsable(false)]
 		public ComplexIndicatorModes Mode { get; protected set; }
 
-		/// <summary>
-		/// Embedded indicators.
-		/// </summary>
-		[Browsable(false)]
-		protected IList<IIndicator> InnerIndicators { get; }
-
-		IEnumerable<IIndicator> IComplexIndicator.InnerIndicators => InnerIndicators;
-
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed
+		private class InnerResetScope
 		{
-			get { return InnerIndicators.All(i => i.IsFormed); }
+		}
+
+		private void InnerReseted()
+		{
+			if (Scope<InnerResetScope>.IsDefined)
+				return;
+
+			Reset();
 		}
 
 		/// <summary>
-		/// Result values type.
+		/// Add to <see cref="InnerIndicators"/>.
 		/// </summary>
-		public override Type ResultType { get; } = typeof(ComplexIndicatorValue);
+		/// <param name="inner">Indicator.</param>
+		protected void AddInner(IIndicator inner)
+		{
+			_innerIndicators.Add(inner ?? throw new ArgumentNullException(nameof(inner)));
+			inner.Reseted += InnerReseted;
+		}
 
 		/// <summary>
-		/// To handle the input value.
+		/// Remove from <see cref="InnerIndicators"/>.
 		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <param name="inner">Indicator.</param>
+		protected void RemoveInner(IIndicator inner)
+		{
+			_innerIndicators.Remove(inner ?? throw new ArgumentNullException(nameof(inner)));
+			inner.Reseted -= InnerReseted;
+		}
+
+		private readonly List<IIndicator> _innerIndicators = new();
+
+		/// <inheritdoc />
+		[Browsable(false)]
+		public IEnumerable<IIndicator> InnerIndicators => _innerIndicators;
+
+		/// <inheritdoc />
+		[Browsable(false)]
+		public override int NumValuesToInitialize =>
+			Mode == ComplexIndicatorModes.Parallel
+				? InnerIndicators.Select(i => i.NumValuesToInitialize).Max()
+				: InnerIndicators.Select(i => i.NumValuesToInitialize).Sum();
+
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => InnerIndicators.All(i => i.IsFormed);
+
+		/// <inheritdoc />
+		public override Type ResultType { get; } = typeof(ComplexIndicatorValue);
+
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var value = new ComplexIndicatorValue(this);
@@ -118,22 +142,19 @@ namespace StockSharp.Algo.Indicators
 			return value;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
-			InnerIndicators.ForEach(i => i.Reset());
+
+			using (new Scope<InnerResetScope>(new()))
+				InnerIndicators.ForEach(i => i.Reset());
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
+			base.Save(storage);
 
 			var index = 0;
 
@@ -141,24 +162,21 @@ namespace StockSharp.Algo.Indicators
 			{
 				var innerSettings = new SettingsStorage();
 				indicator.Save(innerSettings);
-				settings.SetValue(indicator.Name + index, innerSettings);
+				storage.SetValue(indicator.Name + index, innerSettings);
 				index++;
 			}
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
+			base.Load(storage);
 
 			var index = 0;
 
 			foreach (var indicator in InnerIndicators)
 			{
-				indicator.Load(settings.GetValue<SettingsStorage>(indicator.Name + index));
+				indicator.Load(storage, indicator.Name + index);
 				index++;
 			}
 		}

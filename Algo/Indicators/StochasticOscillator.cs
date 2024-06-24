@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -16,14 +16,21 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// The stochastic oscillator.
 	/// </summary>
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/stochastic_oscillator.html
+	/// </remarks>
 	[DisplayName("Stochastic Oscillator")]
 	[Description("Stochastic Oscillator")]
+	[Doc("topics/api/indicators/list_of_indicators/stochastic_oscillator.html")]
 	public class StochasticOscillator : BaseComplexIndicator
 	{
 		/// <summary>
@@ -31,28 +38,38 @@ namespace StockSharp.Algo.Indicators
 		/// </summary>
 		public StochasticOscillator()
 		{
-			InnerIndicators.Add(K = new StochasticK());
-			InnerIndicators.Add(D = new SimpleMovingAverage { Length = 3 });
+			AddInner(K = new());
+			AddInner(D = new() { Length = 3 });
 
 			Mode = ComplexIndicatorModes.Sequence;
 		}
+
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Percent;
 
 		/// <summary>
 		/// %K.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("%K")]
-		[Description("%K")]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.KKey,
+			Description = LocalizedStrings.KKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public StochasticK K { get; }
 
 		/// <summary>
 		/// %D.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("%D")]
-		[Description("%D")]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.DKey,
+			Description = LocalizedStrings.DKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public SimpleMovingAverage D { get; }
+
+		/// <inheritdoc />
+		public override string ToString() => base.ToString() + $" %K={K.Length} %D={D.Length}";
 	}
 }

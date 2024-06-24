@@ -1,48 +1,49 @@
-#region S# License
-/******************************************************************************************
-NOTICE!!!  This program and source code is owned and licensed by
-StockSharp, LLC, www.stocksharp.com
-Viewing or use of this code requires your acceptance of the license
-agreement found at https://github.com/StockSharp/StockSharp/blob/master/LICENSE
-Removal of this comment is a violation of the license agreement.
-
-Project: StockSharp.Localization.Localization
-File: ProjectDescriptions.cs
-Created: 2015, 11, 11, 2:32 PM
-
-Copyright 2010 by StockSharp, LLC
-*******************************************************************************************/
-#endregion S# License
-namespace StockSharp.Localization
+﻿namespace StockSharp.Localization
 {
+	using System;
+	using System.Reflection;
+
+	using Ecng.Common;
+
 	/// <summary>
 	/// Information for an assembly manifest.
 	/// </summary>
-	public class ProjectDescriptions
+	public static class ProjectDescriptions
 	{
+		static ProjectDescriptions()
+		{
+			var asm = typeof(ProjectDescriptions).Assembly;
+
+			Company = asm.GetAttribute<AssemblyCompanyAttribute>()?.Company;
+			Product = asm.GetAttribute<AssemblyProductAttribute>()?.Product;
+			Copyright = asm.GetAttribute<AssemblyCopyrightAttribute>()?.Copyright;
+			Trademark = asm.GetAttribute<AssemblyTrademarkAttribute>()?.Trademark;
+			Version = asm.GetName().Version;
+		}
+
 		/// <summary>
 		/// Gets company information.
 		/// </summary>
-		public const string Company = "StockSharp LP";
+		public static readonly string Company;
 
 		/// <summary>
 		/// Gets product information.
 		/// </summary>
-		public const string Product = "StockSharp";
+		public static readonly string Product;
 
 		/// <summary>
 		/// Gets copyright information.
 		/// </summary>
-		public const string Copyright = "Copyright @ StockSharp 2019";
+		public static readonly string Copyright;
 
 		/// <summary>
 		/// Gets trademark information.
 		/// </summary>
-		public const string Trademark = "StockSharp";
+		public static readonly string Trademark;
 
 		/// <summary>
 		/// Gets version information.
 		/// </summary>
-		public const string Version = "4.4.17";
+		public static readonly Version Version;
 	}
 }

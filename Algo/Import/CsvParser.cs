@@ -7,8 +7,6 @@ namespace StockSharp.Algo.Import
 	using Ecng.Collections;
 	using Ecng.Common;
 
-	using MoreLinq;
-
 	using StockSharp.Algo.Storages;
 	using StockSharp.Localization;
 	using StockSharp.Logging;
@@ -30,7 +28,7 @@ namespace StockSharp.Algo.Import
 		public IEnumerable<FieldMapping> Fields { get; }
 
 		/// <summary>
-		/// Extended info <see cref="Message.ExtensionInfo"/> storage.
+		/// Extended info storage.
 		/// </summary>
 		public IExtendedInfoStorageItem ExtendedInfoStorageItem { get; set; }
 
@@ -79,6 +77,23 @@ namespace StockSharp.Algo.Import
 			}
 		}
 
+		private string _lineSeparator = StringHelper.RN;
+
+		/// <summary>
+		/// Line separator.
+		/// </summary>
+		public string LineSeparator
+		{
+			get => _lineSeparator;
+			set
+			{
+				if (value.IsEmpty())
+					throw new ArgumentNullException(nameof(value));
+
+				_lineSeparator = value;
+			}
+		}
+
 		private int _skipFromHeader;
 
 		/// <summary>
@@ -90,7 +105,7 @@ namespace StockSharp.Algo.Import
 			set
 			{
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_skipFromHeader = value;
 			}
@@ -117,8 +132,8 @@ namespace StockSharp.Algo.Import
 		{
 			var columnSeparator = ColumnSeparator.ReplaceIgnoreCase("TAB", "\t");
 
-			using (new Scope<TimeZoneInfo>(TimeZone))
-			using (var reader = new CsvFileReader(fileName) { Delimiter = columnSeparator[0] })
+			using (TimeZone.ToScope())
+			using (var reader = new CsvFileReader(fileName, LineSeparator) { Delimiter = columnSeparator[0] })
 			{
 				var skipLines = SkipFromHeader;
 				var lineIndex = 0;
@@ -135,10 +150,16 @@ namespace StockSharp.Algo.Import
 				var quoteMsg = isDepth ? new QuoteChangeMessage() : null;
 				var bids = isDepth ? new List<QuoteChange>() : null;
 				var asks = isDepth ? new List<QuoteChange>() : null;
+				var hasPos = false;
 
 				void AddQuote(TimeQuoteChange quote)
 				{
-					(quote.Side == Sides.Buy ? bids : asks).Add(quote);
+					var qq = quote.Quote;
+
+					if (qq.StartPosition != default || qq.EndPosition != default)
+						hasPos = true;
+
+					(quote.Side == Sides.Buy ? bids : asks).Add(qq);
 				}
 
 				void FillQuote(TimeQuoteChange quote)
@@ -154,7 +175,10 @@ namespace StockSharp.Algo.Import
 				{
 					quoteMsg.Bids = bids.ToArray();
 					quoteMsg.Asks = asks.ToArray();
+					quoteMsg.HasPositions = hasPos;
 				}
+
+				var adapters = new Dictionary<Type, IMessageAdapter>();
 
 				while (reader.ReadRow(cells))
 				{
@@ -169,10 +193,12 @@ namespace StockSharp.Algo.Import
 
 					dynamic instance = CreateInstance(isDepth, isSecurities);
 
+					var mappings = new Dictionary<string, SecurityIdMapping>(StringComparer.InvariantCultureIgnoreCase);
+
 					foreach (var field in fields)
 					{
 						if (field.Order >= cells.Count)
-							throw new InvalidOperationException(LocalizedStrings.Str2869Params.Put(field.DisplayName, field.Order, cells.Count));
+							throw new InvalidOperationException(LocalizedStrings.IndexMoreThanLen.Put(field.DisplayName, field.Order, cells.Count));
 
 						try
 						{
@@ -182,7 +208,19 @@ namespace StockSharp.Algo.Import
 									field.ApplyDefaultValue(instance);
 							}
 							else
-								field.ApplyFileValue(instance, cells[field.Order.Value]);
+							{
+								var cell = cells[field.Order.Value];
+
+								if (field.IsAdapter)
+								{
+									var adapter = adapters.SafeAdd(field.AdapterType, key => key.CreateAdapter());
+									var info = mappings.SafeAdd(adapter.StorageName, key => new SecurityIdMapping());
+									
+									field.ApplyFileValue(info, cell);
+								}
+								else
+									field.ApplyFileValue(instance, cell);
+							}
 						}
 						catch (Exception ex)
 						{
@@ -190,24 +228,52 @@ namespace StockSharp.Algo.Import
 						}
 					}
 
-					if (!(instance is SecurityMessage secMsg))
+					if (instance is not SecurityMessage secMsg)
 					{
 						switch (instance)
 						{
 							case ExecutionMessage execMsg:
-								execMsg.ExecutionType = (ExecutionTypes)DataType.Arg;
+								execMsg.DataTypeEx = DataType;
 								break;
 							case CandleMessage candleMsg:
 								candleMsg.State = CandleStates.Finished;
 								break;
 						}
 					}
-					else if (secMsg.SecurityId.SecurityCode.IsEmpty() || secMsg.SecurityId.BoardCode.IsEmpty())
+					else
 					{
-						if (!IgnoreNonIdSecurities)
-							this.AddErrorLog(LocalizedStrings.LineNoSecurityId.Put(reader.CurrLine));
+						if (secMsg.SecurityId.SecurityCode.IsEmpty() || secMsg.SecurityId.BoardCode.IsEmpty())
+						{
+							if (!IgnoreNonIdSecurities)
+								this.AddErrorLog(LocalizedStrings.LineNoSecurityId.Put(reader.CurrLine));
 
-						continue;
+							continue;
+						}
+						else
+						{
+							foreach (var pair in mappings)
+							{
+								var info = pair.Value;
+
+								if (info.AdapterId.SecurityCode.IsEmpty())
+									continue;
+
+								if (info.AdapterId.BoardCode.IsEmpty())
+								{
+									var adapterId = info.AdapterId;
+									adapterId.BoardCode = secMsg.SecurityId.BoardCode;
+									info.AdapterId = adapterId;
+								}
+
+								info.StockSharpId = secMsg.SecurityId;
+
+								yield return new SecurityMappingMessage
+								{
+									StorageName = pair.Key,
+									Mapping = info,
+								};
+							}
+						}
 					}
 
 					if (quoteMsg != null)
@@ -232,6 +298,7 @@ namespace StockSharp.Algo.Import
 								quoteMsg = new QuoteChangeMessage();
 								bids = new List<QuoteChange>();
 								asks = new List<QuoteChange>();
+								hasPos = false;
 								FillQuote(quote);
 							}
 						}
@@ -258,8 +325,8 @@ namespace StockSharp.Algo.Import
 				? new TimeQuoteChange()
 				: DataType.MessageType.CreateInstance<object>();
 
-			if (isSecurities && ExtendedInfoStorageItem != null)
-				((SecurityMessage)instance).ExtensionInfo = new Dictionary<string, object>(StringComparer.InvariantCultureIgnoreCase);
+			//if (isSecurities && ExtendedInfoStorageItem != null)
+			//	((SecurityMessage)instance).ExtensionInfo = new Dictionary<string, object>(StringComparer.InvariantCultureIgnoreCase);
 
 			return instance;
 		}

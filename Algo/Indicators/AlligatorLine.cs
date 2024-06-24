@@ -13,9 +13,11 @@ Created: 2015, 11, 11, 2:32 PM
 Copyright 2010 by StockSharp, LLC
 *******************************************************************************************/
 #endregion S# License
+
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Serialization;
 
@@ -24,13 +26,12 @@ namespace StockSharp.Algo.Indicators
 	/// <summary>
 	/// The realization of one of indicator lines Alligator (Jaw, Teeth, and Lips).
 	/// </summary>
-	[Browsable(false)]
+	[IndicatorHidden]
 	public class AlligatorLine : LengthIndicator<decimal>
 	{
 		private readonly MedianPrice _medianPrice;
 
 		private readonly SmoothedMovingAverage _sma;
-		//private readonly SimpleMovingAverage _sma;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AlligatorLine"/>.
@@ -47,9 +48,11 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Shift to the future.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str841Key)]
-		[DescriptionLoc(LocalizedStrings.Str842Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ShiftKey,
+			Description = LocalizedStrings.ShiftToFutureKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public int Shift
 		{
 			get => _shift;
@@ -71,49 +74,39 @@ namespace StockSharp.Algo.Indicators
 			base.Reset();
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => Buffer.Count > Shift;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => Buffer.Count > Shift;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			//если кол-во в буфере больше Shift, то первое значение отдали в прошлый раз, удалим его.
-			if (Buffer.Count > Shift)
-				Buffer.RemoveAt(0);
-
 			var smaResult = _sma.Process(_medianPrice.Process(input));
 			if (_sma.IsFormed & input.IsFinal)
-				Buffer.Add(smaResult.GetValue<decimal>());
+			{
+				//если кол-во в буфере больше Shift, то первое значение отдали в прошлый раз, удалим его.
+				if (Buffer.Count > Shift)
+					Buffer.PopFront();
+
+				Buffer.PushBack(smaResult.GetValue<decimal>());
+			}
 
 			return Buffer.Count > Shift
-				? new DecimalIndicatorValue(this, Buffer[0])
+				? new DecimalIndicatorValue(this, Buffer[input.IsFinal ? 0 : Math.Min(1, Buffer.Count - 1)])
 				: new DecimalIndicatorValue(this);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
-			Shift = settings.GetValue<int>(nameof(Shift));
+			base.Load(storage);
+			Shift = storage.GetValue<int>(nameof(Shift));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
-			settings.SetValue(nameof(Shift), Shift);
+			base.Save(storage);
+			storage.SetValue(nameof(Shift), Shift);
 		}
 	}
 }

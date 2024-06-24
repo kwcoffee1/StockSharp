@@ -16,36 +16,23 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Strategies
 {
 	using System;
-	using System.Collections.Generic;
 	using System.ComponentModel;
-	using System.Linq;
 
-	using Ecng.Collections;
 	using Ecng.Common;
-	using Ecng.Configuration;
-	using Ecng.Serialization;
 
-	using MoreLinq;
-
-	using StockSharp.Algo.Candles;
-	using StockSharp.Algo.Storages;
-	using StockSharp.Algo.Strategies.Messages;
-	using StockSharp.Algo.Testing;
 	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
 	using StockSharp.Localization;
 	using StockSharp.Logging;
+	using StockSharp.Algo.Strategies.Protective;
+	using StockSharp.Algo.Strategies.Quoting;
+	using StockSharp.Algo.Derivatives;
 
 	/// <summary>
 	/// Extension class for <see cref="Strategy"/>.
 	/// </summary>
-	public static class StrategyHelper
+	public static partial class StrategyHelper
 	{
-		/// <summary>
-		/// Allow trading key.
-		/// </summary>
-		public const string AllowTradingKey = "AllowTrading";
-
 		/// <summary>
 		/// To create initialized object of buy order at market price.
 		/// </summary>
@@ -57,7 +44,7 @@ namespace StockSharp.Algo.Strategies
 		/// </remarks>
 		public static Order BuyAtMarket(this Strategy strategy, decimal? volume = null)
 		{
-			return strategy.CreateOrder(Sides.Buy, null, volume);
+			return strategy.CreateOrder(Sides.Buy, default, volume);
 		}
 
 		/// <summary>
@@ -71,7 +58,7 @@ namespace StockSharp.Algo.Strategies
 		/// </remarks>
 		public static Order SellAtMarket(this Strategy strategy, decimal? volume = null)
 		{
-			return strategy.CreateOrder(Sides.Sell, null, volume);
+			return strategy.CreateOrder(Sides.Sell, default, volume);
 		}
 
 		/// <summary>
@@ -108,32 +95,27 @@ namespace StockSharp.Algo.Strategies
 		/// To create the initialized order object.
 		/// </summary>
 		/// <param name="strategy">Strategy.</param>
-		/// <param name="direction">Order side.</param>
+		/// <param name="side">Order side.</param>
 		/// <param name="price">The price. If <see langword="null" /> value is passed, the order is registered at market price.</param>
 		/// <param name="volume">The volume. If <see langword="null" /> value is passed, then <see cref="Strategy.Volume"/> value is used.</param>
 		/// <returns>The initialized order object.</returns>
 		/// <remarks>
 		/// The order is not registered, only the object is created.
 		/// </remarks>
-		public static Order CreateOrder(this Strategy strategy, Sides direction, decimal? price, decimal? volume = null)
+		public static Order CreateOrder(this Strategy strategy, Sides side, decimal price, decimal? volume = null)
 		{
 			if (strategy == null)
 				throw new ArgumentNullException(nameof(strategy));
 
-			var security = strategy.Security;
-
-			if (security == null)
-				throw new InvalidOperationException(LocalizedStrings.Str1403Params.Put(strategy.Name));
-
 			var order = new Order
 			{
-				Portfolio = strategy.Portfolio,
-				Security = strategy.Security,
-				Direction = direction,
+				Portfolio = strategy.GetPortfolio(),
+				Security = strategy.GetSecurity(),
+				Side = side,
 				Volume = volume ?? strategy.Volume,
 			};
 
-			if (price == null)
+			if (price == 0)
 			{
 				//if (security.Board.IsSupportMarketOrders)
 				order.Type = OrderTypes.Market;
@@ -141,7 +123,7 @@ namespace StockSharp.Algo.Strategies
 				//	order.Price = strategy.GetMarketPrice(direction) ?? 0;
 			}
 			else
-				order.Price = price.Value;
+				order.Price = price;
 
 			return order;
 		}
@@ -169,73 +151,11 @@ namespace StockSharp.Algo.Strategies
 
 				if (order.Type != OrderTypes.Market)
 				{
-					order.Price += (order.Direction == Sides.Buy ? slippage : -slippage);
+					order.Price += (order.Side == Sides.Buy ? slippage : -slippage);
 				}
 
 				strategy.RegisterOrder(order);
 			}
-		}
-
-		private const string _candleManagerKey = "CandleManager";
-
-		/// <summary>
-		/// To get the candle manager, associated with the passed strategy.
-		/// </summary>
-		/// <param name="strategy">Strategy.</param>
-		/// <returns>The candles manager.</returns>
-		public static ICandleManager GetCandleManager(this Strategy strategy)
-		{
-			if (strategy == null)
-				throw new ArgumentNullException(nameof(strategy));
-
-			return strategy.Environment.GetValue<ICandleManager>(_candleManagerKey);
-		}
-
-		/// <summary>
-		/// To set the candle manager for the strategy.
-		/// </summary>
-		/// <param name="strategy">Strategy.</param>
-		/// <param name="candleManager">The candles manager.</param>
-		public static void SetCandleManager(this Strategy strategy, ICandleManager candleManager)
-		{
-			if (strategy == null)
-				throw new ArgumentNullException(nameof(strategy));
-
-			if (candleManager == null)
-				throw new ArgumentNullException(nameof(candleManager));
-
-			strategy.Environment.SetValue(_candleManagerKey, candleManager);
-		}
-
-		private const string _messageSenderKey = "MessageSender";
-
-		/// <summary>
-		/// To get the message sender, associated with the passed strategy.
-		/// </summary>
-		/// <param name="strategy">Strategy.</param>
-		/// <returns>Message sender.</returns>
-		public static IMessageSender GetMessageSender(this Strategy strategy)
-		{
-			if (strategy == null)
-				throw new ArgumentNullException(nameof(strategy));
-
-			return strategy.Environment.GetValue<IMessageSender>(_messageSenderKey);
-		}
-
-		/// <summary>
-		/// To set the message sender for the strategy.
-		/// </summary>
-		/// <param name="strategy">Strategy.</param>
-		/// <param name="messageSender">Message sender.</param>
-		public static void SetMessageSender(this Strategy strategy, IMessageSender messageSender)
-		{
-			if (strategy == null)
-				throw new ArgumentNullException(nameof(strategy));
-
-			if (messageSender == null)
-				throw new ArgumentNullException(nameof(messageSender));
-
-			strategy.Environment.SetValue(_messageSenderKey, messageSender);
 		}
 
 		private const string _isEmulationModeKey = "IsEmulationMode";
@@ -245,106 +165,43 @@ namespace StockSharp.Algo.Strategies
 		/// </summary>
 		/// <param name="strategy">Strategy.</param>
 		/// <returns>If the paper trading mode is used - <see langword="true" />, otherwise - <see langword="false" />.</returns>
+		[Obsolete("Use Strategy.IsBacktesting property.")]
 		public static bool GetIsEmulation(this Strategy strategy)
 		{
 			return strategy.Environment.GetValue(_isEmulationModeKey, false);
 		}
 
 		/// <summary>
-		/// To get the strategy start-up mode (paper trading or real).
+		/// To set the strategy start-up mode (paper trading or real).
 		/// </summary>
 		/// <param name="strategy">Strategy.</param>
 		/// <param name="isEmulation">If the paper trading mode is used - <see langword="true" />, otherwise - <see langword="false" />.</param>
+		[Obsolete("Use Strategy.IsBacktesting property.")]
 		public static void SetIsEmulation(this Strategy strategy, bool isEmulation)
 		{
 			strategy.Environment.SetValue(_isEmulationModeKey, isEmulation);
 		}
 
+		private const string _optionDeskKey = "OptionDesk";
+
 		/// <summary>
-		/// To get the strategy operation mode (initialization or trade).
+		/// To get the <see cref="IOptionDesk"/>.
 		/// </summary>
 		/// <param name="strategy">Strategy.</param>
-		/// <returns>If initialization is performed - <see langword="true" />, otherwise - <see langword="false" />.</returns>
-		public static bool GetAllowTrading(this Strategy strategy)
+		/// <returns><see cref="IOptionDesk"/>.</returns>
+		public static IOptionDesk GetOptionDesk(this Strategy strategy)
 		{
-			return strategy.Environment.GetValue(AllowTradingKey, false);
+			return strategy.Environment.GetValue<IOptionDesk>(_optionDeskKey);
 		}
 
 		/// <summary>
-		/// To set the strategy operation mode (initialization or trade).
+		/// To set the <see cref="IOptionDesk"/>.
 		/// </summary>
 		/// <param name="strategy">Strategy.</param>
-		/// <param name="isInitialization">If initialization is performed - <see langword="true" />, otherwise - <see langword="false" />.</param>
-		public static void SetAllowTrading(this Strategy strategy, bool isInitialization)
+		/// <param name="desk"><see cref="IOptionDesk"/>.</param>
+		public static void SetIsEmulation(this Strategy strategy, IOptionDesk desk)
 		{
-			strategy.Environment.SetValue(AllowTradingKey, isInitialization);
-			strategy.RaiseParametersChanged(AllowTradingKey);
-		}
-
-		/// <summary>
-		/// To restore the strategy state.
-		/// </summary>
-		/// <param name="strategy">Strategy.</param>
-		/// <param name="storage">Market data storage.</param>
-		/// <remarks>
-		/// This method is used to load statistics, orders and trades.
-		/// The data storage shall include the following parameters:
-		/// 1. Settings (SettingsStorage) - statistics settings.
-		/// 2. Statistics(SettingsStorage) - saved state of statistics.
-		/// 3. Orders (IDictionary[Order, IEnumerable[MyTrade]]) - orders and corresponding trades.
-		/// 4. Positions (IEnumerable[Position]) - strategy positions.
-		/// If any of the parameters is missing, data will not be restored.
-		/// </remarks>
-		public static void LoadState(this Strategy strategy, SettingsStorage storage)
-		{
-			if (strategy == null)
-				throw new ArgumentNullException(nameof(strategy));
-
-			if (storage == null)
-				throw new ArgumentNullException(nameof(storage));
-
-			var settings = storage.GetValue<SettingsStorage>("Settings");
-			if (settings != null && settings.Count != 0)
-			{
-				var connector = strategy.Connector ?? ConfigManager.TryGetService<IConnector>();
-
-				if (connector != null && settings.Contains("security"))
-					strategy.Security = connector.LookupById(settings.GetValue<string>("security"));
-
-				if (connector != null && settings.Contains("portfolio"))
-					strategy.Portfolio = connector.LookupByPortfolioName(settings.GetValue<string>("portfolio"));
-
-				var id = strategy.Id;
-
-				strategy.Load(settings);
-
-				if (strategy.Id != id)
-					throw new InvalidOperationException(LocalizedStrings.Str1404);
-			}
-
-			var statistics = storage.GetValue<SettingsStorage>("Statistics");
-			if (statistics != null)
-			{
-				foreach (var parameter in strategy.StatisticManager.Parameters.Where(parameter => statistics.ContainsKey(parameter.Name)))
-				{
-					parameter.Load(statistics.GetValue<SettingsStorage>(parameter.Name));
-				}
-			}
-
-			var orders = storage.GetValue<IDictionary<Order, IEnumerable<MyTrade>>>("Orders");
-			if (orders != null)
-			{
-				foreach (var pair in orders)
-				{
-					strategy.AttachOrder(pair.Key, pair.Value);
-				}
-			}
-
-			var positions = storage.GetValue<IEnumerable<KeyValuePair<Tuple<SecurityId, string>, decimal>>>("Positions");
-			if (positions != null)
-			{
-				strategy.PositionManager.Positions = positions;
-			}
+			strategy.Environment.SetValue(_optionDeskKey, desk);
 		}
 
 		/// <summary>
@@ -375,114 +232,6 @@ namespace StockSharp.Algo.Strategies
 
 		//	return strategy.Security.GetMarketPrice(strategy.SafeGetConnector(), side);
 		//}
-
-		/// <summary>
-		/// To get the tracing-based order identifier.
-		/// </summary>
-		/// <param name="order">Order.</param>
-		/// <returns>The tracing-based order identifier.</returns>
-		public static string GetTraceId(this Order order)
-		{
-			return "{0} (0x{1:X})".Put(order.TransactionId, order.GetHashCode());
-		}
-
-		private sealed class EquityStrategy : Strategy
-		{
-			private readonly Dictionary<DateTimeOffset, Order[]> _orders;
-			private readonly Dictionary<Tuple<Security, Portfolio>, Strategy> _childStrategies;
-
-			public EquityStrategy(IEnumerable<Order> orders, IDictionary<Security, decimal> openedPositions)
-			{
-				_orders = orders.GroupBy(o => o.Time).ToDictionary(g => g.Key, g => g.ToArray());
-
-				_childStrategies = orders.ToDictionary(GetKey, o => new Strategy
-				{
-					Portfolio = o.Portfolio,
-					Security = o.Security,
-					Position = openedPositions.TryGetValue2(o.Security) ?? 0,
-				});
-
-				ChildStrategies.AddRange(_childStrategies.Values);
-			}
-
-			protected override void OnStarted()
-			{
-				base.OnStarted();
-
-				SafeGetConnector()
-					.WhenTimeCome(_orders.Keys)
-					.Do(time => _orders[time].ForEach(o => _childStrategies[GetKey(o)].RegisterOrder(o)))
-					.Apply(this);
-			}
-
-			private static Tuple<Security, Portfolio> GetKey(Order order)
-			{
-				return Tuple.Create(order.Security, order.Portfolio);
-			}
-		}
-
-		/// <summary>
-		/// To emulate orders on history.
-		/// </summary>
-		/// <param name="orders">Orders to be emulated on history.</param>
-		/// <param name="storageRegistry">The external storage for access to history data.</param>
-		/// <param name="openedPositions">Trades, describing initial open positions.</param>
-		/// <returns>The virtual strategy, containing progress of paper trades.</returns>
-		public static Strategy EmulateOrders(this IEnumerable<Order> orders, IStorageRegistry storageRegistry, IDictionary<Security, decimal> openedPositions)
-		{
-			if (openedPositions == null)
-				throw new ArgumentNullException(nameof(openedPositions));
-
-			if (storageRegistry == null)
-				throw new ArgumentNullException(nameof(storageRegistry));
-
-			if (orders == null)
-				throw new ArgumentNullException(nameof(orders));
-
-			var array = orders.ToArray();
-
-			if (array.IsEmpty())
-				throw new ArgumentOutOfRangeException(nameof(orders));
-
-			using (var connector = new RealTimeEmulationTrader<HistoryMessageAdapter>(new HistoryMessageAdapter(new IncrementalIdGenerator(), new CollectionSecurityProvider(array.Select(o => o.Security).Distinct()))
-			{
-				StorageRegistry = storageRegistry
-			}))
-			{
-				var from = array.Min(o => o.Time);
-				var to = from.EndOfDay();
-
-				var strategy = new EquityStrategy(array, openedPositions) { Connector = connector };
-
-				var waitHandle = new SyncObject();
-
-				//connector.UnderlyngMarketDataAdapter.StateChanged += () =>
-				//{
-				//	if (connector.UnderlyngMarketDataAdapter.State == EmulationStates.Started)
-				//		strategy.Start();
-
-				//	if (connector.UnderlyngMarketDataAdapter.State == EmulationStates.Stopped)
-				//	{
-				//		strategy.Stop();
-
-				//		waitHandle.Pulse();
-				//	}
-				//};
-
-				connector.UnderlyngMarketDataAdapter.StartDate = from;
-				connector.UnderlyngMarketDataAdapter.StopDate = to;
-
-				connector.Connect();
-
-				//lock (waitHandle)
-				//{
-				//	if (connector.UnderlyngMarketDataAdapter.State != EmulationStates.Stopped)
-				//		waitHandle.Wait();
-				//}
-
-				return strategy;
-			}
-		}
 
 		#region Strategy rules
 
@@ -535,7 +284,7 @@ namespace StockSharp.Algo.Strategies
 			public PositionManagerStrategyRule(Strategy strategy)
 				: this(strategy, v => true)
 			{
-				Name = LocalizedStrings.Str1250;
+				Name = LocalizedStrings.Positions;
 			}
 
 			public PositionManagerStrategyRule(Strategy strategy, Func<decimal, bool> changed)
@@ -564,7 +313,7 @@ namespace StockSharp.Algo.Strategies
 			public NewMyTradeStrategyRule(Strategy strategy)
 				: base(strategy)
 			{
-				Name = LocalizedStrings.Str1251 + " " + strategy;
+				Name = LocalizedStrings.NewTrades + " " + strategy;
 				Strategy.NewMyTrade += OnStrategyNewMyTrade;
 			}
 
@@ -585,15 +334,13 @@ namespace StockSharp.Algo.Strategies
 			public OrderRegisteredStrategyRule(Strategy strategy)
 				: base(strategy)
 			{
-				Name = LocalizedStrings.Str1252 + " " + strategy;
+				Name = LocalizedStrings.Orders + " " + strategy;
 				Strategy.OrderRegistered += Activate;
-				Strategy.StopOrderRegistered += Activate;
 			}
 
 			protected override void DisposeManaged()
 			{
 				Strategy.OrderRegistered -= Activate;
-				Strategy.StopOrderRegistered -= Activate;
 				base.DisposeManaged();
 			}
 		}
@@ -603,15 +350,13 @@ namespace StockSharp.Algo.Strategies
 			public OrderChangedStrategyRule(Strategy strategy)
 				: base(strategy)
 			{
-				Name = LocalizedStrings.Str1253 + " " + strategy;
+				Name = LocalizedStrings.Orders + " " + strategy;
 				Strategy.OrderChanged += Activate;
-				Strategy.StopOrderChanged += Activate;
 			}
 
 			protected override void DisposeManaged()
 			{
 				Strategy.OrderChanged -= Activate;
-				Strategy.StopOrderChanged -= Activate;
 				base.DisposeManaged();
 			}
 		}
@@ -675,7 +420,7 @@ namespace StockSharp.Algo.Strategies
 			{
 				_processChildStrategyErrors = processChildStrategyErrors;
 
-				Name = strategy + LocalizedStrings.Str1254;
+				Name = strategy + LocalizedStrings.Error;
 				Strategy.Error += OnError;
 			}
 
@@ -752,7 +497,7 @@ namespace StockSharp.Algo.Strategies
 
 			return new PositionManagerStrategyRule(strategy, pos => pos < finishPosition)
 			{
-				Name = LocalizedStrings.Str1255Params.Put(finishPosition)
+				Name = $"Pos < {value}"
 			};
 		}
 
@@ -774,7 +519,7 @@ namespace StockSharp.Algo.Strategies
 
 			return new PositionManagerStrategyRule(strategy, pos => pos > finishPosition)
 			{
-				Name = LocalizedStrings.Str1256Params.Put(finishPosition)
+				Name = $"Pos > {value}"
 			};
 		}
 
@@ -796,7 +541,7 @@ namespace StockSharp.Algo.Strategies
 
 			return new PnLManagerStrategyRule(strategy, pos => pos < finishPosition)
 			{
-				Name = LocalizedStrings.Str1257Params.Put(finishPosition)
+				Name = $"P&L < {value}"
 			};
 		}
 
@@ -818,7 +563,7 @@ namespace StockSharp.Algo.Strategies
 
 			return new PnLManagerStrategyRule(strategy, pos => pos > finishPosition)
 			{
-				Name = LocalizedStrings.Str1258Params.Put(finishPosition)
+				Name = $"P&L > {value}"
 			};
 		}
 
@@ -841,7 +586,7 @@ namespace StockSharp.Algo.Strategies
 		{
 			return new ProcessStateChangedStrategyRule(strategy, s => s == ProcessStates.Started)
 			{
-				Name = strategy + LocalizedStrings.Str1259,
+				Name = strategy + LocalizedStrings.Started,
 			};
 		}
 
@@ -854,7 +599,7 @@ namespace StockSharp.Algo.Strategies
 		{
 			return new ProcessStateChangedStrategyRule(strategy, s => s == ProcessStates.Stopping)
 			{
-				Name = strategy + LocalizedStrings.Str1260,
+				Name = strategy + LocalizedStrings.Stopping,
 			};
 		}
 
@@ -867,7 +612,7 @@ namespace StockSharp.Algo.Strategies
 		{
 			return new ProcessStateChangedStrategyRule(strategy, s => s == ProcessStates.Stopped)
 			{
-				Name = strategy + LocalizedStrings.Str1261,
+				Name = strategy + LocalizedStrings.Stopped,
 			};
 		}
 
@@ -891,7 +636,7 @@ namespace StockSharp.Algo.Strategies
 		{
 			return new PropertyChangedStrategyRule(strategy, s => s.ErrorState == LogLevels.Warning)
 			{
-				Name = strategy + LocalizedStrings.Str1262,
+				Name = strategy + LocalizedStrings.Warning,
 			};
 		}
 
@@ -961,29 +706,201 @@ namespace StockSharp.Algo.Strategies
 			if (rule == null)
 				throw new ArgumentNullException(nameof(rule));
 
-			if (!(rule.Container is Strategy strategy))
-				throw new ArgumentException(LocalizedStrings.Str1263Params.Put(rule.Name), nameof(rule));
+			if (rule.Container is not Strategy strategy)
+				throw new ArgumentException(LocalizedStrings.RuleNotRegisteredInStrategy.Put(rule), nameof(rule));
 
 			return strategy;
 		}
 
 		/// <summary>
-		/// Convert <see cref="Type"/> to <see cref="StrategyTypeMessage"/>.
+		/// To open the position via quoting.
 		/// </summary>
-		/// <param name="strategyType">Strategy type.</param>
-		/// <param name="transactionId">ID of the original message <see cref="StrategyLookupMessage.TransactionId"/> for which this message is a response.</param>
-		/// <returns>The message contains information about strategy type.</returns>
-		public static StrategyTypeMessage ToTypeMessage(this Type strategyType, long transactionId = 0)
+		/// <param name="strategy">Strategy.</param>
+		/// <param name="finishPosition">The position value that should be reached. A negative value means the short position.</param>
+		public static void OpenPositionByQuoting(this Strategy strategy, decimal finishPosition)
 		{
-			if (strategyType == null)
-				throw new ArgumentNullException(nameof(strategyType));
+			if (strategy == null)
+				throw new ArgumentNullException(nameof(strategy));
 
-			return new StrategyTypeMessage
+			var position = strategy.Position;
+
+			if (finishPosition == position)
+				return;
+
+			var delta = (finishPosition - position).Abs();
+
+			var quoting = new MarketQuotingStrategy(finishPosition < position ? Sides.Sell : Sides.Buy, delta);
+			strategy.ChildStrategies.Add(quoting);
+		}
+
+		/// <summary>
+		/// To close the open position via quoting.
+		/// </summary>
+		/// <param name="strategy">Strategy.</param>
+		public static void ClosePositionByQuoting(this Strategy strategy)
+		{
+			if (strategy == null)
+				throw new ArgumentNullException(nameof(strategy));
+
+			var position = strategy.Position;
+
+			if (position == 0)
+				return;
+
+			var quoting = new MarketQuotingStrategy(position > 0 ? Sides.Sell : Sides.Buy, position.Abs());
+			strategy.ChildStrategies.Add(quoting);
+		}
+
+		///// <summary>
+		///// To create the action protecting the order by strategies <see cref="TakeProfitStrategy"/> and <see cref="StopLossStrategy"/>.
+		///// </summary>
+		///// <param name="rule">The rule associated with the order.</param>
+		///// <param name="takePriceDelta">The delta from the price of the protected order, by which the protective take profit order is to be registered.</param>
+		///// <param name="stopPriceDelta">The delta from the price of the protected order, by which the protective stop loss order is to be registered.</param>
+		///// <returns>Rule.</returns>
+		//public static MarketRule<Order, Order> Protect(this MarketRule<Order, Order> rule, Unit takePriceDelta, Unit stopPriceDelta)
+		//{
+		//	if (rule == null)
+		//		throw new ArgumentNullException(nameof(rule));
+
+		//	return rule.Do(order =>
+		//		order
+		//			.WhenNewTrades()
+		//			.Protect(takePriceDelta, stopPriceDelta)
+		//			.Apply(GetRuleStrategy(rule)));
+		//}
+
+		/// <summary>
+		/// To create the action protecting orders by strategies <see cref="TakeProfitStrategy"/> and <see cref="StopLossStrategy"/>.
+		/// </summary>
+		/// <param name="rule">The rule for new orders.</param>
+		/// <param name="takePriceDelta">The delta from the price of the protected order, by which the protective take profit order is to be registered.</param>
+		/// <param name="stopPriceDelta">The delta from the price of the protected order, by which the protective stop loss order is to be registered.</param>
+		/// <returns>Rule.</returns>
+		[Obsolete("Use ProtectiveController class.")]
+		public static MarketRule<Order, MyTrade> Protect(this MarketRule<Order, MyTrade> rule, Unit takePriceDelta, Unit stopPriceDelta)
+		{
+			return rule.Protect(
+				takePriceDelta == null
+					? null
+					: t => new TakeProfitStrategy(t, takePriceDelta),
+				stopPriceDelta == null
+					? null
+					: t => new StopLossStrategy(t, stopPriceDelta));
+		}
+
+		/// <summary>
+		/// To create the action protecting orders by strategies <see cref="TakeProfitStrategy"/> and <see cref="StopLossStrategy"/>.
+		/// </summary>
+		/// <param name="rule">The rule for new orders.</param>
+		/// <param name="takeProfit">The function that creates the strategy <see cref="TakeProfitStrategy"/> by the order.</param>
+		/// <param name="stopLoss">The function that creates the strategy <see cref="StopLossStrategy"/> by the order.</param>
+		/// <returns>Rule.</returns>
+		[Obsolete("Use ProtectiveController class.")]
+		public static MarketRule<Order, MyTrade> Protect(this MarketRule<Order, MyTrade> rule, Func<MyTrade, TakeProfitStrategy> takeProfit, Func<MyTrade, StopLossStrategy> stopLoss)
+		{
+			if (rule == null)
+				throw new ArgumentNullException(nameof(rule));
+
+			if (takeProfit == null && stopLoss == null)
+				throw new ArgumentException(LocalizedStrings.NoTakeAndStop);
+
+			Strategy CreateProtection(MyTrade trade)
 			{
-				StrategyTypeId = strategyType.GUID,
-				StrategyName = strategyType.Name,
-				OriginalTransactionId = transactionId,
+				if (takeProfit != null && stopLoss != null)
+					return new TakeProfitStopLossStrategy(takeProfit(trade), stopLoss(trade));
+
+				if (takeProfit != null)
+					return takeProfit(trade);
+				else
+					return stopLoss(trade);
+			}
+
+			rule.Do(trade => GetRuleStrategy(rule).ChildStrategies.Add(CreateProtection(trade)));
+
+			return rule;
+		}
+
+		[Obsolete("Use ProtectiveController class.")]
+		private sealed class ActivatedStrategyRule : MarketRule<ProtectiveStrategy, ProtectiveStrategy>
+		{
+			private readonly ProtectiveStrategy _strategy;
+
+			public ActivatedStrategyRule(ProtectiveStrategy strategy)
+				: base(strategy)
+			{
+				Name = LocalizedStrings.Activation;
+
+				_strategy = strategy;
+				_strategy.Activated += Activate;
+			}
+
+			protected override void DisposeManaged()
+			{
+				_strategy.Activated -= Activate;
+				base.DisposeManaged();
+			}
+		}
+
+		/// <summary>
+		/// To create the rule for the event <see cref="ProtectiveStrategy.Activated"/>.
+		/// </summary>
+		/// <param name="strategy">The strategy, by which the event will be monitored.</param>
+		/// <returns>Rule.</returns>
+		[Obsolete("Use ProtectiveController class.")]
+		public static IMarketRule WhenActivated(this ProtectiveStrategy strategy)
+		{
+			return new ActivatedStrategyRule(strategy);
+		}
+
+		/// <summary>
+		/// <see cref="Strategy.IsFormed"/> and <see cref="Strategy.IsOnline"/>.
+		/// </summary>
+		/// <param name="strategy"><see cref="Strategy"/></param>
+		/// <returns>Check result.</returns>
+		public static bool IsFormedAndOnline(this Strategy strategy)
+		{
+			if (strategy is null)
+				throw new ArgumentNullException(nameof(strategy));
+
+			return strategy.IsFormed && strategy.IsOnline;
+		}
+
+		/// <summary>
+		/// <see cref="IsFormedAndOnline"/> and <see cref="Strategy.TradingMode"/>.
+		/// </summary>
+		/// <param name="strategy"><see cref="Strategy"/></param>
+		/// <param name="required">Required action.</param>
+		/// <returns>Check result.</returns>
+		public static bool IsFormedAndOnlineAndAllowTrading(this Strategy strategy, StrategyTradingModes required = StrategyTradingModes.Full)
+		{
+			if (strategy is null)
+				throw new ArgumentNullException(nameof(strategy));
+
+			if (!strategy.IsFormedAndOnline() || strategy.TradingMode == StrategyTradingModes.Disabled)
+				return false;
+
+			return required switch
+			{
+				StrategyTradingModes.Full => strategy.TradingMode == StrategyTradingModes.Full,
+				StrategyTradingModes.CancelOrdersOnly => true,
+				StrategyTradingModes.ReducePositionOnly => strategy.TradingMode != StrategyTradingModes.CancelOrdersOnly,
+				_ => throw new ArgumentOutOfRangeException(nameof(required), required, LocalizedStrings.InvalidValue),
 			};
 		}
+
+		/// <summary>
+		/// Get <see cref="Security"/> or throw <see cref="InvalidOperationException"/> if not present.
+		/// </summary>
+		/// <returns><see cref="Security"/></returns>
+		public static Security GetSecurity(this Strategy strategy)
+			=> strategy.CheckOnNull(nameof(strategy)).Security ?? throw new InvalidOperationException(LocalizedStrings.SecurityNotSpecified);
+
+		/// <summary>
+		/// Get <see cref="Portfolio"/> or throw <see cref="InvalidOperationException"/> if not present.
+		/// </summary>
+		/// <returns><see cref="Portfolio"/></returns>
+		public static Portfolio GetPortfolio(this Strategy strategy)
+			=> strategy.CheckOnNull(nameof(strategy)).Portfolio ?? throw new InvalidOperationException(LocalizedStrings.PortfolioNotSpecified);
 	}
 }

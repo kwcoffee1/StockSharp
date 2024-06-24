@@ -16,8 +16,17 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Testing
 {
 	using System;
+	using System.Linq;
+	using System.Collections.Generic;
 
-	//using StockSharp.BusinessEntities;
+	using Ecng.Common;
+	using Ecng.Serialization;
+
+	using StockSharp.Messages;
+	using StockSharp.Algo.Storages;
+	using StockSharp.Logging;
+	using StockSharp.Localization;
+	using StockSharp.BusinessEntities;
 
 	/// <summary>
 	/// The base connection of emulation.
@@ -25,90 +34,167 @@ namespace StockSharp.Algo.Testing
 	public abstract class BaseEmulationConnector : Connector
 	{
 		/// <summary>
-		/// Initialize <see cref="BaseEmulationConnector"/>.
+		/// Initializes a new instance of the <see cref="BaseEmulationConnector"/>.
 		/// </summary>
-		protected BaseEmulationConnector()
+		/// <param name="emulationAdapter">Emulation message adapter.</param>
+		/// <param name="applyHeartbeat">Apply on/off heartbeat mode for the specified adapter.</param>
+		/// <param name="initChannels">Initialize channels.</param>
+		protected BaseEmulationConnector(EmulationMessageAdapter emulationAdapter, bool applyHeartbeat, bool initChannels)
+			: base(
+				new InMemorySecurityStorage(emulationAdapter.CheckOnNull(nameof(emulationAdapter)).Emulator.SecurityProvider),
+				new InMemoryPositionStorage(emulationAdapter.Emulator.PortfolioProvider),
+				emulationAdapter.Emulator.ExchangeInfoProvider, initChannels: initChannels)
 		{
-			EmulationAdapter = new EmulationMessageAdapter(TransactionIdGenerator);
+			Adapter.InnerAdapters.Add(emulationAdapter ?? throw new ArgumentNullException(nameof(emulationAdapter)));
+			Adapter.ApplyHeartbeat(EmulationAdapter, applyHeartbeat);
+
+			Adapter.IsSupportTransactionLog = emulationAdapter.IsSupportTransactionLog;
+
 			TimeChange = false;
+
+			// sync transaction ids with underlying adapter
+			TransactionIdGenerator = emulationAdapter.TransactionIdGenerator;
 		}
+
+		/// <inheritdoc />
+		public override IEnumerable<Portfolio> Portfolios => base.Portfolios.Concat(EmulationAdapter.Emulator.PortfolioProvider.Portfolios).Distinct();
+
+		private DateTimeOffset _currentTime;
+
+		/// <inheritdoc />
+		public override DateTimeOffset CurrentTime => _currentTime;
 
 		/// <summary>
 		/// The adapter, executing messages in <see cref="IMarketEmulator"/>.
 		/// </summary>
-		public EmulationMessageAdapter EmulationAdapter { get; }
+		public EmulationMessageAdapter EmulationAdapter => (EmulationMessageAdapter)Adapter.InnerAdapters.First();
 
-		///// <summary>
-		///// Gets a value indicating whether the re-registration orders via the method <see cref="IConnector.ReRegisterOrder(StockSharp.BusinessEntities.Order,StockSharp.BusinessEntities.Order)"/> as a single transaction.
-		///// </summary>
-		//public override bool IsSupportAtomicReRegister => EmulationAdapter.Emulator.Settings.IsSupportAtomicReRegister;
-
-		private void SendInGeneratorMessage(MarketDataGenerator generator, bool isSubscribe)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			if (generator == null)
-				throw new ArgumentNullException(nameof(generator));
+			if (EmulationAdapter.OwnInnerAdapter)
+				EmulationAdapter.Load(storage, nameof(EmulationAdapter));
 
-			SendInMessage(new GeneratorMessage
-			{
-				IsSubscribe = isSubscribe,
-				SecurityId = generator.SecurityId,
-				Generator = generator,
-				DataType = generator.DataType,
-			});
+			base.Load(storage);
+		}
+
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
+		{
+			if (EmulationAdapter.OwnInnerAdapter)
+				storage.SetValue(nameof(EmulationAdapter), EmulationAdapter.Save());
+
+			base.Save(storage);
+		}
+
+		/// <inheritdoc />
+		protected override void OnProcessMessage(Message message)
+		{
+			// output messages from adapters goes non ordered
+			if (_currentTime < message.LocalTime)
+				_currentTime = message.LocalTime;
+
+			base.OnProcessMessage(message);
+		}
+
+		/// <inheritdoc />
+		public override void ClearCache()
+		{
+			base.ClearCache();
+
+			_currentTime = default;
+		}
+
+		/// <inheritdoc />
+		protected override void DisposeManaged()
+		{
+			if (EmulationAdapter.OwnInnerAdapter)
+				EmulationAdapter.Dispose();
+
+			base.DisposeManaged();
 		}
 
 		/// <summary>
 		/// To register the trades generator.
 		/// </summary>
 		/// <param name="generator">The trades generator.</param>
-		public void RegisterTrades(TradeGenerator generator)
-		{
-			SendInGeneratorMessage(generator, true);
-		}
+		/// <returns>Subscription.</returns>
+		//[Obsolete("Uses custom adapter implementation.")]
+		public Subscription RegisterTrades(TradeGenerator generator)
+			=> SubscribeGenerator(generator);
 
 		/// <summary>
 		/// To delete the trades generator, registered earlier through <see cref="RegisterTrades"/>.
 		/// </summary>
 		/// <param name="generator">The trades generator.</param>
+		[Obsolete("Uses UnSubscribe method.")]
 		public void UnRegisterTrades(TradeGenerator generator)
-		{
-			SendInGeneratorMessage(generator, false);
-		}
+			=> UnSubscribeGenerator(generator);
 
 		/// <summary>
 		/// To register the order books generator.
 		/// </summary>
 		/// <param name="generator">The order books generator.</param>
-		public void RegisterMarketDepth(MarketDepthGenerator generator)
-		{
-			SendInGeneratorMessage(generator, true);
-		}
+		/// <returns>Subscription.</returns>
+		//[Obsolete("Uses custom adapter implementation.")]
+		public Subscription RegisterMarketDepth(MarketDepthGenerator generator)
+			=> SubscribeGenerator(generator);
 
 		/// <summary>
 		/// To delete the order books generator, earlier registered through <see cref="RegisterMarketDepth"/>.
 		/// </summary>
 		/// <param name="generator">The order books generator.</param>
+		[Obsolete("Uses UnSubscribe method.")]
 		public void UnRegisterMarketDepth(MarketDepthGenerator generator)
-		{
-			SendInGeneratorMessage(generator, false);
-		}
+			=> UnSubscribeGenerator(generator);
 
 		/// <summary>
 		/// To register the orders log generator.
 		/// </summary>
 		/// <param name="generator">The orders log generator.</param>
-		public void RegisterOrderLog(OrderLogGenerator generator)
-		{
-			SendInGeneratorMessage(generator, true);
-		}
+		/// <returns>Subscription.</returns>
+		//[Obsolete("Uses custom adapter implementation.")]
+		public Subscription RegisterOrderLog(OrderLogGenerator generator)
+			=> SubscribeGenerator(generator);
 
 		/// <summary>
 		/// To delete the orders log generator, earlier registered through <see cref="RegisterOrderLog"/>.
 		/// </summary>
 		/// <param name="generator">The orders log generator.</param>
+		[Obsolete("Uses UnSubscribe method.")]
 		public void UnRegisterOrderLog(OrderLogGenerator generator)
+			=> UnSubscribeGenerator(generator);
+
+		private Subscription SubscribeGenerator(MarketDataGenerator generator)
 		{
-			SendInGeneratorMessage(generator, false);
+			if (generator == null)
+				throw new ArgumentNullException(nameof(generator));
+
+			var subscription = new Subscription(new GeneratorMessage
+			{
+				TransactionId = TransactionIdGenerator.GetNextId(),
+				IsSubscribe = true,
+				SecurityId = generator.SecurityId,
+				Generator = generator,
+				DataType2 = generator.DataType,
+			}, (SecurityMessage)null);
+
+			Subscribe(subscription);
+
+			return subscription;
+		}
+
+		private void UnSubscribeGenerator(MarketDataGenerator generator)
+		{
+			if (generator is null)
+				throw new ArgumentNullException(nameof(generator));
+
+			var subscription = Subscriptions.FirstOrDefault(s => s.SubscriptionMessage is GeneratorMessage genMsg && genMsg.Generator == generator);
+			
+			if (subscription != null)
+				UnSubscribe(subscription);
+			else
+				this.AddWarningLog(LocalizedStrings.SubscriptionNonExist, generator);
 		}
 	}
 }

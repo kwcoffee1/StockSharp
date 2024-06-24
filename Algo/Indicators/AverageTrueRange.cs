@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -17,18 +17,25 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
-	/// The average true range <see cref="AverageTrueRange.TrueRange"/>.
+	/// The average true range <see cref="Indicators.TrueRange"/>.
 	/// </summary>
-	[DisplayName("ATR")]
-	[DescriptionLoc(LocalizedStrings.Str758Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/atr.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ATRKey,
+		Description = LocalizedStrings.AverageTrueRangeKey)]
+	[Doc("topics/api/indicators/list_of_indicators/atr.html")]
 	public class AverageTrueRange : LengthIndicator<IIndicatorValue>
 	{
-		private bool _isFormed;
-
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AverageTrueRange"/>.
 		/// </summary>
@@ -48,6 +55,9 @@ namespace StockSharp.Algo.Indicators
 			TrueRange = trueRange ?? throw new ArgumentNullException(nameof(trueRange));
 		}
 
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
 		/// <summary>
 		/// Moving Average.
 		/// </summary>
@@ -60,36 +70,25 @@ namespace StockSharp.Algo.Indicators
 		[Browsable(false)]
 		public TrueRange TrueRange { get; }
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _isFormed;
-
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
-
-			_isFormed = false;
 
 			MovingAverage.Length = Length;
 			TrueRange.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			// используем дополнительную переменную IsFormed, 
+			// используем дополнительную переменную IsFormed,
 			// т.к. нужна задержка в один период для корректной инициализации скользящей средней
-			_isFormed = MovingAverage.IsFormed;
+			if (MovingAverage.IsFormed)
+				IsFormed = true;
 
-			return MovingAverage.Process(TrueRange.Process(input));
+			var val = MovingAverage.Process(TrueRange.Process(input));
+			return val.SetValue(this, val.GetValue<decimal>());
 		}
 	}
 }

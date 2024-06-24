@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -18,11 +18,12 @@ namespace StockSharp.Algo.Indicators
 	using System;
 	using System.Collections.Generic;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Linq;
 
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
-	using StockSharp.Algo.Candles;
 	using StockSharp.Localization;
 	using StockSharp.Messages;
 
@@ -30,21 +31,21 @@ namespace StockSharp.Algo.Indicators
 	/// ZigZag.
 	/// </summary>
 	/// <remarks>
-	/// ZigZag traces and combines extreme points of the chart, distanced for not less than specified percentage by the price scale.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/zigzag.html
 	/// </remarks>
-	[DisplayName("ZigZag")]
-	[DescriptionLoc(LocalizedStrings.Str826Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ZigZagKey,
+		Description = LocalizedStrings.ZigZagDescKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/zigzag.html")]
 	public class ZigZag : BaseIndicator
 	{
-		private readonly IList<Candle> _buffer = new List<Candle>();
-		private readonly List<decimal> _lowBuffer = new List<decimal>();
-		private readonly List<decimal> _highBuffer = new List<decimal>();
-		private readonly List<decimal> _zigZagBuffer = new List<decimal>();
+		private readonly List<(decimal low, decimal high)> _buffer = new();
+		private readonly List<decimal> _lowBuffer = new();
+		private readonly List<decimal> _highBuffer = new();
+		private readonly List<decimal> _zigZagBuffer = new();
 
-		private Func<Candle, decimal> _currentValue = candle => candle.ClosePrice;
-		private int _depth;
-		private int _backStep;
 		private bool _needAdd = true;
 
 		/// <summary>
@@ -52,16 +53,21 @@ namespace StockSharp.Algo.Indicators
 		/// </summary>
 		public ZigZag()
 		{
-			BackStep = 3;
-			Depth = 12;
 		}
 
+		/// <inheritdoc />
+		public override int NumValuesToInitialize => 2;
+
+		private int _backStep = 3;
+
 		/// <summary>
-		/// Minimum number of bars between local maximums, minimums.
+		/// Minimum number of candles between local maximums, minimums.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str827Key)]
-		[DescriptionLoc(LocalizedStrings.Str828Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CandlesKey,
+			Description = LocalizedStrings.BackStepKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public int BackStep
 		{
 			get => _backStep;
@@ -75,12 +81,16 @@ namespace StockSharp.Algo.Indicators
 			}
 		}
 
+		private int _depth = 12;
+
 		/// <summary>
-		/// Bars minimum, on which Zigzag will not build a second maximum (or minimum), if it is smaller (or larger) by a deviation of the previous respectively.
+		/// Candles minimum, on which Zigzag will not build a second maximum (or minimum), if it is smaller (or larger) by a deviation of the previous respectively.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str829Key)]
-		[DescriptionLoc(LocalizedStrings.Str830Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.DepthKey,
+			Description = LocalizedStrings.ZigZagDepthKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public int Depth
 		{
 			get => _depth;
@@ -94,13 +104,16 @@ namespace StockSharp.Algo.Indicators
 			}
 		}
 
-		private Unit _deviation = new Unit(0.45m, UnitTypes.Percent);
+		private Unit _deviation = new(0.45m, UnitTypes.Percent);
+
 		/// <summary>
-		/// Minimum number of points between maximums (minimums) of two adjacent bars used by Zigzag indicator to form a local peak (local trough).
+		/// Minimum number of points between maximums (minimums) of two adjacent candles used by Zigzag indicator to form a local peak (local trough).
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str831Key)]
-		[DescriptionLoc(LocalizedStrings.Str832Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.MinimumChangeKey,
+			Description = LocalizedStrings.MinimumChangeDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public Unit Deviation
 		{
 			get => _deviation;
@@ -117,46 +130,62 @@ namespace StockSharp.Algo.Indicators
 			}
 		}
 
-		private Func<Candle, decimal> _highValue = candle => candle.HighPrice;
+		private Level1Fields _highPriceField = Level1Fields.HighPrice;
+
 		/// <summary>
 		/// The converter, returning from the candle a price for search of maximum.
 		/// </summary>
-		[Browsable(false)]
-		public Func<Candle, decimal> HighValueFunc
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.HighPriceKey,
+			Description = LocalizedStrings.HighPriceKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public Level1Fields HighPriceField
 		{
-			get => _highValue;
+			get => _highPriceField;
 			set
 			{
-				_highValue = value;
+				_highPriceField = value;
 				Reset();
 			}
 		}
 
-		private Func<Candle, decimal> _lowValue = candle => candle.LowPrice;
+		private Level1Fields _lowPriceField = Level1Fields.LowPrice;
+
 		/// <summary>
 		/// The converter, returning from the candle a price for search of minimum.
 		/// </summary>
-		[Browsable(false)]
-		public Func<Candle, decimal> LowValueFunc
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LowPriceKey,
+			Description = LocalizedStrings.LowPriceKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public Level1Fields LowPriceField
 		{
-			get => _lowValue;
+			get => _lowPriceField;
 			set
 			{
-				_lowValue = value;
+				_lowPriceField = value;
 				Reset();
 			}
 		}
 
+		private Level1Fields _closePriceField = Level1Fields.ClosePrice;
+
 		/// <summary>
-		/// The converter, returning from the candle a price for the current value.
+		/// The converter, returning from the candle a price for calculations.
 		/// </summary>
-		[Browsable(false)]
-		public Func<Candle, decimal> CurrentValueFunc
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ClosingPriceKey,
+			Description = LocalizedStrings.ClosingPriceKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public Level1Fields ClosePriceField
 		{
-			get => _currentValue;
+			get => _closePriceField;
 			set
 			{
-				_currentValue = value;
+				_closePriceField = value;
 				Reset();
 			}
 		}
@@ -173,9 +202,7 @@ namespace StockSharp.Algo.Indicators
 		[Browsable(false)]
 		public int LastValueShift { get; private set; }
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_needAdd = true;
@@ -188,25 +215,22 @@ namespace StockSharp.Algo.Indicators
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var lowPrice = input.GetValue<decimal>(LowPriceField);
+			var highPrice = input.GetValue<decimal>(HighPriceField);
 
 			if (_needAdd)
 			{
-				_buffer.Insert(0, candle);
+				_buffer.Insert(0, (lowPrice, highPrice));
 				_lowBuffer.Insert(0, 0);
 				_highBuffer.Insert(0, 0);
 				_zigZagBuffer.Insert(0, 0);
 			}
 			else
 			{
-				_buffer[0] = candle;
+				_buffer[0] = (lowPrice, highPrice);
 				_lowBuffer[0] = 0;
 				_highBuffer[0] = 0;
 				_zigZagBuffer[0] = 0;
@@ -239,7 +263,7 @@ namespace StockSharp.Algo.Indicators
 			for (var shift = limit; shift >= 0; shift--)
 			{
 				//--- low
-				var val = _buffer.Skip(shift).Take(Depth).Min(v => _lowValue(v));
+				var val = _buffer.Skip(shift).Take(Depth).Min(t => t.low);
 				if (val == lastLow)
 				{
 					val = 0.0m;
@@ -247,7 +271,7 @@ namespace StockSharp.Algo.Indicators
 				else
 				{
 					lastLow = val;
-					if (_lowValue(_buffer[shift]) - val > 0.0m * val / 100)
+					if (_buffer[shift].low - val > 0.0m * val / 100)
 					{
 						val = 0.0m;
 					}
@@ -263,13 +287,13 @@ namespace StockSharp.Algo.Indicators
 						}
 					}
 				}
-				if (_lowValue(_buffer[shift]) == val)
+				if (_buffer[shift].low == val)
 					_lowBuffer[shift] = val;
 				else
 					_lowBuffer[shift] = 0m;
 
 				//--- high
-				val = _buffer.Skip(shift).Take(Depth).Max(v => _highValue(v));
+				val = _buffer.Skip(shift).Take(Depth).Max(t => t.high);
 				if (val == lastHigh)
 				{
 					val = 0.0m;
@@ -277,7 +301,7 @@ namespace StockSharp.Algo.Indicators
 				else
 				{
 					lastHigh = val;
-					if (val - _highValue(_buffer[shift]) > 0.0m * val / 100)
+					if (val - _buffer[shift].high > 0.0m * val / 100)
 					{
 						val = 0.0m;
 					}
@@ -293,13 +317,13 @@ namespace StockSharp.Algo.Indicators
 						}
 					}
 				}
-				if (_highValue(_buffer[shift]) == val)
+				if (_buffer[shift].high == val)
 					_highBuffer[shift] = val;
 				else
 					_highBuffer[shift] = 0m;
 			}
 
-			// final cutting 
+			// final cutting
 			lastHigh = -1;
 			lastLow = -1;
 			var lastHighPos = -1;
@@ -398,35 +422,29 @@ namespace StockSharp.Algo.Indicators
 
 			LastValueShift = valueId - 1;
 
-			CurrentValue = _currentValue(_buffer[0]);
+			CurrentValue = input.GetValue<decimal>(ClosePriceField);
 
 			return new DecimalIndicatorValue(this, _zigZagBuffer[LastValueShift]);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
+			base.Load(storage);
 
-			BackStep = settings.GetValue<int>(nameof(BackStep));
-			Depth = settings.GetValue<int>(nameof(Depth));
-			Deviation.Load(settings.GetValue<SettingsStorage>(nameof(Deviation)));
+			BackStep = storage.GetValue<int>(nameof(BackStep));
+			Depth = storage.GetValue<int>(nameof(Depth));
+			Deviation.Load(storage, nameof(Deviation));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
+			base.Save(storage);
 
-			settings.SetValue(nameof(BackStep), BackStep);
-			settings.SetValue(nameof(Depth), Depth);
-			settings.SetValue(nameof(Deviation), Deviation.Save());
+			storage.SetValue(nameof(BackStep), BackStep);
+			storage.SetValue(nameof(Depth), Depth);
+			storage.SetValue(nameof(Deviation), Deviation.Save());
 		}
 	}
 }

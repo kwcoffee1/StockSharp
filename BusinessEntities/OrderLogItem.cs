@@ -16,6 +16,7 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.BusinessEntities
 {
 	using System;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Common;
 
@@ -27,8 +28,12 @@ namespace StockSharp.BusinessEntities
 	/// </summary>
 	[Serializable]
 	[System.Runtime.Serialization.DataContract]
-	[DescriptionLoc(LocalizedStrings.Str535Key)]
-	public class OrderLogItem : MyTrade
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.OrderLogOfKey,
+		Description = LocalizedStrings.OrderLogDescKey)]
+	[Obsolete("Use IOrderLogMessage.")]
+	public class OrderLogItem : MyTrade, IOrderLogMessage
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="OrderLogItem"/>.
@@ -37,16 +42,16 @@ namespace StockSharp.BusinessEntities
 		{
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		IOrderMessage IOrderLogMessage.Order => Order;
+		ITickTradeMessage IOrderLogMessage.Trade => Trade;
+
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			var result = LocalizedStrings.Str536Params.Put(Trade == null ? (Order.State == OrderStates.Done ? LocalizedStrings.Str537 : LocalizedStrings.Str538) : LocalizedStrings.Str539, Order);
+			var result = LocalizedStrings.OLFromOrder.Put(Trade == null ? (Order.State == OrderStates.Done ? LocalizedStrings.Cancellation : LocalizedStrings.Registration) : LocalizedStrings.Matching, Order);
 
 			if (Trade != null)
-				result += " " + LocalizedStrings.Str540Params.Put(Trade);
+				result += " " + LocalizedStrings.OLFromTrade.Put(Trade);
 
 			return result;
 		}

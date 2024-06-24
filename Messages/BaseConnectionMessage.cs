@@ -24,7 +24,7 @@ namespace StockSharp.Messages
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public abstract class BaseConnectionMessage : Message
+	public abstract class BaseConnectionMessage : Message, IErrorMessage
 	{
 		/// <summary>
 		/// Initialize <see cref="BaseConnectionMessage"/>.
@@ -35,17 +35,23 @@ namespace StockSharp.Messages
 		{
 		}
 
-		/// <summary>
-		/// Information about the error connection or disconnection.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
 		[XmlIgnore]
 		public Exception Error { get; set; }
 
 		/// <summary>
-		/// Returns a string that represents the current object.
+		/// Copy the message into the <paramref name="destination" />.
 		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <param name="destination">The object, to which copied information.</param>
+		protected virtual void CopyTo(BaseConnectionMessage destination)
+		{
+			base.CopyTo(destination);
+
+			destination.Error = Error;
+		}
+
+		/// <inheritdoc />
 		public override string ToString()
 		{
 			return base.ToString() + (Error == null ? null : $",Error={Error.Message}");

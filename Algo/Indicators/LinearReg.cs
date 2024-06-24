@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -16,18 +16,24 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System.Collections.Generic;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Linq;
 
-	using Ecng.Collections;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Linear regression - Value returns the last point prediction.
 	/// </summary>
-	[DisplayName("LinearReg")]
-	[DescriptionLoc(LocalizedStrings.Str734Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/lrc.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.LRCKey,
+		Description = LocalizedStrings.LinearRegressionKey)]
+	[Doc("topics/api/indicators/list_of_indicators/lrc.html")]
 	public class LinearReg : LengthIndicator<decimal>
 	{
 		// Коэффициент при независимой переменной, угол наклона прямой.
@@ -41,39 +47,27 @@ namespace StockSharp.Algo.Indicators
 			Length = 11;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_slope = 0;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
 
 			if (input.IsFinal)
 			{
-				Buffer.Add(newValue);
+				Buffer.PushBack(newValue);
 
 				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
+					Buffer.PopFront();
 			}
 
-			var buff = Buffer;
-			if (!input.IsFinal)
-			{
-				buff = new List<decimal>();
-				buff.AddRange(Buffer.Skip(1));
-				buff.Add(newValue);
-			}
+			var buff = input.IsFinal ? Buffer : (IList<decimal>)Buffer.Skip(1).Append(newValue).ToArray();
 
 			//x - независимая переменная, номер значения в буфере
 			//y - зависимая переменная - значения из буфера
@@ -85,8 +79,8 @@ namespace StockSharp.Algo.Indicators
 			for (var i = 0; i < buff.Count; i++)
 			{
 				sumX += i;
-				sumY += buff.ElementAt(i);
-				sumXy += i * buff.ElementAt(i);
+				sumY += buff[i];
+				sumXy += i * buff[i];
 				sumX2 += i * i;
 			}
 

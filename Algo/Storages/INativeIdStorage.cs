@@ -2,16 +2,15 @@ namespace StockSharp.Algo.Storages
 {
 	using System;
 	using System.Collections.Generic;
-	using System.Globalization;
 	using System.IO;
 	using System.Linq;
 	using System.Text;
 
 	using Ecng.Collections;
 	using Ecng.Common;
-	using Ecng.Reflection;
 	using Ecng.Serialization;
 
+	using StockSharp.Localization;
 	using StockSharp.Logging;
 	using StockSharp.Messages;
 
@@ -32,11 +31,11 @@ namespace StockSharp.Algo.Storages
 		IDictionary<string, Exception> Init();
 
 		/// <summary>
-		/// Get native security identifiers for storage. 
+		/// Get native security identifiers for storage.
 		/// </summary>
 		/// <param name="storageName">Storage name.</param>
 		/// <returns>Security identifiers.</returns>
-		Tuple<SecurityId, object>[] Get(string storageName);
+		(SecurityId secId, object nativeId)[] Get(string storageName);
 
 		/// <summary>
 		/// Try add native security identifier to storage.
@@ -69,6 +68,24 @@ namespace StockSharp.Algo.Storages
 		/// </summary>
 		/// <param name="storageName">Storage name.</param>
 		void Clear(string storageName);
+
+		/// <summary>
+		///Remove by security identifier.
+		/// </summary>
+		/// <param name="storageName">Storage name.</param>
+		/// <param name="securityId">Security identifier.</param>
+		/// <param name="isPersistable">Save the identifier as a permanent.</param>
+		/// <returns>Operation result.</returns>
+		bool RemoveBySecurityId(string storageName, SecurityId securityId, bool isPersistable = true);
+
+		/// <summary>
+		/// Remove by native identifier.
+		/// </summary>
+		/// <param name="storageName">Storage name.</param>
+		/// <param name="nativeId">Native (internal) trading system security id.</param>
+		/// <param name="isPersistable">Save the identifier as a permanent.</param>
+		/// <returns>Operation result.</returns>
+		bool RemoveByNativeId(string storageName, object nativeId, bool isPersistable = true);
 	}
 
 	/// <summary>
@@ -77,6 +94,7 @@ namespace StockSharp.Algo.Storages
 	public sealed class CsvNativeIdStorage : INativeIdStorage
 	{
 		private readonly INativeIdStorage _inMemory = new InMemoryNativeIdStorage();
+		private readonly SynchronizedDictionary<SecurityId, object> _buffer = new();
 
 		private readonly string _path;
 
@@ -110,8 +128,7 @@ namespace StockSharp.Algo.Storages
 		/// <inheritdoc />
 		public IDictionary<string, Exception> Init()
 		{
-			if (!Directory.Exists(_path))
-				Directory.CreateDirectory(_path);
+			Directory.CreateDirectory(_path);
 
 			var errors = _inMemory.Init();
 
@@ -133,10 +150,7 @@ namespace StockSharp.Algo.Storages
 		}
 
 		/// <inheritdoc />
-		public Tuple<SecurityId, object>[] Get(string storageName)
-		{
-			return _inMemory.Get(storageName);
-		}
+		public (SecurityId, object)[] Get(string storageName) => _inMemory.Get(storageName);
 
 		/// <inheritdoc />
 		public bool TryAdd(string storageName, SecurityId securityId, object nativeId, bool isPersistable)
@@ -158,114 +172,188 @@ namespace StockSharp.Algo.Storages
 		public void Clear(string storageName)
 		{
 			_inMemory.Clear(storageName);
-
+			_buffer.Clear();
 			DelayAction.DefaultGroup.Add(() => File.Delete(GetFileName(storageName)));
 		}
 
 		/// <inheritdoc />
-		public SecurityId? TryGetByNativeId(string storageName, object nativeId)
+		public bool RemoveBySecurityId(string storageName, SecurityId securityId, bool isPersistable)
 		{
-			return _inMemory.TryGetByNativeId(storageName, nativeId);
+			var added = _inMemory.RemoveBySecurityId(storageName, securityId, isPersistable);
+
+			if (!added)
+				return false;
+
+			if (isPersistable)
+				SaveAll(storageName);
+
+			return true;
 		}
 
 		/// <inheritdoc />
-		public object TryGetBySecurityId(string storageName, SecurityId securityId)
+		public bool RemoveByNativeId(string storageName, object nativeId, bool isPersistable)
 		{
-			return _inMemory.TryGetBySecurityId(storageName, securityId);
+			var added = _inMemory.RemoveByNativeId(storageName, nativeId, isPersistable);
+
+			if (!added)
+				return false;
+
+			if (isPersistable)
+				SaveAll(storageName);
+
+			return true;
 		}
 
-		private void Save(string storageName, SecurityId securityId, object nativeId)
+		private void SaveAll(string storageName)
 		{
+			_buffer.Clear();
+
 			DelayAction.DefaultGroup.Add(() =>
 			{
 				var fileName = GetFileName(storageName);
 
+				File.Delete(fileName);
+
+				var items = _inMemory.Get(storageName);
+
+				if (items.Length == 0)
+					return;
+
+				using var writer = new CsvFileWriter(new TransactionFileStream(fileName, FileMode.Append));
+
+				WriteHeader(writer, items.FirstOrDefault().Item2);
+
+				foreach (var item in items)
+					WriteItem(writer, item.Item1, item.Item2);
+			});
+		}
+
+		/// <inheritdoc />
+		public SecurityId? TryGetByNativeId(string storageName, object nativeId)
+			=> _inMemory.TryGetByNativeId(storageName, nativeId);
+
+		/// <inheritdoc />
+		public object TryGetBySecurityId(string storageName, SecurityId securityId)
+			=> _inMemory.TryGetBySecurityId(storageName, securityId);
+
+		private static object[] TryTupleToValues(object nativeId)
+		{
+			if (nativeId is null)
+				throw new ArgumentNullException(nameof(nativeId));
+
+			if (!nativeId.GetType().IsTuple())
+				return null;
+
+			var tupleValues = nativeId.ToValues().ToArray();
+
+			if (tupleValues.Length == 0)
+				throw new ArgumentOutOfRangeException(nameof(nativeId), nativeId, LocalizedStrings.InvalidValue);
+
+			return tupleValues;
+		}
+
+		private static void WriteHeader(CsvFileWriter writer, object nativeId)
+		{
+			var tupleValues = TryTupleToValues(nativeId);
+
+			const string symbol = "Symbol";
+			const string board = "Board";
+
+			if (tupleValues is not null)
+			{
+				writer.WriteRow(new[]
+				{
+					symbol,
+					board,
+				}.Concat(tupleValues.Select(v => GetTypeName(v.GetType()))));
+			}
+			else
+			{
+				writer.WriteRow(new[]
+				{
+					symbol,
+					board,
+					GetTypeName(nativeId.GetType()),
+				});
+			}
+		}
+
+		private static void WriteItem(CsvFileWriter writer, SecurityId securityId, object nativeId)
+		{
+			var tupleValues = TryTupleToValues(nativeId);
+
+			if (tupleValues is not null)
+			{
+				writer.WriteRow(new[]
+				{
+					securityId.SecurityCode,
+					securityId.BoardCode
+				}.Concat(tupleValues.Select(v => v.To<string>())));
+			}
+			else
+			{
+				writer.WriteRow(new[]
+				{
+					securityId.SecurityCode,
+					securityId.BoardCode,
+					nativeId.ToString()
+				});
+			}
+		}
+
+		private void Save(string storageName, SecurityId securityId, object nativeId)
+		{
+			_buffer[securityId] = nativeId;
+
+			DelayAction.DefaultGroup.Add(() =>
+			{
+				var items = _buffer.SyncGet(c => c.CopyAndClear());
+
+				if (items.Length == 0)
+					return;
+
+				var fileName = GetFileName(storageName);
+
 				var appendHeader = !File.Exists(fileName) || new FileInfo(fileName).Length == 0;
 
-				using (var writer = new CsvFileWriter(new TransactionFileStream(fileName, FileMode.Append)))
-				{
-					var nativeIdType = nativeId.GetType();
-					var typleType = nativeIdType.GetGenericType(typeof(Tuple<,>));
+				using var writer = new CsvFileWriter(new TransactionFileStream(fileName, FileMode.Append));
 
-					if (appendHeader)
-					{
-						if (typleType == null)
-						{
-							writer.WriteRow(new[]
-							{
-								"Symbol",
-								"Board",
-								GetTypeName(nativeIdType),
-							});
-						}
-						else
-						{
-							dynamic tuple = nativeId;
+				if (appendHeader)
+					WriteHeader(writer, nativeId);
 
-							writer.WriteRow(new[]
-							{
-								"Symbol",
-								"Board",
-								GetTypeName((Type)tuple.Item1.GetType()),
-								GetTypeName((Type)tuple.Item2.GetType()),
-							});
-						}
-					}
-
-					if (typleType == null)
-					{
-						writer.WriteRow(new[]
-						{
-							securityId.SecurityCode,
-							securityId.BoardCode,
-							nativeId.ToString()
-						});
-					}
-					else
-					{
-						dynamic tuple = nativeId;
-
-						writer.WriteRow(new[]
-						{
-							securityId.SecurityCode,
-							securityId.BoardCode,
-							(string)tuple.Item1.ToString(),
-							(string)tuple.Item2.ToString()
-						});
-					}
-				}
+				foreach (var item in items)
+					WriteItem(writer, item.Key, item.Value);
 			});
 		}
 
 		private string GetFileName(string storageName) => Path.Combine(_path, storageName + ".csv");
 
-		private static string GetTypeName(Type nativeIdType)
-		{
-			return Converter.GetAlias(nativeIdType) ?? nativeIdType.GetTypeName(false);
-		}
+		private static string GetTypeName(Type nativeIdType) => nativeIdType.TryGetCSharpAlias() ?? nativeIdType.GetTypeName(false);
 
 		private void LoadFile(string fileName)
 		{
-			CultureInfo.InvariantCulture.DoInCulture(() =>
+			Do.Invariant(() =>
 			{
 				if (!File.Exists(fileName))
 					return;
 
 				var name = Path.GetFileNameWithoutExtension(fileName);
 
-				var pairs = new List<Tuple<SecurityId, object>>();
+				var pairs = new List<(SecurityId, object)>();
 
 				using (var stream = new FileStream(fileName, FileMode.Open, FileAccess.Read))
 				{
-					var reader = new FastCsvReader(stream, Encoding.UTF8);
+					var reader = new FastCsvReader(stream, Encoding.UTF8, StringHelper.RN);
 
 					reader.NextLine();
 					reader.Skip(2);
 
-					var type1 = reader.ReadString().To<Type>();
-					var type2 = reader.ReadString().To<Type>();
+					var types = new List<Type>();
 
-					var isTuple = type2 != null;
+					while ((reader.ColumnCurr + 1) < reader.ColumnCount)
+						types.Add(reader.ReadString().To<Type>());
+
+					var isTuple = types.Count > 1;
 
 					while (reader.NextLine())
 					{
@@ -275,15 +363,21 @@ namespace StockSharp.Algo.Storages
 							BoardCode = reader.ReadString()
 						};
 
-						var nativeId = reader.ReadString().To(type1);
+						object nativeId;
 
 						if (isTuple)
 						{
-							var nativeId2 = reader.ReadString().To(type2);
-							nativeId = typeof(Tuple<,>).MakeGenericType(type1, type2).CreateInstance(new[] { nativeId, nativeId2 });
+							var args = new List<object>();
+
+							for (var i = 0; i < types.Count; i++)
+								args.Add(reader.ReadString().To(types[i]));
+
+							nativeId = args.ToTuple(true);
 						}
-						
-						pairs.Add(Tuple.Create(securityId, nativeId));
+						else
+							nativeId = reader.ReadString().To(types[0]);
+
+						pairs.Add((securityId, nativeId));
 					}
 				}
 
@@ -297,8 +391,8 @@ namespace StockSharp.Algo.Storages
 	/// </summary>
 	public class InMemoryNativeIdStorage : INativeIdStorage
 	{
-		private readonly Dictionary<string, PairSet<SecurityId, object>> _nativeIds = new Dictionary<string, PairSet<SecurityId, object>>(StringComparer.InvariantCultureIgnoreCase);
-		private readonly SyncObject _syncRoot = new SyncObject();
+		private readonly Dictionary<string, PairSet<SecurityId, object>> _nativeIds = new(StringComparer.InvariantCultureIgnoreCase);
+		private readonly SyncObject _syncRoot = new();
 
 		private Action<string, SecurityId, object> _added;
 
@@ -313,7 +407,7 @@ namespace StockSharp.Algo.Storages
 			return new Dictionary<string, Exception>();
 		}
 
-		internal void Add(string storageName, IEnumerable<Tuple<SecurityId, object>> ids)
+		internal void Add(string storageName, IEnumerable<(SecurityId secId, object nativeId)> ids)
 		{
 			if (storageName.IsEmpty())
 				throw new ArgumentNullException(nameof(storageName));
@@ -325,9 +419,13 @@ namespace StockSharp.Algo.Storages
 			{
 				var dict = _nativeIds.SafeAdd(storageName);
 
-				foreach (var id in ids)
+				foreach (var (secId, nativeId) in ids)
 				{
-					dict.Add(id.Item1, id.Item2);
+					// skip duplicates
+					if (dict.ContainsKey(secId) || dict.ContainsValue(nativeId))
+						continue;
+
+					dict.Add(secId, nativeId);
 				}
 			}
 		}
@@ -387,13 +485,45 @@ namespace StockSharp.Algo.Storages
 			return securityId;
 		}
 
-		Tuple<SecurityId, object>[] INativeIdStorage.Get(string storageName)
+		(SecurityId, object)[] INativeIdStorage.Get(string storageName)
 		{
 			if (storageName.IsEmpty())
 				throw new ArgumentNullException(nameof(storageName));
 
 			lock (_syncRoot)
-				return _nativeIds.TryGetValue(storageName)?.Select(p => Tuple.Create(p.Key, p.Value)).ToArray() ?? ArrayHelper.Empty<Tuple<SecurityId, object>>();
+				return _nativeIds.TryGetValue(storageName)?.Select(p => (p.Key, p.Value)).ToArray() ?? Array.Empty<(SecurityId, object)>();
+		}
+
+		bool INativeIdStorage.RemoveBySecurityId(string storageName, SecurityId securityId, bool isPersistable)
+		{
+			if (storageName.IsEmpty())
+				throw new ArgumentNullException(nameof(storageName));
+
+			lock (_syncRoot)
+			{
+				var set = _nativeIds.TryGetValue(storageName);
+
+				if (set == null)
+					return false;
+
+				return set.Remove(securityId);
+			}
+		}
+
+		bool INativeIdStorage.RemoveByNativeId(string storageName, object nativeId, bool isPersistable)
+		{
+			if (storageName.IsEmpty())
+				throw new ArgumentNullException(nameof(storageName));
+
+			lock (_syncRoot)
+			{
+				var set = _nativeIds.TryGetValue(storageName);
+
+				if (set == null)
+					return false;
+
+				return set.RemoveByValue(nativeId);
+			}
 		}
 	}
 }

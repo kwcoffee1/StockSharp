@@ -3,14 +3,12 @@ namespace StockSharp.Messages
 	using System;
 	using System.Runtime.Serialization;
 
-	using StockSharp.Localization;
-
 	/// <summary>
 	/// Message users lookup for specified criteria.
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class UserLookupMessage : Message, ITransactionIdMessage
+	public class UserLookupMessage : BaseSubscriptionMessage
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="UserLookupMessage"/>.
@@ -20,14 +18,8 @@ namespace StockSharp.Messages
 		{
 		}
 
-		/// <summary>
-		/// Transaction ID.
-		/// </summary>
-		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.TransactionKey)]
-		[DescriptionLoc(LocalizedStrings.TransactionIdKey, true)]
-		[MainCategory]
-		public long TransactionId { get; set; }
+		/// <inheritdoc />
+		public override DataType DataType => DataType.Users;
 
 		/// <summary>
 		/// The filter for user search.
@@ -35,10 +27,22 @@ namespace StockSharp.Messages
 		[DataMember]
 		public string Like { get; set; }
 
+		/// <summary>
+		/// Own.
+		/// </summary>
+		[DataMember]
+		public bool Own { get; set; }
+
+		/// <summary>
+		/// Identifier.
+		/// </summary>
+		[DataMember]
+		public long? UserId { get; set; }
+
 		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",Like={Like},TrId={TransactionId}";
+			return base.ToString() + $",Like={Like},Own={Own},UId={UserId}";
 		}
 
 		/// <summary>
@@ -57,12 +61,29 @@ namespace StockSharp.Messages
 		/// <returns>The object, to which copied information.</returns>
 		protected UserLookupMessage CopyTo(UserLookupMessage destination)
 		{
-			destination.Like = Like;
-			destination.TransactionId = TransactionId;
+			base.CopyTo(destination);
 
-			this.CopyExtensionInfo(destination);
+			destination.Like = Like;
+			destination.Own = Own;
+			destination.UserId = UserId;
 
 			return destination;
 		}
+
+		/// <inheritdoc />
+		[DataMember]
+		public override DateTimeOffset? From => null;
+
+		/// <inheritdoc />
+		[DataMember]
+		public override DateTimeOffset? To => DateTimeOffset.MaxValue /* prevent for online mode */;
+
+		/// <inheritdoc />
+		[DataMember]
+		public override bool IsSubscribe => true;
+
+		/// <inheritdoc />
+		[DataMember]
+		public override long OriginalTransactionId => 0;
 	}
 }

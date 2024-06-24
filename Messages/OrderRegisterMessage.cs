@@ -16,16 +16,15 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Messages
 {
 	using System;
+	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
-
-	using Ecng.Serialization;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// The message containing the information for the order registration.
 	/// </summary>
-	[System.Runtime.Serialization.DataContract]
+	[DataContract]
 	[Serializable]
 	public class OrderRegisterMessage : OrderMessage
 	{
@@ -33,47 +32,46 @@ namespace StockSharp.Messages
 		/// Order price.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.PriceKey)]
-		[DescriptionLoc(LocalizedStrings.OrderPriceKey)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PriceKey,
+			Description = LocalizedStrings.OrderPriceKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal Price { get; set; }
 
 		/// <summary>
 		/// Number of contracts in the order.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.VolumeKey)]
-		[DescriptionLoc(LocalizedStrings.OrderVolumeKey)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.VolumeKey,
+			Description = LocalizedStrings.OrderVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal Volume { get; set; }
 
 		/// <summary>
 		/// Visible quantity of contracts in order.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.VisibleVolumeKey)]
-		[DescriptionLoc(LocalizedStrings.Str127Key)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.VisibleVolumeKey,
+			Description = LocalizedStrings.VisibleVolumeDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public decimal? VisibleVolume { get; set; }
 
 		/// <summary>
 		/// Order side (buy or sell).
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str128Key)]
-		[DescriptionLoc(LocalizedStrings.Str129Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.DirectionKey,
+			Description = LocalizedStrings.OrderSideDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public Sides Side { get; set; }
-
-		/// <summary>
-		/// Placed order comment.
-		/// </summary>
-		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str135Key)]
-		[DescriptionLoc(LocalizedStrings.Str136Key)]
-		[MainCategory]
-		public string Comment { get; set; }
 
 		/// <summary>
 		/// Order expiry time. The default is <see langword="null" />, which mean (GTC).
@@ -82,53 +80,80 @@ namespace StockSharp.Messages
 		/// If the value is equal <see langword="null" />, order will be GTC (good til cancel). Or uses exact date.
 		/// </remarks>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str141Key)]
-		[DescriptionLoc(LocalizedStrings.Str142Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ExpirationKey,
+			Description = LocalizedStrings.OrderExpirationTimeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public DateTimeOffset? TillDate { get; set; }
 
 		/// <summary>
 		/// Limit order time in force.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.TimeInForceKey)]
-		[DescriptionLoc(LocalizedStrings.Str232Key)]
-		[MainCategory]
-		[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TimeInForceKey,
+			Description = LocalizedStrings.LimitOrderTifKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		//[Nullable]
 		public TimeInForce? TimeInForce { get; set; }
 
 		/// <summary>
 		/// Is the order of market-maker.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.MarketMakerKey)]
-		[DescriptionLoc(LocalizedStrings.MarketMakerOrderKey, true)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.MarketMakerKey,
+			Description = LocalizedStrings.MarketMakerOrderKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public bool? IsMarketMaker { get; set; }
-
-		/// <summary>
-		/// Is margin enabled.
-		/// </summary>
-		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.MarginKey)]
-		[DescriptionLoc(LocalizedStrings.IsMarginKey)]
-		[MainCategory]
-		public bool? IsMargin { get; set; }
 
 		/// <summary>
 		/// Slippage in trade price.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str163Key)]
-		[DescriptionLoc(LocalizedStrings.Str164Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SlippageKey,
+			Description = LocalizedStrings.SlippageTradeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public decimal? Slippage { get; set; }
 
 		/// <summary>
 		/// Is order manual.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.ManualKey)]
-		[DescriptionLoc(LocalizedStrings.IsOrderManualKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ManualKey,
+			Description = LocalizedStrings.IsOrderManualKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public bool? IsManual { get; set; }
+
+		/// <summary>
+		/// Minimum quantity of an order to be executed.
+		/// </summary>
+		[DataMember]
+		public decimal? MinOrderVolume { get; set; }
+
+		/// <summary>
+		/// Position effect.
+		/// </summary>
+		[DataMember]
+		public OrderPositionEffects? PositionEffect { get; set; }
+
+		/// <summary>
+		/// Post-only order.
+		/// </summary>
+		[DataMember]
+		public bool? PostOnly { get; set; }
+
+		/// <summary>
+		/// Margin leverage.
+		/// </summary>
+		[DataMember]
+		public int? Leverage { get; set; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="OrderRegisterMessage"/>.
@@ -154,9 +179,7 @@ namespace StockSharp.Messages
 		public override Message Clone()
 		{
 			var clone = new OrderRegisterMessage(Type);
-
 			CopyTo(clone);
-
 			return clone;
 		}
 
@@ -166,41 +189,38 @@ namespace StockSharp.Messages
 		/// <param name="destination">The object, to which copied information.</param>
 		public void CopyTo(OrderRegisterMessage destination)
 		{
-			if (destination == null)
-				throw new ArgumentNullException(nameof(destination));
+			base.CopyTo(destination);
 
-			destination.Comment = Comment;
-			destination.Condition = Condition?.Clone();
-			destination.TillDate = TillDate;
-			destination.OrderType = OrderType;
-			destination.PortfolioName = PortfolioName;
 			destination.Price = Price;
-			//destination.SecurityId = SecurityId;
-			//destination.SecurityType = SecurityType;
-			destination.Side = Side;
-			destination.TimeInForce = TimeInForce;
-			destination.TransactionId = TransactionId;
-			destination.VisibleVolume = VisibleVolume;
 			destination.Volume = Volume;
-			//destination.Currency = Currency;
-			destination.UserOrderId = UserOrderId;
-			destination.ClientCode = ClientCode;
-			destination.BrokerCode = BrokerCode;
+			destination.VisibleVolume = VisibleVolume;
+			destination.Side = Side;
+			destination.TillDate = TillDate;
+			destination.TimeInForce = TimeInForce;
 			destination.IsMarketMaker = IsMarketMaker;
-			destination.IsMargin = IsMargin;
 			destination.Slippage = Slippage;
 			destination.IsManual = IsManual;
-
-			base.CopyTo(destination);
+			destination.MinOrderVolume = MinOrderVolume;
+			destination.PositionEffect = PositionEffect;
+			destination.PostOnly = PostOnly;
+			destination.Leverage = Leverage;
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",TransId={TransactionId},Price={Price},Side={Side},OrdType={OrderType},Vol={Volume},Sec={SecurityId},Pf={PortfolioName}";
+			var str = base.ToString() + $",Price={Price},Side={Side},Vol={Volume}/{VisibleVolume}/{MinOrderVolume},Till={TillDate},TIF={TimeInForce},MM={IsMarketMaker},SLP={Slippage},MN={IsManual}";
+
+			if (PositionEffect != null)
+				str += $",PosEffect={PositionEffect.Value}";
+
+			if (PostOnly != null)
+				str += $",PostOnly={PostOnly.Value}";
+
+			if (Leverage != null)
+				str += $",Leverage={Leverage.Value}";
+
+			return str;
 		}
 	}
 }

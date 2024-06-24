@@ -18,14 +18,13 @@ namespace StockSharp.Logging
 	using System;
 	using System.Collections.Generic;
 	using System.IO;
+	using System.IO.Compression;
 	using System.Linq;
 	using System.Text;
 
 	using Ecng.Collections;
 	using Ecng.Common;
 	using Ecng.Serialization;
-
-	using MoreLinq;
 
 	using StockSharp.Localization;
 
@@ -51,6 +50,32 @@ namespace StockSharp.Logging
 	}
 
 	/// <summary>
+	/// Policies of action for out of date logs.
+	/// </summary>
+	public enum FileLogHistoryPolicies
+	{
+		/// <summary>
+		/// Do nothing.
+		/// </summary>
+		None,
+
+		/// <summary>
+		/// Delete after <see cref="FileLogListener.HistoryAfter"/>.
+		/// </summary>
+		Delete,
+
+		/// <summary>
+		/// Compression after <see cref="FileLogListener.HistoryAfter"/>.
+		/// </summary>
+		Compression,
+
+		/// <summary>
+		/// Move to <see cref="FileLogListener.HistoryMove"/> after <see cref="FileLogListener.HistoryAfter"/>.
+		/// </summary>
+		Move,
+	}
+
+	/// <summary>
 	/// The logger recording the data to a text file.
 	/// </summary>
 	public class FileLogListener : LogListener
@@ -65,8 +90,18 @@ namespace StockSharp.Logging
 				_digitChars[i] = (char)(i + '0');
 		}
 
-		private readonly PairSet<Tuple<string, DateTime>, StreamWriter> _writers = new PairSet<Tuple<string, DateTime>, StreamWriter>();
-		private readonly Dictionary<StreamWriter, string> _fileNames = new Dictionary<StreamWriter, string>();
+		private class StreamWriterEx : StreamWriter
+		{
+			public StreamWriterEx(string path, bool append, Encoding encoding)
+				: base(path, append, encoding)
+			{
+				Path = path;
+			}
+
+			public string Path { get; }
+		}
+
+		private readonly PairSet<(string, DateTime), StreamWriterEx> _writers = new();
 
 		/// <summary>
 		/// To create <see cref="FileLogListener"/>. For each <see cref="ILogSource"/> a separate file with a name equal to <see cref="ILogSource.Name"/> will be created.
@@ -131,7 +166,7 @@ namespace StockSharp.Logging
 			set
 			{
 				if (value < 0)
-					throw new ArgumentOutOfRangeException();
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_maxLength = value;
 			}
@@ -148,7 +183,7 @@ namespace StockSharp.Logging
 			set
 			{
 				if (value < 0)
-					throw new ArgumentOutOfRangeException();
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_maxCount = value;
 			}
@@ -230,6 +265,38 @@ namespace StockSharp.Logging
 		/// </summary>
 		public SeparateByDateModes SeparateByDates { get; set; }
 
+		/// <summary>
+		/// <see cref="FileLogHistoryPolicies"/>. By default is <see cref="FileLogHistoryPolicies.None"/>.
+		/// </summary>
+		public FileLogHistoryPolicies HistoryPolicy { get; set; } = FileLogHistoryPolicies.None;
+
+		private TimeSpan _historyAfter = TimeSpan.FromDays(7);
+
+		/// <summary>
+		/// Offset from present day indicates are logs are out of date.
+		/// </summary>
+		public TimeSpan HistoryAfter
+		{
+			get => _historyAfter;
+			set
+			{
+				if (value < TimeSpan.FromDays(1))
+					throw new ArgumentOutOfRangeException(nameof(value));
+
+				_historyAfter = value;
+			}
+		}
+
+		/// <summary>
+		/// Uses in case of <see cref="FileLogHistoryPolicies.Move"/>. Default is <see langword="null"/>.
+		/// </summary>
+		public string HistoryMove { get; set; }
+
+		/// <summary>
+		/// Uses in case of <see cref="FileLogHistoryPolicies.Compression"/>. Default is <see cref="CompressionLevel.Optimal"/>.
+		/// </summary>
+		public CompressionLevel HistoryCompressionLevel { get; set; } = CompressionLevel.Optimal;
+
 		private string GetFileName(string sourceName, DateTime date)
 		{
 			var invalidChars = sourceName.Intersect(Path.GetInvalidFileNameChars()).ToArray();
@@ -271,25 +338,152 @@ namespace StockSharp.Logging
 		/// </summary>
 		/// <param name="fileName">The name of the text file to which messages from the event <see cref="ILogSource.Log"/> will be recorded.</param>
 		/// <returns>A text writer.</returns>
-		protected virtual StreamWriter OnCreateWriter(string fileName)
+		private StreamWriterEx OnCreateWriter(string fileName)
 		{
-			var writer = new StreamWriter(fileName, Append, Encoding);
-			_fileNames.Add(writer, fileName);
-			return writer;
+			return new StreamWriterEx(fileName, Append, Encoding);
 		}
 
-		/// <summary>
-		/// To record messages.
-		/// </summary>
-		/// <param name="messages">Debug messages.</param>
+		private bool _triedHistoryPolicy;
+
+		private void TryDoHistoryPolicy()
+		{
+			bool isDir;
+
+			switch (SeparateByDates)
+			{
+				case SeparateByDateModes.None:
+					return;
+				case SeparateByDateModes.FileName:
+					isDir = false;
+					break;
+				case SeparateByDateModes.SubDirectories:
+					isDir = true;
+					break;
+				default:
+					throw new ArgumentOutOfRangeException(nameof(SeparateByDates), SeparateByDates, LocalizedStrings.InvalidValue);
+			}
+
+			if (SeparateByDates == SeparateByDateModes.None)
+				return;
+
+			var policy = HistoryPolicy;
+
+			switch (policy)
+			{
+				case FileLogHistoryPolicies.None:
+					return;
+				case FileLogHistoryPolicies.Delete:
+					break;
+				case FileLogHistoryPolicies.Compression:
+					break;
+				case FileLogHistoryPolicies.Move:
+				{
+					if (HistoryMove.IsEmpty())
+						throw new InvalidOperationException("HistoryMove is null.");
+
+					Directory.CreateDirectory(HistoryMove);
+
+					break;
+				}
+				default:
+					throw new ArgumentOutOfRangeException(nameof(HistoryPolicy), policy, LocalizedStrings.InvalidValue);
+			}
+
+			var files = new List<string>();
+
+			var start = DateTime.Today - HistoryAfter;
+
+			for (var i = 0; i < 365; i++)
+			{
+				var dateStr = (start - TimeSpan.FromDays(i)).ToString(DirectoryDateFormat);
+
+				if (isDir)
+				{
+					var dirName = Path.Combine(LogDirectory, dateStr);
+
+					if (Directory.Exists(dirName))
+						files.Add(dirName);
+				}
+				else
+					files.AddRange(Directory.GetFiles(LogDirectory, $"{dateStr}_*.{Extension}"));
+			}
+
+			if (files.Count == 0)
+				return;
+
+			switch (policy)
+			{
+				case FileLogHistoryPolicies.Delete:
+				{
+					if (isDir)
+					{
+						foreach (var file in files)
+							Directory.Delete(file, true);
+					}
+					else
+					{
+						foreach (var file in files)
+							File.Delete(file);
+					}
+
+					break;
+				}
+				case FileLogHistoryPolicies.Compression:
+				{
+					if (isDir)
+					{
+						foreach (var file in files)
+						{
+							ZipFile.CreateFromDirectory(file, Path.Combine(LogDirectory, $"{Path.GetFileName(file)}.zip"), HistoryCompressionLevel, false);
+							Directory.Delete(file, true);
+						}
+					}
+					else
+					{
+						foreach (var file in files)
+						{
+							using (var zipFile = new ZipArchive(File.Open(Path.Combine(LogDirectory, $"{Path.GetFileNameWithoutExtension(file)}.zip"), FileMode.Create), ZipArchiveMode.Create))
+								zipFile.CreateEntryFromFile(file, Path.GetFileName(file), HistoryCompressionLevel);
+
+							File.Delete(file);
+						}
+					}
+
+					break;
+				}
+				case FileLogHistoryPolicies.Move:
+				{
+					if (isDir)
+					{
+						foreach (var file in files)
+							Directory.Move(file, HistoryMove);
+					}
+					else
+					{
+						foreach (var file in files)
+							File.Move(file, Path.Combine(HistoryMove, Path.GetFileName(file)));
+					}
+
+					break;
+				}
+			}
+		}
+
+		/// <inheritdoc />
 		protected override void OnWriteMessages(IEnumerable<LogMessage> messages)
 		{
-			// pyh: эмуляция года данных происходит за 5 секунд. На выходе 365 файлов лога? Бред.
-			//var date = SeparateByDates != SeparateByDateModes.None ? message.Time.Date : default(DateTime);
-			var date = SeparateByDates != SeparateByDateModes.None ? DateTime.Today : default(DateTime);
+			if (!_triedHistoryPolicy)
+			{
+				TryDoHistoryPolicy();
+				_triedHistoryPolicy = true;
+			}
+
+			var date = SeparateByDates != SeparateByDateModes.None
+				? DateTime.Today /*message.Time.Date*/ // pyh: эмуляция года данных происходит за 5 секунд. На выходе 365 файлов лога? Бред.
+				: default;
 
 			string prevFileName = null;
-			StreamWriter prevWriter = null;
+			StreamWriterEx prevWriter = null;
 
 			var isDisposing = false;
 
@@ -306,14 +500,25 @@ namespace StockSharp.Logging
 				if (prevFileName == fileName)
 					return prevWriter;
 
-				var key = Tuple.Create(fileName, date);
+				var key = (fileName, date);
 
-				var writer = _writers.TryGetValue(key);
-
-				if (writer == null)
+				if (!_writers.TryGetValue(key, out var writer))
 				{
 					if (isDisposing)
 						return null;
+
+					if (_writers.Count > 0 && date != default)
+					{
+						var outOfDate = _writers.Where(p => p.Key.Item2 < date).ToArray();
+
+						if (outOfDate.Length > 0)
+						{
+							foreach (var pair in outOfDate)
+								_writers.GetAndRemove(pair.Key).Dispose();
+
+							TryDoHistoryPolicy();
+						}
+					}
 
 					writer = OnCreateWriter(GetFileName(fileName, date));
 					_writers.Add(key, writer);
@@ -341,8 +546,7 @@ namespace StockSharp.Logging
 						if (MaxLength <= 0 || writer.BaseStream.Position < MaxLength)
 							continue;
 
-						var fileName = _fileNames[writer];
-						_fileNames.Remove(writer);
+						var fileName = writer.Path;
 
 						var key = _writers[writer];
 						writer.Dispose();
@@ -430,8 +634,8 @@ namespace StockSharp.Logging
 		private char[] ToFastDateCharArray(DateTimeOffset time)
 		{
 			var hasDate = SeparateByDates == SeparateByDateModes.None;
-			
-			var timeChars = new char[12 + (hasDate ? 11: 0)];
+
+			var timeChars = new char[12 + (hasDate ? 11 : 0)];
 
 			var offset = 0;
 
@@ -477,10 +681,7 @@ namespace StockSharp.Logging
 			return timeChars;
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Settings storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -495,12 +696,14 @@ namespace StockSharp.Logging
 			WriteSourceId = storage.GetValue<bool>(nameof(WriteSourceId));
 			DirectoryDateFormat = storage.GetValue<string>(nameof(DirectoryDateFormat));
 			SeparateByDates = storage.GetValue<SeparateByDateModes>(nameof(SeparateByDates));
+
+			HistoryPolicy = storage.GetValue(nameof(HistoryPolicy), HistoryPolicy);
+			HistoryAfter = storage.GetValue(nameof(HistoryAfter), HistoryAfter);
+			HistoryMove = storage.GetValue(nameof(HistoryMove), HistoryMove);
+			HistoryCompressionLevel = storage.GetValue(nameof(HistoryCompressionLevel), HistoryCompressionLevel);
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Settings storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -515,6 +718,11 @@ namespace StockSharp.Logging
 			storage.SetValue(nameof(WriteSourceId), WriteSourceId);
 			storage.SetValue(nameof(DirectoryDateFormat), DirectoryDateFormat);
 			storage.SetValue(nameof(SeparateByDates), SeparateByDates.To<string>());
+
+			storage.SetValue(nameof(HistoryPolicy), HistoryPolicy);
+			storage.SetValue(nameof(HistoryAfter), HistoryAfter);
+			storage.SetValue(nameof(HistoryMove), HistoryMove);
+			storage.SetValue(nameof(HistoryCompressionLevel), HistoryCompressionLevel);
 		}
 
 		/// <summary>
@@ -523,8 +731,6 @@ namespace StockSharp.Logging
 		protected override void DisposeManaged()
 		{
 			_writers.Values.ForEach(w => w.Dispose());
-
-			_fileNames.Clear();
 			_writers.Clear();
 
 			base.DisposeManaged();

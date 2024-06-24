@@ -20,7 +20,6 @@ namespace StockSharp.Messages
 	using System.Linq;
 	using System.Runtime.Serialization;
 
-	using Ecng.Collections;
 	using Ecng.Common;
 
 	using StockSharp.Localization;
@@ -36,21 +35,21 @@ namespace StockSharp.Messages
 		/// Opening price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str79Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.OpenPriceKey)]
 		OpenPrice,
 
 		/// <summary>
 		/// Highest price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str287Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.HighPriceKey)]
 		HighPrice,
 
 		/// <summary>
 		/// Lowest price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str288Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LowPriceKey)]
 		LowPrice,
 
 		/// <summary>
@@ -64,49 +63,52 @@ namespace StockSharp.Messages
 		/// Last trade.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str289Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LastTradeKey)]
+		[Obsolete]
 		LastTrade,
 
 		/// <summary>
 		/// Step price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str290Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.StepPriceKey)]
 		StepPrice,
 
 		/// <summary>
 		/// Best bid.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str291Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BestBidKey)]
+		[Obsolete]
 		BestBid,
 
 		/// <summary>
 		/// Best ask.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str292Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BestAskKey)]
+		[Obsolete]
 		BestAsk,
 
 		/// <summary>
 		/// Volatility (implied).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str293Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.ImpliedVolatilityKey)]
 		ImpliedVolatility,
 
 		/// <summary>
 		/// Theoretical price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str294Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.TheorPriceKey)]
 		TheorPrice,
 
 		/// <summary>
 		/// Open interest.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str150Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.OpenInterestKey)]
 		OpenInterest,
 
 		/// <summary>
@@ -127,35 +129,35 @@ namespace StockSharp.Messages
 		/// Bids volume.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str295Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BidsVolumeKey)]
 		BidsVolume,
 
 		/// <summary>
 		/// Number of bids.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str296Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BidsCountKey)]
 		BidsCount,
 
 		/// <summary>
 		/// Ask volume.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str297Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.AsksVolumeKey)]
 		AsksVolume,
 
 		/// <summary>
 		/// Number of asks.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str298Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.AsksCountKey)]
 		AsksCount,
 
 		/// <summary>
 		/// Volatility (historical).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str299Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.HistoricalVolatilityKey)]
 		HistoricalVolatility,
 
 		/// <summary>
@@ -187,31 +189,31 @@ namespace StockSharp.Messages
 		Theta,
 
 		/// <summary>
-		/// Initial margin (buy).
+		/// Initial margin to buy.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str304Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.MarginBuyKey)]
 		MarginBuy,
 
 		/// <summary>
-		/// Initial margin (sell).
+		/// Initial margin to sell.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str305Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.MarginSellKey)]
 		MarginSell,
 
 		/// <summary>
 		/// Minimum price step.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str306Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.PriceStepKey)]
 		PriceStep,
 
 		/// <summary>
 		/// Minimum volume step.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str307Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.VolumeStepKey)]
 		VolumeStep,
 
 		/// <summary>
@@ -219,6 +221,7 @@ namespace StockSharp.Messages
 		/// </summary>
 		[EnumMember]
 		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.ExtendedInfoKey)]
+		[Obsolete]
 		ExtensionInfo,
 
 		/// <summary>
@@ -232,35 +235,35 @@ namespace StockSharp.Messages
 		/// Last trade price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str308Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LastTradePriceKey)]
 		LastTradePrice,
 
 		/// <summary>
 		/// Last trade volume.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str309Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LastTradeVolumeKey)]
 		LastTradeVolume,
 
 		/// <summary>
 		/// Volume per session.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str310Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.VolumePerSessionKey)]
 		Volume,
 
 		/// <summary>
 		/// Average price per session.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str311Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.AveragePricePerSessionKey)]
 		AveragePrice,
 
 		/// <summary>
 		/// Settlement price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str312Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.SettlementPriceKey)]
 		SettlementPrice,
 
 		/// <summary>
@@ -274,28 +277,28 @@ namespace StockSharp.Messages
 		/// Best bid price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str313Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BestBidPriceKey)]
 		BestBidPrice,
 
 		/// <summary>
 		/// Best buy volume.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str314Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BestBidVolumeKey)]
 		BestBidVolume,
 
 		/// <summary>
 		/// Best ask price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str315Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BestAskPriceKey)]
 		BestAskPrice,
 
 		/// <summary>
 		/// Best sell volume.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str316Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BestAskVolumeKey)]
 		BestAskVolume,
 
 		/// <summary>
@@ -309,35 +312,35 @@ namespace StockSharp.Messages
 		/// Accrued coupon income (ACI).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str318Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.AccruedCouponIncomeKey)]
 		AccruedCouponIncome,
 
 		/// <summary>
 		/// Maximum bid during the session.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str319Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BidMaxKey)]
 		HighBidPrice,
 
 		/// <summary>
 		/// Minimum ask during the session.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str320Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.AskMinKey)]
 		LowAskPrice,
 
 		/// <summary>
 		/// Yield.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str321Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.YieldKey)]
 		Yield,
 
 		/// <summary>
 		/// Time of last trade.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str322Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LastTradeTimeKey)]
 		LastTradeTime,
 
 		/// <summary>
@@ -358,42 +361,42 @@ namespace StockSharp.Messages
 		/// Last trade ID.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str325Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LastTradeIdKey)]
 		LastTradeId,
 
 		/// <summary>
 		/// Best bid time.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str326Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BestBidTimeKey)]
 		BestBidTime,
 
 		/// <summary>
 		/// Best ask time.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str327Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BestAskTimeKey)]
 		BestAskTime,
 
 		/// <summary>
 		/// Is tick ascending or descending in price.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str328Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.TrendKey)]
 		LastTradeUpDown,
 
 		/// <summary>
 		/// Initiator of the last trade (buyer or seller).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str329Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.InitiatorKey)]
 		LastTradeOrigin,
 
 		/// <summary>
 		/// Lot multiplier.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str330Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LotKey)]
 		Multiplier,
 
 		/// <summary>
@@ -456,7 +459,7 @@ namespace StockSharp.Messages
 		/// Number of shares.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str331Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.NumOfSharesKey)]
 		SharesOutstanding,
 
 		/// <summary>
@@ -505,49 +508,49 @@ namespace StockSharp.Messages
 		/// Liquidity (current).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str332Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.CurrentRatioKey)]
 		CurrentRatio,
 
 		/// <summary>
 		/// Liquidity (instantaneous).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str333Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.QuickRatioKey)]
 		QuickRatio,
 
 		/// <summary>
 		/// Capital (long-term debt).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str334Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LongTermDebtEquityKey)]
 		LongTermDebtEquity,
 
 		/// <summary>
 		/// Capital (debt).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str335Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.TotalDebtEquityKey)]
 		TotalDebtEquity,
 
 		/// <summary>
 		/// Assets margin (gross).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str336Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.GrossMarginKey)]
 		GrossMargin,
 
 		/// <summary>
 		/// Assets margin.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str337Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.OperatingMarginKey)]
 		OperatingMargin,
 
 		/// <summary>
 		/// Profit margin.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str338Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.ProfitMarginKey)]
 		ProfitMargin,
 
 		/// <summary>
@@ -568,21 +571,21 @@ namespace StockSharp.Messages
 		/// Volatility (week).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str340Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.VolatilityWeekKey)]
 		HistoricalVolatilityWeek,
 
 		/// <summary>
 		/// Volatility (month).
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str341Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.VolatilityMonthKey)]
 		HistoricalVolatilityMonth,
 
 		/// <summary>
 		/// System info.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str342Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.SystemKey)]
 		IsSystem,
 
 		/// <summary>
@@ -682,6 +685,188 @@ namespace StockSharp.Messages
 		[EnumMember]
 		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.UnderlyingMinVolumeKey)]
 		UnderlyingMinVolume,
+
+		/// <summary>
+		/// Coupon value.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.CouponValueKey)]
+		CouponValue,
+
+		/// <summary>
+		/// Coupon date.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.CouponDateKey)]
+		CouponDate,
+
+		/// <summary>
+		/// Coupon period.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.CouponPeriodKey)]
+		CouponPeriod,
+
+		/// <summary>
+		/// Market price (yesterday).
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.MarketPriceYesterdayKey)]
+		MarketPriceYesterday,
+
+		/// <summary>
+		/// Market price (today).
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.MarketPriceTodayKey)]
+		MarketPriceToday,
+
+		/// <summary>
+		/// VWAP (prev).
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.VWAPPrevKey)]
+		VWAPPrev,
+
+		/// <summary>
+		/// Yield by VWAP.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.YieldVWAPKey)]
+		YieldVWAP,
+
+		/// <summary>
+		/// Yield by VWAP (prev).
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.YieldVWAPPrevKey)]
+		YieldVWAPPrev,
+
+		/// <summary>
+		/// Index.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.IndexKey)]
+		Index,
+
+		/// <summary>
+		/// Imbalance.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.ImbalanceKey)]
+		Imbalance,
+
+		/// <summary>
+		/// Underlying price.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.UnderlyingKey)]
+		UnderlyingPrice,
+
+		/// <summary>
+		/// Maximum volume allowed in order.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.MaxVolumeKey)]
+		MaxVolume,
+
+		/// <summary>
+		/// Lowest bid during the session.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LowBidPriceKey, Description = LocalizedStrings.LowBidPriceDescKey)]
+		LowBidPrice,
+
+		/// <summary>
+		/// Highest ask during the session.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.HighAskPriceKey, Description = LocalizedStrings.HighAskPriceDescKey)]
+		HighAskPrice,
+
+		/// <summary>
+		/// Lowest last trade volume.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LastTradeVolumeLowKey, Description = LocalizedStrings.LastTradeVolumeLowDescKey)]
+		LastTradeVolumeLow,
+
+		/// <summary>
+		/// Highest last trade volume.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LastTradeVolumeHighKey, Description = LocalizedStrings.LastTradeVolumeHighDescKey)]
+		LastTradeVolumeHigh,
+
+		/// <summary>
+		/// Option margin leverage.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.OptionMarginKey, Description = LocalizedStrings.OptionMarginDescKey)]
+		OptionMargin,
+
+		/// <summary>
+		/// Synthetic option position margin leverage.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.OptionSyntheticMarginKey, Description = LocalizedStrings.OptionSyntheticMarginDescKey)]
+		OptionSyntheticMargin,
+
+		/// <summary>
+		/// Volume of the lowest bid.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LowBidVolumeKey, Description = LocalizedStrings.LowBidVolumeDescKey)]
+		LowBidVolume,
+		
+		/// <summary>
+		/// Volume of the highest ask.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.HighAskVolumeKey, Description = LocalizedStrings.HighAskVolumeDescKey)]
+		HighAskVolume,
+		
+		/// <summary>
+		/// Underlying asset best bid price.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.UnderlyingBestBidPriceKey, Description = LocalizedStrings.UnderlyingBestBidPriceDescKey)]
+		UnderlyingBestBidPrice,
+		
+		/// <summary>
+		/// Underlying asset best ask price.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.UnderlyingBestAskPriceKey, Description = LocalizedStrings.UnderlyingBestAskPriceDescKey)]
+		UnderlyingBestAskPrice,
+		
+		/// <summary>
+		/// Median price.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.MedianKey, Description = LocalizedStrings.MedianPriceKey)]
+		MedianPrice,
+		
+		/// <summary>
+		/// The highest price for 52 weeks.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.HighPrice52WeekKey, Description = LocalizedStrings.HighPrice52WeekDescKey)]
+		HighPrice52Week,
+		
+		/// <summary>
+		/// The lowest price for 52 weeks.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LowPrice52WeekKey, Description = LocalizedStrings.LowPrice52WeekDescKey)]
+		LowPrice52Week,
+		
+		/// <summary>
+		/// Last trade ID (string).
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LastTradeStringIdKey, Description = LocalizedStrings.LastTradeStringIdDescKey)]
+		LastTradeStringId,
 	}
 
 	/// <summary>
@@ -689,18 +874,28 @@ namespace StockSharp.Messages
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	[DisplayNameLoc(LocalizedStrings.Level1Key)]
-	[DescriptionLoc(LocalizedStrings.Level1MarketDataKey)]
-	public class Level1ChangeMessage : BaseChangeMessage<Level1Fields>, ISecurityIdMessage
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.Level1Key,
+		Description = LocalizedStrings.Level1MarketDataKey)]
+	public class Level1ChangeMessage : BaseChangeMessage<Level1ChangeMessage, Level1Fields>,
+		ISecurityIdMessage, ISeqNumMessage
 	{
-		/// <summary>
-		/// Security ID.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.SecurityKey)]
-		[DescriptionLoc(LocalizedStrings.SecurityIdKey, true)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SecurityKey,
+			Description = LocalizedStrings.SecurityIdKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public SecurityId SecurityId { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		public long SeqNum { get; set; }
+
+		/// <inheritdoc />
+		public override DataType DataType => DataType.Level1;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="Level1ChangeMessage"/>.
@@ -710,31 +905,24 @@ namespace StockSharp.Messages
 		{
 		}
 
-		/// <summary>
-		/// Create a copy of <see cref="Level1ChangeMessage"/>.
-		/// </summary>
-		/// <returns>Copy.</returns>
-		public override Message Clone()
+		/// <inheritdoc />
+		public override void CopyTo(Level1ChangeMessage destination)
 		{
-			var msg = new Level1ChangeMessage
-			{
-				LocalTime = LocalTime,
-				SecurityId = SecurityId,
-				ServerTime = ServerTime,
-			};
+			base.CopyTo(destination);
 
-			msg.Changes.AddRange(Changes);
-
-			return msg;
+			destination.SecurityId = SecurityId;
+			destination.SeqNum = SeqNum;
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",Sec={SecurityId},Changes={Changes.Select(c => c.ToString()).Join(",")}";
+			var str = base.ToString() + $",Sec={SecurityId},Changes={Changes.Select(c => c.ToString()).JoinComma()}";
+
+			if (SeqNum != default)
+				str += $",SQ={SeqNum}";
+
+			return str;
 		}
 	}
 }

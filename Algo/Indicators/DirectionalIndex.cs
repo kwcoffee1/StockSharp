@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -17,24 +17,33 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Common;
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
+	using StockSharp.Messages;
 
 	/// <summary>
 	/// Welles Wilder Directional Movement Index.
 	/// </summary>
-	[DisplayName("DX")]
-	[DescriptionLoc(LocalizedStrings.Str762Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/dmi.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.DMIKey,
+		Description = LocalizedStrings.WellesWilderDirectionalMovementIndexKey)]
+	[Doc("topics/api/indicators/list_of_indicators/dmi.html")]
 	public class DirectionalIndex : BaseComplexIndicator
 	{
-		private sealed class DxValue : ComplexIndicatorValue
+		private class DxValue : ComplexIndicatorValue
 		{
 			private decimal _value;
 
-			public DxValue(IIndicator indicator)
+			public DxValue(IComplexIndicator indicator)
 				: base(indicator)
 			{
 			}
@@ -46,7 +55,7 @@ namespace StockSharp.Algo.Indicators
 				return new DecimalIndicatorValue(indicator, _value);
 			}
 
-			public override T GetValue<T>()
+			public override T GetValue<T>(Level1Fields? field)
 			{
 				return _value.To<T>();
 			}
@@ -57,17 +66,22 @@ namespace StockSharp.Algo.Indicators
 		/// </summary>
 		public DirectionalIndex()
 		{
-			InnerIndicators.Add(Plus = new DiPlus());
-			InnerIndicators.Add(Minus = new DiMinus());
+			AddInner(Plus = new());
+			AddInner(Minus = new());
 		}
+
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Percent;
 
 		/// <summary>
 		/// Period length.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str736Key)]
-		[DescriptionLoc(LocalizedStrings.Str737Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		public virtual int Length
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PeriodKey,
+			Description = LocalizedStrings.IndicatorPeriodKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public int Length
 		{
 			get => Plus.Length;
 			set
@@ -81,25 +95,25 @@ namespace StockSharp.Algo.Indicators
 		/// DI+.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("DI+")]
-		[Description("DI+.")]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.DiPlusKey,
+			Description = LocalizedStrings.DiPlusLineKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public DiPlus Plus { get; }
 
 		/// <summary>
 		/// DI-.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("DI-")]
-		[Description("DI-.")]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.DiMinusKey,
+			Description = LocalizedStrings.DiMinusLineKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public DiMinus Minus { get; }
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var value = new DxValue(this) { IsFinal = input.IsFinal };
@@ -124,24 +138,21 @@ namespace StockSharp.Algo.Indicators
 			return value;
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
-			Length = settings.GetValue<int>(nameof(Length));
+			base.Load(storage);
+			Length = storage.GetValue<int>(nameof(Length));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
-			settings.SetValue(nameof(Length), Length);
+			base.Save(storage);
+			storage.SetValue(nameof(Length), Length);
 		}
+
+		/// <inheritdoc />
+		public override string ToString() => base.ToString() + " " + Length;
 	}
 }

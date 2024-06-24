@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -17,18 +17,24 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.Collections.Generic;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Linq;
 
-	using Ecng.Collections;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Standard error in linear regression.
 	/// </summary>
-	[DisplayName("StdErr")]
-	[DescriptionLoc(LocalizedStrings.Str750Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/standard_error.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.StandardErrorKey,
+		Description = LocalizedStrings.StandardErrorLinearRegKey)]
+	[Doc("topics/api/indicators/list_of_indicators/standard_error.html")]
 	public class StandardError : LengthIndicator<decimal>
 	{
 		// Коэффициент при независимой переменной, угол наклона прямой.
@@ -42,39 +48,27 @@ namespace StockSharp.Algo.Indicators
 			Length = 10;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
 			_slope = 0;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
 
 			if (input.IsFinal)
 			{
-				Buffer.Add(newValue);
-
-				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
+				Buffer.AddEx(newValue);
 			}
 
-			var buff = Buffer;
-			if (!input.IsFinal)
-			{
-				buff = new List<decimal>();
-				buff.AddRange(Buffer.Skip(1));
-				buff.Add(newValue);
-			}
+			var buff = input.IsFinal ? Buffer : (IList<decimal>)Buffer.Skip(1).Append(newValue).ToArray();
 
 			// если значений хватает, считаем регрессию
 			if (IsFormed)
@@ -89,8 +83,8 @@ namespace StockSharp.Algo.Indicators
 				for (var i = 0; i < Length; i++)
 				{
 					sumX += i;
-					sumY += buff.ElementAt(i);
-					sumXy += i * buff.ElementAt(i);
+					sumY += buff[i];
+					sumXy += i * buff[i];
 					sumX2 += i * i;
 				}
 
@@ -107,7 +101,7 @@ namespace StockSharp.Algo.Indicators
 
 				for (var i = 0; i < Length; i++)
 				{
-					var y = buff.ElementAt(i); // значение
+					var y = buff[i]; // значение
 					var yEst = _slope * i + b; // оценка по регрессии
 					sumErr2 += (y - yEst) * (y - yEst);
 				}

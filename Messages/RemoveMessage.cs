@@ -45,7 +45,7 @@ namespace StockSharp.Messages
 		/// User.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str3725Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.UserKey)]
 		User,
 	}
 
@@ -54,7 +54,7 @@ namespace StockSharp.Messages
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class RemoveMessage : Message
+	public class RemoveMessage : Message, ITransactionIdMessage
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="RemoveMessage"/>.
@@ -76,18 +76,26 @@ namespace StockSharp.Messages
 		[DataMember]
 		public string RemoveId { get; set; }
 
+		/// <inheritdoc />
+		[DataMember]
+		public long TransactionId { get; set; }
+
 		/// <summary>
 		/// Create a copy of <see cref="RemoveMessage"/>.
 		/// </summary>
 		/// <returns>Copy.</returns>
 		public override Message Clone()
 		{
-			return new RemoveMessage
+			var clone = new RemoveMessage
 			{
 				RemoveType = RemoveType,
 				RemoveId = RemoveId,
-				LocalTime = LocalTime,
+				TransactionId = TransactionId,
 			};
+
+			CopyTo(clone);
+
+			return clone;
 		}
 	}
 }

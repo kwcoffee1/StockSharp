@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -16,7 +16,9 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
@@ -24,10 +26,13 @@ namespace StockSharp.Algo.Indicators
 	/// Correlation.
 	/// </summary>
 	/// <remarks>
-	/// https://en.wikipedia.org/wiki/Correlation_and_dependence.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/correlation.html
 	/// </remarks>
-	[DisplayName("COR")]
-	[DescriptionLoc(LocalizedStrings.CorrelationKey, true)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.CORKey,
+		Description = LocalizedStrings.CorrelationKey)]
+	[Doc("topics/api/indicators/list_of_indicators/correlation.html")]
 	[IndicatorIn(typeof(PairIndicatorValue<decimal>))]
 	public class Correlation : Covariance
 	{
@@ -45,9 +50,7 @@ namespace StockSharp.Algo.Indicators
 			Length = 20;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -59,11 +62,7 @@ namespace StockSharp.Algo.Indicators
 				_other.Length = Length;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var cov = base.OnProcess(input);

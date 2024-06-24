@@ -18,7 +18,6 @@ namespace StockSharp.Algo.Storages.Csv
 	using System;
 	using System.Collections;
 	using System.Collections.Generic;
-	using System.Globalization;
 	using System.IO;
 	using System.Linq;
 	using System.Text;
@@ -32,12 +31,14 @@ namespace StockSharp.Algo.Storages.Csv
 	{
 		private readonly Encoding _encoding;
 		private readonly Func<FastCsvReader, object> _readId;
+		private readonly Func<FastCsvReader, bool> _readIncrementalOnly;
 
-		public CsvMetaInfo(DateTime date, Encoding encoding, Func<FastCsvReader, object> readId)
+		public CsvMetaInfo(DateTime date, Encoding encoding, Func<FastCsvReader, object> readId, Func<FastCsvReader, bool> readIncrementalOnly = null)
 			: base(date)
 		{
 			_encoding = encoding ?? throw new ArgumentNullException(nameof(encoding));
 			_readId = readId;
+			_readIncrementalOnly = readIncrementalOnly;
 		}
 
 		//public override CsvMetaInfo Clone()
@@ -60,20 +61,22 @@ namespace StockSharp.Algo.Storages.Csv
 			set => _lastId = value;
 		}
 
+		public bool? IncrementalOnly { get; set; }
+
 		public override void Write(Stream stream)
 		{
 		}
 
 		public override void Read(Stream stream)
 		{
-			CultureInfo.InvariantCulture.DoInCulture(() =>
+			Do.Invariant(() =>
 			{
 				var count = 0;
 
 				var firstTimeRead = false;
 				string lastLine = null;
 
-				var reader = new FastCsvReader(stream, _encoding);
+				var reader = new FastCsvReader(stream, _encoding, StringHelper.RN);
 
 				while (reader.NextLine())
 				{
@@ -92,13 +95,14 @@ namespace StockSharp.Algo.Storages.Csv
 
 				if (lastLine != null)
 				{
-					reader = new FastCsvReader(lastLine);
+					reader = new FastCsvReader(lastLine, StringHelper.RN);
 
 					if (!reader.NextLine())
 						throw new InvalidOperationException();
 
 					LastTime = reader.ReadTime(Date).UtcDateTime;
 					_lastId = _readId?.Invoke(reader);
+					IncrementalOnly = _readIncrementalOnly?.Invoke(reader);
 				}
 
 				stream.Position = 0;
@@ -113,7 +117,7 @@ namespace StockSharp.Algo.Storages.Csv
 	public abstract class CsvMarketDataSerializer<TData> : IMarketDataSerializer<TData>
 	{
 		// ReSharper disable StaticFieldInGenericType
-		private static readonly UTF8Encoding _utf = new UTF8Encoding(false);
+		private static readonly UTF8Encoding _utf = new(false);
 		// ReSharper restore StaticFieldInGenericType
 
 		/// <summary>
@@ -121,7 +125,7 @@ namespace StockSharp.Algo.Storages.Csv
 		/// </summary>
 		/// <param name="encoding">Encoding.</param>
 		protected CsvMarketDataSerializer(Encoding encoding = null)
-			: this(default(SecurityId), encoding)
+			: this(default, encoding)
 		{
 		}
 
@@ -132,6 +136,9 @@ namespace StockSharp.Algo.Storages.Csv
 		/// <param name="encoding">Encoding.</param>
 		protected CsvMarketDataSerializer(SecurityId securityId, Encoding encoding = null)
 		{
+			// force hash code caching
+			securityId.GetHashCode();
+
 			SecurityId = securityId;
 			Encoding = encoding ?? _utf;
 		}
@@ -184,7 +191,7 @@ namespace StockSharp.Algo.Storages.Csv
 		/// <param name="metaInfo">Meta-information on data for one day.</param>
 		public virtual void Serialize(Stream stream, IEnumerable<TData> data, IMarketDataMetaInfo metaInfo)
 		{
-			CultureInfo.InvariantCulture.DoInCulture(() =>
+			Do.Invariant(() =>
 			{
 				var writer = new CsvFileWriter(stream, Encoding);
 
@@ -253,7 +260,7 @@ namespace StockSharp.Algo.Storages.Csv
 			//	new CsvReader(copy, _encoding, SecurityId, metaInfo.Date.Date, _executionType, _candleArg, _members))
 			//	.ToEx(metaInfo.Count);
 
-			return new SimpleEnumerable<TData>(() => new CsvEnumerator(this, new FastCsvReader(copy, Encoding), metaInfo));
+			return new SimpleEnumerable<TData>(() => new CsvEnumerator(this, new FastCsvReader(copy, Encoding, StringHelper.RN), metaInfo));
 		}
 
 		/// <summary>

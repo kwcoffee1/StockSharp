@@ -28,8 +28,8 @@ namespace StockSharp.Algo.Slippage
 	/// </summary>
 	public class SlippageManager : ISlippageManager
 	{
-		private readonly SynchronizedDictionary<SecurityId, RefPair<decimal, decimal>> _bestPrices = new SynchronizedDictionary<SecurityId, RefPair<decimal, decimal>>();
-		private readonly SynchronizedDictionary<long, Tuple<Sides, decimal>> _plannedPrices = new SynchronizedDictionary<long, Tuple<Sides, decimal>>();
+		private readonly SynchronizedDictionary<SecurityId, RefPair<decimal, decimal>> _bestPrices = new();
+		private readonly SynchronizedDictionary<long, Tuple<Sides, decimal>> _plannedPrices = new();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="SlippageManager"/>.
@@ -39,9 +39,7 @@ namespace StockSharp.Algo.Slippage
 			CalculateNegative = true;
 		}
 
-		/// <summary>
-		/// Total slippage.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual decimal Slippage { get; private set; }
 
 		/// <summary>
@@ -49,9 +47,7 @@ namespace StockSharp.Algo.Slippage
 		/// </summary>
 		public bool CalculateNegative { get; set; }
 
-		/// <summary>
-		/// To zero <see cref="ISlippageManager.Slippage"/>.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual void Reset()
 		{
 			Slippage = 0;
@@ -59,11 +55,7 @@ namespace StockSharp.Algo.Slippage
 			_plannedPrices.Clear();
 		}
 
-		/// <summary>
-		/// To calculate slippage.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		/// <returns>The slippage. If it is impossible to calculate slippage, <see langword="null" /> will be returned.</returns>
+		/// <inheritdoc />
 		public decimal? ProcessMessage(Message message)
 		{
 			switch (message.Type)
@@ -79,11 +71,11 @@ namespace StockSharp.Algo.Slippage
 					var l1Msg = (Level1ChangeMessage)message;
 					var pair = _bestPrices.SafeAdd(l1Msg.SecurityId);
 
-					var bidPrice = (decimal?)l1Msg.Changes.TryGetValue(Level1Fields.BestBidPrice);
+					var bidPrice = l1Msg.TryGetDecimal(Level1Fields.BestBidPrice);
 					if (bidPrice != null)
 						pair.First = bidPrice.Value;
 
-					var askPrice = (decimal?)l1Msg.Changes.TryGetValue(Level1Fields.BestAskPrice);
+					var askPrice = l1Msg.TryGetDecimal(Level1Fields.BestAskPrice);
 					if (askPrice != null)
 						pair.Second = askPrice.Value;
 
@@ -93,15 +85,19 @@ namespace StockSharp.Algo.Slippage
 				case MessageTypes.QuoteChange:
 				{
 					var quotesMsg = (QuoteChangeMessage)message;
+
+					if (quotesMsg.State != null)
+						break;
+
 					var pair = _bestPrices.SafeAdd(quotesMsg.SecurityId);
 
 					var bid = quotesMsg.GetBestBid();
 					if (bid != null)
-						pair.First = bid.Price;
+						pair.First = bid.Value.Price;
 
 					var ask = quotesMsg.GetBestAsk();
 					if (ask != null)
-						pair.Second = ask.Price;
+						pair.Second = ask.Value.Price;
 
 					break;
 				}

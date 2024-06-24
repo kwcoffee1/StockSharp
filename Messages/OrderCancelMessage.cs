@@ -18,6 +18,8 @@ namespace StockSharp.Messages
 	using System;
 	using System.Runtime.Serialization;
 
+	using Ecng.Common;
+
 	/// <summary>
 	/// A message containing the data for the cancellation of the order.
 	/// </summary>
@@ -38,10 +40,10 @@ namespace StockSharp.Messages
 		public string OrderStringId { get; set; }
 
 		/// <summary>
-		/// Transaction ID cancellation order.
+		/// Cancelling balance.
 		/// </summary>
 		[DataMember]
-		public long OrderTransactionId { get; set; }
+		public decimal? Balance { get; set; }
 
 		/// <summary>
 		/// Cancelling volume. If not specified, then it canceled the entire balance.
@@ -73,36 +75,52 @@ namespace StockSharp.Messages
 		}
 
 		/// <summary>
+		/// Copy the message into the <paramref name="destination" />.
+		/// </summary>
+		/// <param name="destination">The object, to which copied information.</param>
+		protected void CopyTo(OrderCancelMessage destination)
+		{
+			base.CopyTo(destination);
+
+			destination.OrderId = OrderId;
+			destination.OrderStringId = OrderStringId;
+			destination.Balance = Balance;
+			destination.Volume = Volume;
+			destination.Side = Side;
+		}
+
+		/// <summary>
 		/// Create a copy of <see cref="OrderCancelMessage"/>.
 		/// </summary>
 		/// <returns>Copy.</returns>
 		public override Message Clone()
 		{
-			var clone = new OrderCancelMessage
-			{
-				OrderId = OrderId,
-				OrderStringId = OrderStringId,
-				TransactionId = TransactionId,
-				OrderTransactionId = OrderTransactionId,
-				Volume = Volume,
-				OrderType = OrderType,
-				PortfolioName = PortfolioName,
-				SecurityId = SecurityId,
-				Side = Side,
-			};
-
+			var clone = new OrderCancelMessage();
 			CopyTo(clone);
-
 			return clone;
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",OrderTransId={OrderTransactionId},TransId={TransactionId},OrderId={OrderId}";
+			var str = base.ToString();
+
+			if (OrderId != null)
+				str += $",OrdId={OrderId.Value}";
+
+			if (!OrderStringId.IsEmpty())
+				str += $",OrdStrId={OrderStringId}";
+
+			if (Balance != null)
+				str += $",Bal={Balance.Value}";
+
+			if (Volume != null)
+				str += $",Vol={Volume.Value}";
+
+			if (Side != null)
+				str += $",Side={Side.Value}";
+
+			return str;
 		}
 	}
 }

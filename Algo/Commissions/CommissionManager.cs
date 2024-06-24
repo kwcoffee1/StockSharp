@@ -21,8 +21,6 @@ namespace StockSharp.Algo.Commissions
 	using Ecng.Collections;
 	using Ecng.Serialization;
 
-	using MoreLinq;
-
 	using StockSharp.Messages;
 
 	/// <summary>
@@ -37,32 +35,22 @@ namespace StockSharp.Algo.Commissions
 		{
 		}
 
-		private readonly CachedSynchronizedSet<ICommissionRule> _rules = new CachedSynchronizedSet<ICommissionRule>();
+		private readonly CachedSynchronizedSet<ICommissionRule> _rules = new();
 
-		/// <summary>
-		/// The list of commission calculating rules.
-		/// </summary>
+		/// <inheritdoc />
 		public ISynchronizedCollection<ICommissionRule> Rules => _rules;
 
-		/// <summary>
-		/// Total commission.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual decimal Commission { get; private set; }
 
-		/// <summary>
-		/// To reset the state.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual void Reset()
 		{
 			Commission = 0;
 			_rules.Cache.ForEach(r => r.Reset());
 		}
 
-		/// <summary>
-		/// To calculate commission.
-		/// </summary>
-		/// <param name="message">The message containing the information about the order or own trade.</param>
-		/// <returns>The commission. If the commission cannot be calculated then <see langword="null" /> will be returned.</returns>
+		/// <inheritdoc />
 		public virtual decimal? Process(Message message)
 		{
 			switch (message.Type)
@@ -77,19 +65,16 @@ namespace StockSharp.Algo.Commissions
 					if (_rules.Count == 0)
 						return null;
 
+					var execMsg = (ExecutionMessage)message;
+
 					decimal? commission = null;
 
 					foreach (var rule in _rules.Cache)
 					{
-						var ruleCom = rule.Process(message);
+						var ruleCom = rule.Process(execMsg);
 
 						if (ruleCom != null)
-						{
-							if (commission == null)
-								commission = 0;
-
-							commission += ruleCom.Value;
-						}
+							commission = (commission ?? 0) + ruleCom.Value;
 					}
 
 					if (commission != null)
@@ -119,9 +104,5 @@ namespace StockSharp.Algo.Commissions
 		{
 			storage.SetValue(nameof(Rules), Rules.Select(r => r.SaveEntire(false)).ToArray());
 		}
-
-		string ICommissionRule.Title => throw new NotSupportedException();
-
-		Unit ICommissionRule.Value => throw new NotSupportedException();
 	}
 }

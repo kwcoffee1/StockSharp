@@ -22,8 +22,6 @@ namespace StockSharp.Algo.Risk
 	using Ecng.Collections;
 	using Ecng.Serialization;
 
-	using MoreLinq;
-
 	using StockSharp.Logging;
 	using StockSharp.Messages;
 
@@ -47,26 +45,18 @@ namespace StockSharp.Algo.Risk
 			};
 		}
 
-		private readonly CachedSynchronizedSet<IRiskRule> _rules = new CachedSynchronizedSet<IRiskRule>();
+		private readonly CachedSynchronizedList<IRiskRule> _rules = new();
 
-		/// <summary>
-		/// Rule list.
-		/// </summary>
-		public SynchronizedSet<IRiskRule> Rules => _rules;
+		/// <inheritdoc />
+		public INotifyList<IRiskRule> Rules => _rules;
 
-		/// <summary>
-		/// To reset the state.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual void Reset()
 		{
 			_rules.Cache.ForEach(r => r.Reset());
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns>List of rules, activated by the message.</returns>
+		/// <inheritdoc />
 		public IEnumerable<IRiskRule> ProcessRules(Message message)
 		{
 			if (message.Type == MessageTypes.Reset)
@@ -78,10 +68,7 @@ namespace StockSharp.Algo.Risk
 			return _rules.Cache.Where(r => r.ProcessMessage(message)).ToArray();
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			Rules.Clear();
@@ -90,28 +77,12 @@ namespace StockSharp.Algo.Risk
 			base.Load(storage);
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			storage.SetValue(nameof(Rules), Rules.Select(r => r.SaveEntire(false)).ToArray());
 
 			base.Save(storage);
-		}
-
-		RiskActions IRiskRule.Action
-		{
-			get => throw new NotSupportedException();
-			set => throw new NotSupportedException();
-		}
-
-		string IRiskRule.Title => throw new NotSupportedException();
-
-		bool IRiskRule.ProcessMessage(Message message)
-		{
-			throw new NotSupportedException();
 		}
 	}
 }

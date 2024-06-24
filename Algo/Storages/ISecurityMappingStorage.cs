@@ -2,7 +2,6 @@ namespace StockSharp.Algo.Storages
 {
 	using System;
 	using System.Collections.Generic;
-	using System.Globalization;
 	using System.IO;
 	using System.Linq;
 	using System.Text;
@@ -58,6 +57,22 @@ namespace StockSharp.Algo.Storages
 		/// <param name="stockSharpId">StockSharp format.</param>
 		/// <returns><see langword="true"/> if mapping was added. Otherwise, <see langword="false" />.</returns>
 		bool Remove(string storageName, SecurityId stockSharpId);
+
+		/// <summary>
+		/// Try get <see cref="SecurityIdMapping.StockSharpId"/>.
+		/// </summary>
+		/// <param name="storageName">Storage name.</param>
+		/// <param name="adapterId">Adapter format.</param>
+		/// <returns><see cref="SecurityIdMapping.StockSharpId"/> if identifier exists. Otherwise, <see langword="null" />.</returns>
+		SecurityId? TryGetStockSharpId(string storageName, SecurityId adapterId);
+
+		/// <summary>
+		/// Try get <see cref="SecurityIdMapping.AdapterId"/>.
+		/// </summary>
+		/// <param name="storageName">Storage name.</param>
+		/// <param name="stockSharpId">StockSharp format.</param>
+		/// <returns><see cref="SecurityIdMapping.AdapterId"/> if identifier exists. Otherwise, <see langword="null" />.</returns>
+		SecurityId? TryGetAdapterId(string storageName, SecurityId stockSharpId);
 	}
 
 	/// <summary>
@@ -65,9 +80,9 @@ namespace StockSharp.Algo.Storages
 	/// </summary>
 	public class InMemorySecurityMappingStorage : ISecurityMappingStorage
 	{
-		private readonly SynchronizedDictionary<string, PairSet<SecurityId, SecurityId>> _mappings = new SynchronizedDictionary<string, PairSet<SecurityId, SecurityId>>(StringComparer.InvariantCultureIgnoreCase);
+		private readonly SynchronizedDictionary<string, PairSet<SecurityId, SecurityId>> _mappings = new(StringComparer.InvariantCultureIgnoreCase);
 
-		private event Action<string, SecurityIdMapping> _changed;
+		private Action<string, SecurityIdMapping> _changed;
 
 		event Action<string, SecurityIdMapping> ISecurityMappingStorage.Changed
 		{
@@ -105,7 +120,7 @@ namespace StockSharp.Algo.Storages
 			if (storageName.IsEmpty())
 				throw new ArgumentNullException(nameof(storageName));
 
-			if (mapping.IsDefault())
+			if (mapping == default)
 				throw new ArgumentNullException(nameof(mapping));
 
 			var added = false;
@@ -115,15 +130,20 @@ namespace StockSharp.Algo.Storages
 				var mappings = _mappings.SafeAdd(storageName);
 
 				var stockSharpId = mapping.StockSharpId;
+				var adapterId = mapping.AdapterId;
 
 				if (mappings.ContainsKey(stockSharpId))
 				{
 					mappings.Remove(stockSharpId);
 				}
+				else if (mappings.ContainsValue(adapterId))
+				{
+					mappings.RemoveByValue(adapterId);
+				}
 				else
 					added = true;
 
-				mappings.Add(stockSharpId, mapping.AdapterId);
+				mappings.Add(stockSharpId, adapterId);
 
 				all = added ? null : mappings.Select(p => (SecurityIdMapping)p).ToArray();
 			}
@@ -138,12 +158,40 @@ namespace StockSharp.Algo.Storages
 			return Remove(storageName, stockSharpId, out _);
 		}
 
+		SecurityId? ISecurityMappingStorage.TryGetStockSharpId(string storageName, SecurityId adapterId)
+		{
+			lock (_mappings.SyncRoot)
+			{
+				if (!_mappings.TryGetValue(storageName, out var mappings))
+					return null;
+
+				if (!mappings.TryGetKey(adapterId, out var stockSharpId))
+					return null;
+
+				return stockSharpId;
+			}
+		}
+
+		SecurityId? ISecurityMappingStorage.TryGetAdapterId(string storageName, SecurityId stockSharpId)
+		{
+			lock (_mappings.SyncRoot)
+			{
+				if (!_mappings.TryGetValue(storageName, out var mappings))
+					return null;
+
+				if (!mappings.TryGetValue(stockSharpId, out var adapterId))
+					return null;
+
+				return adapterId;
+			}
+		}
+
 		internal bool Remove(string storageName, SecurityId stockSharpId, out IEnumerable<SecurityIdMapping> all)
 		{
 			if (storageName.IsEmpty())
 				throw new ArgumentNullException(nameof(storageName));
 
-			if (stockSharpId.IsDefault())
+			if (stockSharpId == default)
 				throw new ArgumentNullException(nameof(storageName));
 
 			all = null;
@@ -225,8 +273,7 @@ namespace StockSharp.Algo.Storages
 		/// <inheritdoc />
 		public IDictionary<string, Exception> Init()
 		{
-			if (!Directory.Exists(_path))
-				Directory.CreateDirectory(_path);
+			Directory.CreateDirectory(_path);
 
 			var errors = _inMemory.Init();
 
@@ -259,7 +306,7 @@ namespace StockSharp.Algo.Storages
 			if (storageName.IsEmpty())
 				throw new ArgumentNullException(nameof(storageName));
 
-			if (mapping.IsDefault())
+			if (mapping == default)
 				throw new ArgumentNullException(nameof(mapping));
 
 			var added = ((InMemorySecurityMappingStorage)_inMemory).Save(storageName, mapping, out var all);
@@ -287,9 +334,21 @@ namespace StockSharp.Algo.Storages
 			return true;
 		}
 
+		/// <inheritdoc />
+		public SecurityId? TryGetStockSharpId(string storageName, SecurityId adapterId)
+		{
+			return _inMemory.TryGetStockSharpId(storageName, adapterId);
+		}
+
+		/// <inheritdoc />
+		public SecurityId? TryGetAdapterId(string storageName, SecurityId stockSharpId)
+		{
+			return _inMemory.TryGetAdapterId(storageName, stockSharpId);
+		}
+
 		private void LoadFile(string fileName)
 		{
-			CultureInfo.InvariantCulture.DoInCulture(() =>
+			Do.Invariant(() =>
 			{
 				if (!File.Exists(fileName))
 					return;
@@ -298,7 +357,7 @@ namespace StockSharp.Algo.Storages
 
 				using (var stream = new FileStream(fileName, FileMode.Open, FileAccess.Read))
 				{
-					var reader = new FastCsvReader(stream, Encoding.UTF8);
+					var reader = new FastCsvReader(stream, Encoding.UTF8, StringHelper.RN);
 
 					reader.NextLine();
 
@@ -329,7 +388,7 @@ namespace StockSharp.Algo.Storages
 			{
 				var fileName = Path.Combine(_path, name + ".csv");
 
-				var appendHeader = overwrite || !File.Exists(fileName);
+				var appendHeader = overwrite || !File.Exists(fileName) || new FileInfo(fileName).Length == 0;
 				var mode = overwrite ? FileMode.Create : FileMode.Append;
 
 				using (var writer = new CsvFileWriter(new TransactionFileStream(fileName, mode)))

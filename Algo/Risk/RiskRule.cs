@@ -1,27 +1,13 @@
-#region S# License
-/******************************************************************************************
-NOTICE!!!  This program and source code is owned and licensed by
-StockSharp, LLC, www.stocksharp.com
-Viewing or use of this code requires your acceptance of the license
-agreement found at https://github.com/StockSharp/StockSharp/blob/master/LICENSE
-Removal of this comment is a violation of the license agreement.
-
-Project: StockSharp.Algo.Risk.Algo
-File: RiskRule.cs
-Created: 2015, 11, 11, 2:32 PM
-
-Copyright 2010 by StockSharp, LLC
-*******************************************************************************************/
-#endregion S# License
 namespace StockSharp.Algo.Risk
 {
 	using System;
 	using System.Collections.Generic;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+	using System.Runtime.CompilerServices;
 
 	using Ecng.Common;
 	using Ecng.Serialization;
-	using Ecng.Collections;
 
 	using StockSharp.Messages;
 	using StockSharp.Localization;
@@ -37,7 +23,26 @@ namespace StockSharp.Algo.Risk
 		/// </summary>
 		protected RiskRule()
 		{
+			UpdateTitle();
 		}
+
+		/// <inheritdoc/>
+		[Browsable(false)]
+		public override Guid Id { get => base.Id; set => base.Id = value; }
+
+		/// <inheritdoc/>
+		[Browsable(false)]
+		public override string Name { get => base.Name; set => base.Name = value; }
+
+		/// <summary>
+		/// Get title.
+		/// </summary>
+		protected abstract string GetTitle();
+
+		/// <summary>
+		/// Update title.
+		/// </summary>
+		protected void UpdateTitle() => Title = GetTitle();
 
 		private string _title;
 
@@ -48,49 +53,44 @@ namespace StockSharp.Algo.Risk
 		public string Title
 		{
 			get => _title;
-			protected set
+			private set
 			{
 				_title = value;
-				NotifyChanged(nameof(Title));
+				NotifyChanged();
 			}
 		}
 
 		private RiskActions _action;
 
-		/// <summary>
-		/// Action that needs to be taken in case of rule activation.
-		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str722Key)]
-		[DescriptionLoc(LocalizedStrings.Str859Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		/// <inheritdoc />
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ActionKey,
+			Description = LocalizedStrings.RiskRuleActionKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public RiskActions Action
 		{
 			get => _action;
 			set
 			{
+				if (_action == value)
+					return;
+
 				_action = value;
-				NotifyChanged(nameof(Action));
+				NotifyChanged();
 			}
 		}
 
-		/// <summary>
-		/// To reset the state.
-		/// </summary>
+		/// <inheritdoc />
 		public virtual void Reset()
 		{
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
 		public abstract bool ProcessMessage(Message message);
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			Action = storage.GetValue<RiskActions>(nameof(Action));
@@ -98,10 +98,7 @@ namespace StockSharp.Algo.Risk
 			base.Load(storage);
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			storage.SetValue(nameof(Action), Action.To<string>());
@@ -110,14 +107,14 @@ namespace StockSharp.Algo.Risk
 		}
 
 		private PropertyChangedEventHandler _propertyChanged;
-		
+
 		event PropertyChangedEventHandler INotifyPropertyChanged.PropertyChanged
 		{
 			add => _propertyChanged += value;
 			remove => _propertyChanged -= value;
 		}
 
-		private void NotifyChanged(string propertyName)
+		private void NotifyChanged([CallerMemberName]string propertyName = null)
 		{
 			_propertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 		}
@@ -126,54 +123,86 @@ namespace StockSharp.Algo.Risk
 	/// <summary>
 	/// Risk-rule, tracking profit-loss.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.PnLKey)]
-	[DescriptionLoc(LocalizedStrings.Str860Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.PnLKey,
+		Description = LocalizedStrings.RulePnLKey,
+		GroupName = LocalizedStrings.PnLKey)]
 	public class RiskPnLRule : RiskRule
 	{
-		private decimal _pnL;
+		private decimal? _initValue;
+
+		/// <inheritdoc />
+		public override void Reset()
+		{
+			base.Reset();
+			_initValue = null;
+		}
+
+		private Unit _pnL = new();
 
 		/// <summary>
 		/// Profit-loss.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.PnLKey)]
-		[DescriptionLoc(LocalizedStrings.Str861Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		public decimal PnL
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PnLKey,
+			Description = LocalizedStrings.PnLKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
+		public Unit PnL
 		{
 			get => _pnL;
 			set
 			{
-				_pnL = value;
-				Title = value.To<string>();
+				if (_pnL == value)
+					return;
+
+				_pnL = value ?? throw new ArgumentNullException(nameof(value));
+				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
+		protected override string GetTitle() => _pnL?.To<string>();
+
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
-			if (message.Type != MessageTypes.PortfolioChange)
+			if (message.Type != MessageTypes.PositionChange)
 				return false;
 
-			var pfMsg = (PortfolioChangeMessage)message;
-			var currValue = (decimal?)pfMsg.Changes.TryGetValue(PositionChangeTypes.CurrentValue);
+			var pfMsg = (PositionChangeMessage)message;
+
+			if (!pfMsg.IsMoney())
+				return false;
+
+			var currValue = pfMsg.TryGetDecimal(PositionChangeTypes.CurrentValue);
 
 			if (currValue == null)
 				return false;
 
-			if (PnL > 0)
-				return currValue >= PnL;
+			if (_initValue == null)
+			{
+				_initValue = currValue.Value;
+				return false;
+			}
+
+			if (PnL.Type == UnitTypes.Limit)
+			{
+				if (PnL.Value > 0)
+					return PnL.Value <= currValue.Value;
+				else
+					return PnL.Value >= currValue.Value;
+			}
+
+			if (PnL.Value > 0)
+				return (_initValue + PnL) <= currValue.Value;
 			else
-				return currValue <= PnL;
+				return (_initValue + PnL) >= currValue.Value;
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -181,23 +210,23 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(PnL), PnL);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
 
-			PnL = storage.GetValue<decimal>(nameof(PnL));
+			PnL = storage.GetValue<Unit>(nameof(PnL));
 		}
 	}
 
 	/// <summary>
 	/// Risk-rule, tracking position size.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str862Key)]
-	[DescriptionLoc(LocalizedStrings.Str863Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.PositionKey,
+		Description = LocalizedStrings.RulePositionKey,
+		GroupName = LocalizedStrings.PositionsKey)]
 	public class RiskPositionSizeRule : RiskRule
 	{
 		private decimal _position;
@@ -205,31 +234,36 @@ namespace StockSharp.Algo.Risk
 		/// <summary>
 		/// Position size.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str862Key)]
-		[DescriptionLoc(LocalizedStrings.Str864Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PositionKey,
+			Description = LocalizedStrings.PositionSizeKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public decimal Position
 		{
 			get => _position;
 			set
 			{
+				if (_position == value)
+					return;
+
 				_position = value;
-				Title = value.To<string>();
+				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
+		protected override string GetTitle() => _position.To<string>();
+
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
 			if (message.Type != MessageTypes.PositionChange)
 				return false;
 
 			var posMsg = (PositionChangeMessage)message;
-			var currValue = (decimal?)posMsg.Changes.TryGetValue(PositionChangeTypes.CurrentValue);
+			var currValue = posMsg.TryGetDecimal(PositionChangeTypes.CurrentValue);
 
 			if (currValue == null)
 				return false;
@@ -240,10 +274,7 @@ namespace StockSharp.Algo.Risk
 				return currValue <= Position;
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -251,10 +282,7 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Position), Position);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -266,46 +294,52 @@ namespace StockSharp.Algo.Risk
 	/// <summary>
 	/// Risk-rule, tracking position lifetime.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str865Key)]
-	[DescriptionLoc(LocalizedStrings.Str866Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.PositionTimeKey,
+		Description = LocalizedStrings.RulePositionTimeKey,
+		GroupName = LocalizedStrings.PositionsKey)]
 	public class RiskPositionTimeRule : RiskRule
 	{
-		private readonly Dictionary<Tuple<SecurityId, string>, DateTimeOffset> _posOpenTime = new Dictionary<Tuple<SecurityId, string>, DateTimeOffset>();
+		private readonly Dictionary<Tuple<SecurityId, string>, DateTimeOffset> _posOpenTime = new();
 		private TimeSpan _time;
 
 		/// <summary>
 		/// Position lifetime.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.TimeKey)]
-		[DescriptionLoc(LocalizedStrings.Str867Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TimeKey,
+			Description = LocalizedStrings.PositionTimeDescKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public TimeSpan Time
 		{
 			get => _time;
 			set
 			{
+				if (_time == value)
+					return;
+
 				if (value < TimeSpan.Zero)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
-				
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
+
 				_time = value;
-				Title = value.To<string>();
+				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To reset the state.
-		/// </summary>
+		/// <inheritdoc />
+		protected override string GetTitle() => _time.To<string>();
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
 			_posOpenTime.Clear();
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
 			switch (message.Type)
@@ -313,7 +347,7 @@ namespace StockSharp.Algo.Risk
 				case MessageTypes.PositionChange:
 				{
 					var posMsg = (PositionChangeMessage)message;
-					var currValue = (decimal?)posMsg.Changes.TryGetValue(PositionChangeTypes.CurrentValue);
+					var currValue = posMsg.TryGetDecimal(PositionChangeTypes.CurrentValue);
 
 					if (currValue == null)
 						return false;
@@ -326,9 +360,7 @@ namespace StockSharp.Algo.Risk
 						return false;
 					}
 
-					var openTime = _posOpenTime.TryGetValue2(key);
-
-					if (openTime == null)
+					if (!_posOpenTime.TryGetValue(key, out var openTime))
 					{
 						_posOpenTime.Add(key, posMsg.LocalTime);
 						return false;
@@ -369,10 +401,7 @@ namespace StockSharp.Algo.Risk
 			return false;
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -380,10 +409,7 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Time), Time);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -395,8 +421,11 @@ namespace StockSharp.Algo.Risk
 	/// <summary>
 	/// Risk-rule, tracking commission size.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str159Key)]
-	[DescriptionLoc(LocalizedStrings.Str868Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.CommissionKey,
+		Description = LocalizedStrings.RiskCommissionKey,
+		GroupName = LocalizedStrings.PnLKey)]
 	public class RiskCommissionRule : RiskRule
 	{
 		private decimal _commission;
@@ -404,31 +433,40 @@ namespace StockSharp.Algo.Risk
 		/// <summary>
 		/// Commission size.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str159Key)]
-		[DescriptionLoc(LocalizedStrings.Str869Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CommissionKey,
+			Description = LocalizedStrings.CommissionDescKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public decimal Commission
 		{
 			get => _commission;
 			set
 			{
+				if (_commission == value)
+					return;
+
 				_commission = value;
-				Title = value.To<string>();
+				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
+		protected override string GetTitle() => _commission.To<string>();
+
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
-			if (message.Type != MessageTypes.PortfolioChange)
+			if (message.Type != MessageTypes.PositionChange)
 				return false;
 
-			var pfMsg = (PortfolioChangeMessage)message;
-			var currValue = (decimal?)pfMsg.Changes.TryGetValue(PositionChangeTypes.Commission);
+			var pfMsg = (PositionChangeMessage)message;
+
+			if (!pfMsg.IsMoney())
+				return false;
+
+			var currValue = pfMsg.TryGetDecimal(PositionChangeTypes.Commission);
 
 			if (currValue == null)
 				return false;
@@ -436,10 +474,7 @@ namespace StockSharp.Algo.Risk
 			return currValue >= Commission;
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -447,10 +482,7 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Commission), Commission);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -462,8 +494,11 @@ namespace StockSharp.Algo.Risk
 	/// <summary>
 	/// Risk-rule, tracking slippage size.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str163Key)]
-	[DescriptionLoc(LocalizedStrings.Str870Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.SlippageKey,
+		Description = LocalizedStrings.RiskSlippageKey,
+		GroupName = LocalizedStrings.OrdersKey)]
 	public class RiskSlippageRule : RiskRule
 	{
 		private decimal _slippage;
@@ -471,24 +506,29 @@ namespace StockSharp.Algo.Risk
 		/// <summary>
 		/// Slippage size.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str163Key)]
-		[DescriptionLoc(LocalizedStrings.Str871Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SlippageKey,
+			Description = LocalizedStrings.SlippageSizeKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public decimal Slippage
 		{
 			get => _slippage;
 			set
 			{
+				if (_slippage == value)
+					return;
+
 				_slippage = value;
-				Title = value.To<string>();
+				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
+		protected override string GetTitle() => _slippage.To<string>();
+
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
 			if (message.Type != MessageTypes.Execution)
@@ -506,10 +546,7 @@ namespace StockSharp.Algo.Risk
 				return currValue < Slippage;
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -517,10 +554,7 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Slippage), Slippage);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -532,8 +566,11 @@ namespace StockSharp.Algo.Risk
 	/// <summary>
 	/// Risk-rule, tracking order price.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str872Key)]
-	[DescriptionLoc(LocalizedStrings.Str873Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.OrderPrice2Key,
+		Description = LocalizedStrings.RiskOrderPriceKey,
+		GroupName = LocalizedStrings.OrdersKey)]
 	public class RiskOrderPriceRule : RiskRule
 	{
 		private decimal _price;
@@ -541,24 +578,29 @@ namespace StockSharp.Algo.Risk
 		/// <summary>
 		/// Order price.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.PriceKey)]
-		[DescriptionLoc(LocalizedStrings.OrderPriceKey)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PriceKey,
+			Description = LocalizedStrings.OrderPriceKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public decimal Price
 		{
 			get => _price;
 			set
 			{
+				if (_price == value)
+					return;
+
 				_price = value;
-				Title = value.To<string>();
+				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
+		protected override string GetTitle() => _price.To<string>();
+
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
 			switch (message.Type)
@@ -580,10 +622,7 @@ namespace StockSharp.Algo.Risk
 			}
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -591,10 +630,7 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Price), Price);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -606,8 +642,11 @@ namespace StockSharp.Algo.Risk
 	/// <summary>
 	/// Risk-rule, tracking order volume.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str662Key)]
-	[DescriptionLoc(LocalizedStrings.Str874Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.OrderVolume2Key,
+		Description = LocalizedStrings.RiskOrderVolumeKey,
+		GroupName = LocalizedStrings.OrdersKey)]
 	public class RiskOrderVolumeRule : RiskRule
 	{
 		private decimal _volume;
@@ -615,27 +654,32 @@ namespace StockSharp.Algo.Risk
 		/// <summary>
 		/// Order volume.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.VolumeKey)]
-		[DescriptionLoc(LocalizedStrings.Str875Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.VolumeKey,
+			Description = LocalizedStrings.OrderVolumeKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public decimal Volume
 		{
 			get => _volume;
 			set
 			{
+				if (_volume == value)
+					return;
+
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_volume = value;
-				Title = value.To<string>();
+				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
+		protected override string GetTitle() => _volume.To<string>();
+
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
 			switch (message.Type)
@@ -657,10 +701,7 @@ namespace StockSharp.Algo.Risk
 			}
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -668,10 +709,7 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Volume), Volume);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -683,33 +721,40 @@ namespace StockSharp.Algo.Risk
 	/// <summary>
 	/// Risk-rule, tracking orders placing frequency.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str876Key)]
-	[DescriptionLoc(LocalizedStrings.Str877Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.OrderFreqKey,
+		Description = LocalizedStrings.RiskOrderFreqKey,
+		GroupName = LocalizedStrings.OrdersKey)]
 	public class RiskOrderFreqRule : RiskRule
 	{
 		private DateTimeOffset? _endTime;
 		private int _current;
 
-		private void UpdateTitle()
-		{
-			Title = Count + " -> " + Interval;
-		}
+		/// <inheritdoc />
+		protected override string GetTitle() => Count + " -> " + Interval;
 
 		private int _count;
 
 		/// <summary>
 		/// Order count.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str878Key)]
-		[DescriptionLoc(LocalizedStrings.Str957Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CountKey,
+			Description = LocalizedStrings.OrdersCountKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public int Count
 		{
 			get => _count;
 			set
 			{
+				if (_count == value)
+					return;
+
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_count = value;
 				UpdateTitle();
@@ -722,25 +767,29 @@ namespace StockSharp.Algo.Risk
 		/// <summary>
 		/// Interval, during which orders quantity will be monitored.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str175Key)]
-		[DescriptionLoc(LocalizedStrings.Str879Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.IntervalKey,
+			Description = LocalizedStrings.RiskIntervalDescKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 1)]
 		public TimeSpan Interval
 		{
 			get => _interval;
 			set
 			{
+				if (_interval == value)
+					return;
+
 				if (value < TimeSpan.Zero)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_interval = value;
 				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To reset the state.
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -749,11 +798,7 @@ namespace StockSharp.Algo.Risk
 			_endTime = null;
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
 			switch (message.Type)
@@ -764,7 +809,7 @@ namespace StockSharp.Algo.Risk
 				{
 					var time = message.LocalTime;
 
-					if (time.IsDefault())
+					if (time == default)
 					{
 						this.AddWarningLog("Time is null. Msg={0}", message);
 						return false;
@@ -800,7 +845,7 @@ namespace StockSharp.Algo.Risk
 
 						this.AddDebugLog("EndTime={0}", _endTime);
 					}
-					
+
 					return false;
 				}
 			}
@@ -808,10 +853,7 @@ namespace StockSharp.Algo.Risk
 			return false;
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -820,10 +862,7 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Interval), Interval);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -834,10 +873,99 @@ namespace StockSharp.Algo.Risk
 	}
 
 	/// <summary>
+	/// Risk-rule, tracking orders error count.
+	/// </summary>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.OrderErrorKey,
+		Description = LocalizedStrings.RiskOrderErrorKey,
+		GroupName = LocalizedStrings.OrdersKey)]
+	public class RiskOrderErrorRule : RiskRule
+	{
+		private int _current;
+
+		private int _count;
+
+		/// <summary>
+		/// Error count.
+		/// </summary>
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ErrorsKey,
+			Description = LocalizedStrings.ErrorsCountKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
+		public int Count
+		{
+			get => _count;
+			set
+			{
+				if (_count == value)
+					return;
+
+				if (value < 0)
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
+
+				_count = value;
+				UpdateTitle();
+			}
+		}
+
+		/// <inheritdoc />
+		protected override string GetTitle() => Count.To<string>();
+
+		/// <inheritdoc />
+		public override void Reset()
+		{
+			base.Reset();
+
+			_current = 0;
+		}
+
+		/// <inheritdoc />
+		public override bool ProcessMessage(Message message)
+		{
+			if (message.Type != MessageTypes.Execution)
+				return false;
+
+			var execMsg = (ExecutionMessage)message;
+
+			if (execMsg.Error is null)
+			{
+				if (execMsg.HasOrderInfo() && execMsg.OrderState == OrderStates.Active)
+					_current = 0;
+
+				return false;
+			}
+
+			return ++_current >= Count;
+		}
+
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
+		{
+			base.Save(storage);
+
+			storage.SetValue(nameof(Count), Count);
+		}
+
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
+		{
+			base.Load(storage);
+
+			Count = storage.GetValue<int>(nameof(Count));
+		}
+	}
+
+	/// <summary>
 	/// Risk-rule, tracking trade price.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str672Key)]
-	[DescriptionLoc(LocalizedStrings.Str880Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TradePriceKey,
+		Description = LocalizedStrings.RiskTradePriceKey,
+		GroupName = LocalizedStrings.TradesKey)]
 	public class RiskTradePriceRule : RiskRule
 	{
 		private decimal _price;
@@ -845,24 +973,29 @@ namespace StockSharp.Algo.Risk
 		/// <summary>
 		/// Trade price.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.PriceKey)]
-		[DescriptionLoc(LocalizedStrings.Str147Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PriceKey,
+			Description = LocalizedStrings.TradePriceDescKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public decimal Price
 		{
 			get => _price;
 			set
 			{
+				if (_price == value)
+					return;
+
 				_price = value;
-				Title = value.To<string>();
+				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
+		protected override string GetTitle() => _price.To<string>();
+
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
 			if (message.Type != MessageTypes.Execution)
@@ -876,10 +1009,7 @@ namespace StockSharp.Algo.Risk
 			return execMsg.TradePrice >= Price;
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -887,10 +1017,7 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Price), Price);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -902,8 +1029,11 @@ namespace StockSharp.Algo.Risk
 	/// <summary>
 	/// Risk-rule, tracking trade volume.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str664Key)]
-	[DescriptionLoc(LocalizedStrings.Str881Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TradeVolumeKey,
+		Description = LocalizedStrings.RiskTradeVolumeKey,
+		GroupName = LocalizedStrings.TradesKey)]
 	public class RiskTradeVolumeRule : RiskRule
 	{
 		private decimal _volume;
@@ -911,27 +1041,32 @@ namespace StockSharp.Algo.Risk
 		/// <summary>
 		/// Trade volume.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.VolumeKey)]
-		[DescriptionLoc(LocalizedStrings.Str882Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.VolumeKey,
+			Description = LocalizedStrings.TradeVolumeDescKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public decimal Volume
 		{
 			get => _volume;
 			set
 			{
+				if (_volume == value)
+					return;
+
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_volume = value;
-				Title = value.To<string>();
+				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
+		protected override string GetTitle() => _volume.To<string>();
+
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
 			if (message.Type != MessageTypes.Execution)
@@ -945,10 +1080,7 @@ namespace StockSharp.Algo.Risk
 			return execMsg.TradeVolume >= Volume;
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -956,10 +1088,7 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Volume), Volume);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
@@ -971,33 +1100,40 @@ namespace StockSharp.Algo.Risk
 	/// <summary>
 	/// Risk-rule, tracking orders execution frequency.
 	/// </summary>
-	[DisplayNameLoc(LocalizedStrings.Str883Key)]
-	[DescriptionLoc(LocalizedStrings.Str884Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TradeFreqKey,
+		Description = LocalizedStrings.RiskTradeFreqKey,
+		GroupName = LocalizedStrings.TradesKey)]
 	public class RiskTradeFreqRule : RiskRule
 	{
 		private DateTimeOffset? _endTime;
 		private int _current;
 
-		private void UpdateTitle()
-		{
-			Title = Count + " -> " + Interval;
-		}
+		/// <inheritdoc />
+		protected override string GetTitle() => Count + " -> " + Interval;
 
 		private int _count;
 
 		/// <summary>
 		/// Number of trades.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str878Key)]
-		[DescriptionLoc(LocalizedStrings.Str232Key, true)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CountKey,
+			Description = LocalizedStrings.LimitOrderTifKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
 		public int Count
 		{
 			get => _count;
 			set
 			{
+				if (_count == value)
+					return;
+
 				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_count = value;
 				UpdateTitle();
@@ -1009,25 +1145,29 @@ namespace StockSharp.Algo.Risk
 		/// <summary>
 		/// Interval, during which trades quantity will be monitored.
 		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.Str175Key)]
-		[DescriptionLoc(LocalizedStrings.Str885Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.IntervalKey,
+			Description = LocalizedStrings.TradesIntervalKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 1)]
 		public TimeSpan Interval
 		{
 			get => _interval;
 			set
 			{
+				if (_interval == value)
+					return;
+
 				if (value < TimeSpan.Zero)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_interval = value;
 				UpdateTitle();
 			}
 		}
 
-		/// <summary>
-		/// To reset the state.
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -1036,11 +1176,7 @@ namespace StockSharp.Algo.Risk
 			_endTime = null;
 		}
 
-		/// <summary>
-		/// To process the trade message.
-		/// </summary>
-		/// <param name="message">The trade message.</param>
-		/// <returns><see langword="true" />, if the rule is activated, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
 		public override bool ProcessMessage(Message message)
 		{
 			if (message.Type != MessageTypes.Execution)
@@ -1053,7 +1189,7 @@ namespace StockSharp.Algo.Risk
 
 			var time = message.LocalTime;
 
-			if (time.IsDefault())
+			if (time == default)
 			{
 				this.AddWarningLog("Time is null. Msg={0}", message);
 				return false;
@@ -1089,14 +1225,11 @@ namespace StockSharp.Algo.Risk
 
 				this.AddDebugLog("EndTime={0}", _endTime);
 			}
-			
+
 			return false;
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Save(SettingsStorage storage)
 		{
 			base.Save(storage);
@@ -1105,16 +1238,89 @@ namespace StockSharp.Algo.Risk
 			storage.SetValue(nameof(Interval), Interval);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="storage">Storage.</param>
+		/// <inheritdoc />
 		public override void Load(SettingsStorage storage)
 		{
 			base.Load(storage);
 
 			Count = storage.GetValue<int>(nameof(Count));
 			Interval = storage.GetValue<TimeSpan>(nameof(Interval));
+		}
+	}
+
+	/// <summary>
+	/// Risk-rule, tracking error count.
+	/// </summary>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.ErrorKey,
+		Description = LocalizedStrings.RiskErrorKey,
+		GroupName = LocalizedStrings.StrategyKey)]
+	public class RiskErrorRule : RiskRule
+	{
+		private int _current;
+
+		private int _count;
+
+		/// <summary>
+		/// Error count.
+		/// </summary>
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ErrorsKey,
+			Description = LocalizedStrings.ErrorsCountKey,
+			GroupName = LocalizedStrings.GeneralKey,
+			Order = 0)]
+		public int Count
+		{
+			get => _count;
+			set
+			{
+				if (_count == value)
+					return;
+
+				if (value < 0)
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
+
+				_count = value;
+				UpdateTitle();
+			}
+		}
+
+		/// <inheritdoc />
+		protected override string GetTitle() => Count.To<string>();
+
+		/// <inheritdoc />
+		public override void Reset()
+		{
+			base.Reset();
+
+			_current = 0;
+		}
+
+		/// <inheritdoc />
+		public override bool ProcessMessage(Message message)
+		{
+			if (message.Type != MessageTypes.Error)
+				return false;
+
+			return ++_current >= Count;
+		}
+
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
+		{
+			base.Save(storage);
+
+			storage.SetValue(nameof(Count), Count);
+		}
+
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
+		{
+			base.Load(storage);
+
+			Count = storage.GetValue<int>(nameof(Count));
 		}
 	}
 }

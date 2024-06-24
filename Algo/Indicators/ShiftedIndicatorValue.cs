@@ -16,11 +16,16 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System;
+	using System.Collections.Generic;
+	
+	using Ecng.Common;
+
+	using StockSharp.Localization;
 
 	/// <summary>
 	/// The shifted value of the indicator.
 	/// </summary>
-	public class ShiftedIndicatorValue : SingleIndicatorValue<IIndicatorValue>
+	public class ShiftedIndicatorValue : SingleIndicatorValue<decimal>
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ShiftedIndicatorValue"/>.
@@ -34,50 +39,57 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ShiftedIndicatorValue"/>.
 		/// </summary>
-		/// <param name="shift">The shift of the indicator value.</param>
-		/// <param name="value">Indicator value.</param>
 		/// <param name="indicator">Indicator.</param>
-		public ShiftedIndicatorValue(IIndicator indicator, int shift, IIndicatorValue value)
+		/// <param name="value">Indicator value.</param>
+		/// <param name="shift">The shift of the indicator value.</param>
+		public ShiftedIndicatorValue(IIndicator indicator, decimal value, int shift)
 			: base(indicator, value)
 		{
 			Shift = shift;
 		}
 
+		private int _shift;
+
 		/// <summary>
 		/// The shift of the indicator value.
 		/// </summary>
-		public int Shift { get; }
-
-		/// <summary>
-		/// Does value support data type, required for the indicator.
-		/// </summary>
-		/// <param name="valueType">The data type, operated by indicator.</param>
-		/// <returns><see langword="true" />, if data type is supported, otherwise, <see langword="false" />.</returns>
-		public override bool IsSupport(Type valueType)
+		public int Shift
 		{
-			return !IsEmpty && Value.IsSupport(valueType);
+			get => _shift;
+			private set
+			{
+				if (value < 0)
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
+
+				_shift = value;
+			}
 		}
 
-		/// <summary>
-		/// To get the value by the data type.
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <returns>Value.</returns>
-		public override T GetValue<T>()
-		{
-			return base.GetValue<IIndicatorValue>().GetValue<T>();
-		}
-
-		/// <summary>
-		/// To replace the indicator input value by new one (for example it is received from another indicator).
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="value">Value.</param>
-		/// <returns>Replaced copy of the input value.</returns>
+		/// <inheritdoc />
 		public override IIndicatorValue SetValue<T>(IIndicator indicator, T value)
+			=> IsEmpty
+				? new ShiftedIndicatorValue(indicator)
+				: new ShiftedIndicatorValue(indicator, Value, Shift);
+
+		/// <inheritdoc />
+		public override IEnumerable<object> ToValues()
 		{
-			throw new NotSupportedException();
+			foreach (var v in base.ToValues())
+				yield return v;
+
+			if (!IsEmpty)
+				yield return Shift;
+		}
+
+		/// <inheritdoc />
+		public override void FromValues(object[] values)
+		{
+			base.FromValues(values);
+
+			if (IsEmpty)
+				return;
+
+			Shift = values[1].To<int>();
 		}
 	}
 }

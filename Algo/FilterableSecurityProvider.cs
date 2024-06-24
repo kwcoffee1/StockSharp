@@ -20,8 +20,7 @@ namespace StockSharp.Algo
 	using System.Linq;
 
 	using Ecng.Common;
-
-	using MoreLinq;
+	using Ecng.Collections;
 
 	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
@@ -31,23 +30,17 @@ namespace StockSharp.Algo
 	/// </summary>
 	public class FilterableSecurityProvider : Disposable, ISecurityProvider
 	{
-		private readonly SecurityTrie _trie = new SecurityTrie();
+		private readonly SecurityTrie _trie = new();
 
 		private readonly ISecurityProvider _provider;
-		private readonly bool _ownProvider;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="FilterableSecurityProvider"/>.
 		/// </summary>
 		/// <param name="provider">Security meta info provider.</param>
-		/// <param name="ownProvider"><see langword="true"/> to leave the <paramref name="provider"/> open after the <see cref="FilterableSecurityProvider"/> object is disposed; otherwise, <see langword="false"/>.</param>
-		///// <param name="excludeFilter">Filter for instruments exclusion.</param>
-		public FilterableSecurityProvider(ISecurityProvider provider, bool ownProvider = false/*, Func<Security, bool> excludeFilter = null*/)
+		public FilterableSecurityProvider(ISecurityProvider provider)
 		{
 			_provider = provider ?? throw new ArgumentNullException(nameof(provider));
-			_ownProvider = ownProvider;
-
-			//ExcludeFilter = excludeFilter;
 
 			_provider.Added += AddSecurities;
 			_provider.Removed += RemoveSecurities;
@@ -69,6 +62,9 @@ namespace StockSharp.Algo
 		public event Action Cleared;
 
 		/// <inheritdoc />
+		public Security LookupById(SecurityId id) => _trie.GetById(id);
+
+		/// <inheritdoc />
 		public IEnumerable<Security> Lookup(SecurityLookupMessage criteria)
 		{
 			if (criteria == null)
@@ -83,10 +79,16 @@ namespace StockSharp.Algo
 			var securities = _trie.Retrieve(filter);
 
 			if (!secId.IsEmpty())
-				securities = securities.Where(s => s.Id.CompareIgnoreCase(secId));
+				securities = securities.Where(s => s.Id.EqualsIgnoreCase(secId));
 
-			return securities.Filter(criteria);
+			return securities.Filter(criteria).TryLimitByCount(criteria);
 		}
+
+		SecurityMessage ISecurityMessageProvider.LookupMessageById(SecurityId id)
+			=> LookupById(id)?.ToMessage();
+
+		IEnumerable<SecurityMessage> ISecurityMessageProvider.LookupMessages(SecurityLookupMessage criteria)
+			=> Lookup(criteria).Select(s => s.ToMessage());
 
 		private void AddSecurities(IEnumerable<Security> securities)
 		{
@@ -114,9 +116,6 @@ namespace StockSharp.Algo
 			_provider.Added -= AddSecurities;
 			_provider.Removed -= RemoveSecurities;
 			_provider.Cleared -= ClearSecurities;
-
-			if (_ownProvider)
-				_provider.Dispose();
 
 			base.DisposeManaged();
 		}

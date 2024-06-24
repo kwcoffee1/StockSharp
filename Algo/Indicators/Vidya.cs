@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,9 +15,10 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
-	using System.Linq;
 	using System;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
@@ -25,10 +26,13 @@ namespace StockSharp.Algo.Indicators
 	/// The dynamic average of variable index  (Variable Index Dynamic Average).
 	/// </summary>
 	/// <remarks>
-	/// http://www2.wealth-lab.com/WL5Wiki/Vidya.ashx http://www.mql5.com/en/code/75.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/vidya.html
 	/// </remarks>
-	[DisplayName("Vidya")]
-	[DescriptionLoc(LocalizedStrings.Str755Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.VidyaKey,
+		Description = LocalizedStrings.VariableIndexDynamicAverageKey)]
+	[Doc("topics/api/indicators/list_of_indicators/vidya.html")]
 	public class Vidya : LengthIndicator<decimal>
 	{
 		private decimal _multiplier = 1;
@@ -43,11 +47,10 @@ namespace StockSharp.Algo.Indicators
 		{
 			_cmo = new ChandeMomentumOscillator();
 			Length = 15;
+			Buffer.Operator = new DecimalOperator();
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_cmo.Length = Length;
@@ -57,11 +60,7 @@ namespace StockSharp.Algo.Indicators
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
@@ -76,11 +75,11 @@ namespace StockSharp.Algo.Indicators
 			if (!IsFormed)
 			{
 				if (!input.IsFinal)
-					return new DecimalIndicatorValue(this, (Buffer.Skip(1).Sum() + newValue) / Length);
+					return new DecimalIndicatorValue(this, (Buffer.SumNoFirst + newValue) / Length);
 
-				Buffer.Add(newValue);
+				Buffer.AddEx(newValue);
 
-				_prevFinalValue = Buffer.Sum() / Length;
+				_prevFinalValue = Buffer.Sum / Length;
 
 				return new DecimalIndicatorValue(this, _prevFinalValue);
 			}

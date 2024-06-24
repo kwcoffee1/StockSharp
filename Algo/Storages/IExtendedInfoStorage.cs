@@ -2,7 +2,6 @@ namespace StockSharp.Algo.Storages
 {
 	using System;
 	using System.Collections.Generic;
-	using System.Globalization;
 	using System.IO;
 	using System.Text;
 	using System.Linq;
@@ -15,7 +14,7 @@ namespace StockSharp.Algo.Storages
 	using StockSharp.Messages;
 
 	/// <summary>
-	/// Extended info <see cref="Message.ExtensionInfo"/> storage.
+	/// Extended info storage.
 	/// </summary>
 	public interface IExtendedInfoStorageItem
 	{
@@ -47,13 +46,13 @@ namespace StockSharp.Algo.Storages
 		void Add(SecurityId securityId, IDictionary<string, object> extensionInfo);
 
 		/// <summary>
-		/// Load extended info. 
+		/// Load extended info.
 		/// </summary>
 		/// <returns>Extended information.</returns>
 		IEnumerable<Tuple<SecurityId, IDictionary<string, object>>> Load();
 
 		/// <summary>
-		/// Load extended info. 
+		/// Load extended info.
 		/// </summary>
 		/// <param name="securityId">Security identifier.</param>
 		/// <returns>Extended information.</returns>
@@ -67,7 +66,7 @@ namespace StockSharp.Algo.Storages
 	}
 
 	/// <summary>
-	/// Extended info <see cref="Message.ExtensionInfo"/> storage.
+	/// Extended info storage.
 	/// </summary>
 	public interface IExtendedInfoStorage
 	{
@@ -115,7 +114,7 @@ namespace StockSharp.Algo.Storages
 	}
 
 	/// <summary>
-	/// Extended info <see cref="Message.ExtensionInfo"/> storage, used csv files.
+	/// Extended info storage, used csv files.
 	/// </summary>
 	public class CsvExtendedInfoStorage : IExtendedInfoStorage
 	{
@@ -124,9 +123,9 @@ namespace StockSharp.Algo.Storages
 			private readonly CsvExtendedInfoStorage _storage;
 			private readonly string _fileName;
 			private Tuple<string, Type>[] _fields;
-			private readonly SyncObject _lock = new SyncObject();
+			private readonly SyncObject _lock = new();
 			//private readonly Dictionary<string, Type> _fieldTypes = new Dictionary<string, Type>(StringComparer.InvariantCultureIgnoreCase);
-			private readonly Dictionary<SecurityId, Dictionary<string, object>> _cache = new Dictionary<SecurityId, Dictionary<string, object>>();
+			private readonly Dictionary<SecurityId, Dictionary<string, object>> _cache = new();
 
 			public CsvExtendedInfoStorageItem(CsvExtendedInfoStorage storage, string fileName)
 			{
@@ -155,11 +154,11 @@ namespace StockSharp.Algo.Storages
 			{
 				if (File.Exists(_fileName))
 				{
-					CultureInfo.InvariantCulture.DoInCulture(() =>
+					Do.Invariant(() =>
 					{
 						using (var stream = new FileStream(_fileName, FileMode.Open, FileAccess.Read))
 						{
-							var reader = new FastCsvReader(stream, Encoding.UTF8);
+							var reader = new FastCsvReader(stream, Encoding.UTF8, StringHelper.RN);
 
 							reader.NextLine();
 							reader.Skip();
@@ -226,7 +225,7 @@ namespace StockSharp.Algo.Storages
 				using (var writer = new CsvFileWriter(new TransactionFileStream(_fileName, FileMode.Create)))
 				{
 					writer.WriteRow(new[] { nameof(SecurityId) }.Concat(_fields.Select(f => f.Item1)));
-					writer.WriteRow(new[] { typeof(string) }.Concat(_fields.Select(f => f.Item2)).Select(t => Converter.GetAlias(t) ?? t.GetTypeName(false)));
+					writer.WriteRow(new[] { typeof(string) }.Concat(_fields.Select(f => f.Item2)).Select(t => t.TryGetCSharpAlias() ?? t.GetTypeName(false)));
 
 					foreach (var pair in values)
 					{
@@ -310,7 +309,7 @@ namespace StockSharp.Algo.Storages
 			}
 		}
 
-		private readonly CachedSynchronizedDictionary<string, CsvExtendedInfoStorageItem> _items = new CachedSynchronizedDictionary<string, CsvExtendedInfoStorageItem>(StringComparer.InvariantCultureIgnoreCase);
+		private readonly CachedSynchronizedDictionary<string, CsvExtendedInfoStorageItem> _items = new(StringComparer.InvariantCultureIgnoreCase);
 		private readonly string _path;
 
 		/// <summary>

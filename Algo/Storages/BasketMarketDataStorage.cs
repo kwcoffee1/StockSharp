@@ -25,9 +25,6 @@ namespace StockSharp.Algo.Storages
 	using Ecng.Common;
 	using Ecng.Reflection;
 
-	using MoreLinq;
-
-	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
 
 	/// <summary>
@@ -72,8 +69,8 @@ namespace StockSharp.Algo.Storages
 		{
 			private readonly BasketMarketDataStorage<TMessage> _storage;
 			private readonly DateTime _date;
-			private readonly SynchronizedQueue<Tuple<ActionTypes, IMarketDataStorage, long>> _actions = new SynchronizedQueue<Tuple<ActionTypes, IMarketDataStorage, long>>();
-			private readonly OrderedPriorityQueue<DateTimeOffset, Tuple<IEnumerator, IMarketDataStorage, long>> _enumerators = new OrderedPriorityQueue<DateTimeOffset, Tuple<IEnumerator, IMarketDataStorage, long>>();
+			private readonly SynchronizedQueue<(ActionTypes action, IMarketDataStorage storage, long transId)> _actions = new();
+			private readonly Ecng.Collections.PriorityQueue<long, (IEnumerator<Message> enu, IMarketDataStorage storage, long transId)> _enumerators = new((p1, p2) => (p1 - p2).Abs());
 
 			public BasketMarketDataStorageEnumerator(BasketMarketDataStorage<TMessage> storage, DateTime date)
 			{
@@ -85,34 +82,42 @@ namespace StockSharp.Algo.Storages
 					if (s.GetType().GetGenericType(typeof(InMemoryMarketDataStorage<>)) == null && !s.Dates.Contains(date))
 						continue;
 
-					_actions.Add(Tuple.Create(ActionTypes.Add, s, storage._innerStorages.TryGetTransactionId(s)));
+					_actions.Add((ActionTypes.Add, s, storage._innerStorages.TryGetTransactionId(s)));
 				}
 
 				_storage._enumerators.Add(this);
 			}
 
-			/// <summary>
-			/// The current message.
-			/// </summary>
 			public TMessage Current { get; private set; }
 
 			bool IEnumerator.MoveNext()
 			{
 				while (true)
 				{
-					var action = _actions.TryDequeue();
+					var action = _actions.TryDequeue2();
 
-					if (action == null)
+					if (action is null)
 						break;
 
-					var type = action.Item1;
-					var storage = action.Item2;
+					var type = action.Value.action;
+					var storage = action.Value.storage;
 
 					switch (type)
 					{
 						case ActionTypes.Add:
 						{
-							var enu = storage.Load(_date).GetEnumerator();
+							if (_storage.Cache is not null)
+								storage = new CacheableMarketDataStorage(storage, _storage.Cache);
+
+							var loaded = storage.Load(_date);
+
+							// built books slower for emulation, so this case is not real one
+							//if (!_storage.PassThroughOrderBookIncrement && loaded is IEnumerable<QuoteChangeMessage> quotes)
+							//{
+							//	loaded = quotes.BuildIfNeed();
+							//}
+
+							var enu = loaded.GetEnumerator();
 							var lastTime = Current?.GetServerTime() ?? DateTimeOffset.MinValue;
 
 							var hasValues = true;
@@ -126,7 +131,7 @@ namespace StockSharp.Algo.Storages
 									break;
 								}
 
-								var msg = (Message)enu.Current;
+								var msg = enu.Current;
 
 								if (msg.GetServerTime() >= lastTime)
 									break;
@@ -134,7 +139,10 @@ namespace StockSharp.Algo.Storages
 
 							// данных в хранилище нет больше последней даты
 							if (hasValues)
-								_enumerators.Enqueue(GetServerTime(enu), Tuple.Create(enu, storage, action.Item3));
+							{
+								lock (_enumerators)
+									_enumerators.Enqueue(GetServerTime(enu).Ticks, (enu, storage, action.Value.transId));
+							}
 							else
 								enu.DoDispose();
 
@@ -142,30 +150,46 @@ namespace StockSharp.Algo.Storages
 						}
 						case ActionTypes.Remove:
 						{
-							_enumerators.RemoveWhere(p => p.Value.Item2 == storage);
+							lock (_enumerators)
+								_enumerators.RemoveWhere(p => p.Item2.storage == storage);
+
 							break;
 						}
 						case ActionTypes.Clear:
 						{
-							_enumerators.Clear();
+							lock (_enumerators)
+								_enumerators.Clear();
+
 							break;
 						}
 						default:
-							throw new ArgumentOutOfRangeException();
+							throw new InvalidOperationException(type.To<string>());
 					}
 				}
 
-				if (_enumerators.Count == 0)
-					return false;
+				(long, (IEnumerator<Message> enu, IMarketDataStorage, long transId) element) item;
 
-				var pair = _enumerators.Dequeue();
+				lock (_enumerators)
+				{
+					if (_enumerators.Count == 0)
+						return false;
 
-				var enumerator = pair.Value.Item1;
+					item = _enumerators.Dequeue();
+				}
 
-				Current = TrySetTransactionId((TMessage)enumerator.Current, pair.Value.Item3);
+				var element = item.element;
+
+				var enumerator = element.enu;
+
+				Current = TrySetTransactionId(enumerator.Current, element.transId);
 
 				if (enumerator.MoveNext())
-					_enumerators.Enqueue(GetServerTime(enumerator), pair.Value);
+				{
+					var serverTime = GetServerTime(enumerator).Ticks;
+
+					lock (_enumerators)
+						_enumerators.Enqueue(serverTime, element);
+				}
 				else
 					enumerator.DoDispose();
 
@@ -176,36 +200,38 @@ namespace StockSharp.Algo.Storages
 			{
 				if (transactionId > 0)
 				{
-					if (message is CandleMessage candleMsg)
-						candleMsg.OriginalTransactionId = transactionId;
-					//else if (message is ExecutionMessage execMsg && execMsg.ExecutionType != ExecutionTypes.Transaction)
-					//	execMsg.OriginalTransactionId = transactionId;
-					else if (message is NewsMessage newsMsg)
-						newsMsg.OriginalTransactionId = transactionId;
+					if (message is ISubscriptionIdMessage subscrMsg)
+						subscrMsg.SetSubscriptionIds(subscriptionId: transactionId);
 				}
 
 				return (TMessage)message;
 			}
 
-			private static DateTimeOffset GetServerTime(IEnumerator enumerator)
+			private static DateTimeOffset GetServerTime(IEnumerator<Message> enumerator)
 			{
-				return BasketMarketDataStorage<TMessage>.GetServerTime((Message)enumerator.Current);
+				return enumerator.Current.GetServerTime();
 			}
 
 			object IEnumerator.Current => Current;
 
 			void IEnumerator.Reset()
 			{
-				foreach (var enumerator in _enumerators)
-					enumerator.Value.Item1.Reset();
+				lock (_enumerators)
+				{
+					foreach (var enumerator in _enumerators)
+						enumerator.Item2.enu.Reset();
+				}
 			}
 
 			void IDisposable.Dispose()
 			{
-				foreach (var enumerator in _enumerators)
-					enumerator.Value.Item1.DoDispose();
+				lock (_enumerators)
+				{
+					foreach (var enumerator in _enumerators)
+						enumerator.Item2.enu.DoDispose();
 
-				_enumerators.Clear();
+					_enumerators.Clear();
+				}
 
 				_actions.Clear();
 
@@ -214,7 +240,7 @@ namespace StockSharp.Algo.Storages
 
 			public void AddAction(ActionTypes type, IMarketDataStorage storage, long transactionId)
 			{
-				_actions.Add(Tuple.Create(type, storage, transactionId));
+				_actions.Add((type, storage, transactionId));
 			}
 		}
 
@@ -233,35 +259,7 @@ namespace StockSharp.Algo.Storages
 					if (s.GetType().GetGenericType(typeof(InMemoryMarketDataStorage<>)) == null && !s.Dates.Contains(date))
 						continue;
 
-					if (s.DataType == typeof(ExecutionMessage))
-						dataTypes.Add(MessageTypes.Execution);
-
-					if (s.DataType == typeof(QuoteChangeMessage))
-						dataTypes.Add(MessageTypes.QuoteChange);
-
-					if (s.DataType == typeof(Level1ChangeMessage))
-						dataTypes.Add(MessageTypes.Level1Change);
-
-					if (s.DataType == typeof(TimeMessage))
-						dataTypes.Add(MessageTypes.Time);
-
-					if (s.DataType == typeof(TimeFrameCandleMessage))
-						dataTypes.Add(MessageTypes.CandleTimeFrame);
-
-					if (s.DataType == typeof(PnFCandleMessage))
-						dataTypes.Add(MessageTypes.CandlePnF);
-
-					if (s.DataType == typeof(RangeCandleMessage))
-						dataTypes.Add(MessageTypes.CandleRange);
-
-					if (s.DataType == typeof(RenkoCandleMessage))
-						dataTypes.Add(MessageTypes.CandleRenko);
-
-					if (s.DataType == typeof(TickCandleMessage))
-						dataTypes.Add(MessageTypes.CandleTick);
-
-					if (s.DataType == typeof(VolumeCandleMessage))
-						dataTypes.Add(MessageTypes.CandleVolume);
+					dataTypes.Add(s.DataType.ToMessageType2());
 				}
 
 				DataTypes = dataTypes.ToArray();
@@ -279,7 +277,7 @@ namespace StockSharp.Algo.Storages
 		
 		private class BasketMarketDataStorageInnerList : CachedSynchronizedList<IMarketDataStorage>, IBasketMarketDataStorageInnerList
 		{
-			private readonly PairSet<IMarketDataStorage, long> _transactionIds = new PairSet<IMarketDataStorage, long>();
+			private readonly PairSet<IMarketDataStorage, long> _transactionIds = new();
 
 			public long TryGetTransactionId(IMarketDataStorage storage) => _transactionIds.TryGetValue(storage);
 
@@ -310,8 +308,37 @@ namespace StockSharp.Algo.Storages
 			}
 		}
 
-		private readonly BasketMarketDataStorageInnerList _innerStorages = new BasketMarketDataStorageInnerList();
-		private readonly CachedSynchronizedList<BasketMarketDataStorageEnumerator> _enumerators = new CachedSynchronizedList<BasketMarketDataStorageEnumerator>();
+		private class BasketMarketDataSerializer : IMarketDataSerializer<TMessage>
+		{
+			private readonly BasketMarketDataStorage<TMessage> _parent;
+
+			public BasketMarketDataSerializer(BasketMarketDataStorage<TMessage> parent)
+			{
+				_parent = parent ?? throw new ArgumentNullException(nameof(parent));
+			}
+
+			StorageFormats IMarketDataSerializer.Format => _parent.InnerStorages.First().Serializer.Format;
+
+			TimeSpan IMarketDataSerializer.TimePrecision => _parent.InnerStorages.First().Serializer.TimePrecision;
+
+			IMarketDataMetaInfo IMarketDataSerializer.CreateMetaInfo(DateTime date)
+				=> throw new NotSupportedException();
+
+			void IMarketDataSerializer.Serialize(Stream stream, IEnumerable data, IMarketDataMetaInfo metaInfo)
+				=> throw new NotSupportedException();
+
+			IEnumerable<TMessage> IMarketDataSerializer<TMessage>.Deserialize(Stream stream, IMarketDataMetaInfo metaInfo)
+				=> throw new NotSupportedException();
+
+			void IMarketDataSerializer<TMessage>.Serialize(Stream stream, IEnumerable<TMessage> data, IMarketDataMetaInfo metaInfo)
+				=> throw new NotSupportedException();
+
+			IEnumerable IMarketDataSerializer.Deserialize(Stream stream, IMarketDataMetaInfo metaInfo)
+				=> throw new NotSupportedException();
+		}
+
+		private readonly BasketMarketDataStorageInnerList _innerStorages = new();
+		private readonly CachedSynchronizedList<BasketMarketDataStorageEnumerator> _enumerators = new();
 
 		/// <summary>
 		/// Embedded storages of market data.
@@ -344,45 +371,31 @@ namespace StockSharp.Algo.Storages
 			base.DisposeManaged();
 		}
 
+		/// <summary>
+		/// <see cref="MarketDataStorageCache"/>.
+		/// </summary>
+		public MarketDataStorageCache Cache { get; set; }
+
 		private void InnerStoragesOnAdded(IMarketDataStorage storage)
-		{
-			AddAction(ActionTypes.Add, storage, _innerStorages.TryGetTransactionId(storage));
-		}
+			=> AddAction(ActionTypes.Add, storage, _innerStorages.TryGetTransactionId(storage));
 
 		private void InnerStoragesOnRemoved(IMarketDataStorage storage)
-		{
-			AddAction(ActionTypes.Remove, storage, 0);
-		}
+			=> AddAction(ActionTypes.Remove, storage, 0);
 
 		private void InnerStoragesOnCleared()
-		{
-			AddAction(ActionTypes.Clear, null, 0);
-		}
+			=> AddAction(ActionTypes.Clear, null, 0);
 
 		private void AddAction(ActionTypes type, IMarketDataStorage storage, long transactionId)
-		{
-			_enumerators.Cache.ForEach(e => e.AddAction(type, storage, transactionId));
-		}
+			=> _enumerators.Cache.ForEach(e => e.AddAction(type, storage, transactionId));
 
 		IEnumerable<DateTime> IMarketDataStorage.Dates
-		{
-			get { return _innerStorages.Cache.SelectMany(s => s.Dates).OrderBy().Distinct(); }
-		}
+			=> _innerStorages.Cache.SelectMany(s => s.Dates).OrderBy().Distinct();
 
-		/// <summary>
-		/// The type of market-data, operated by given storage.
-		/// </summary>
-		public virtual Type DataType => throw new NotSupportedException();
+		/// <inheritdoc />
+		public virtual DataType DataType => throw new NotSupportedException();
 
-		/// <summary>
-		/// The instrument, operated by the external storage.
-		/// </summary>
-		public virtual Security Security => throw new NotSupportedException();
-
-		/// <summary>
-		/// The additional argument, associated with data. For example, <see cref="CandleMessage.Arg"/>.
-		/// </summary>
-		public virtual object Arg => throw new NotSupportedException();
+		/// <inheritdoc />
+		public virtual SecurityId SecurityId => throw new NotSupportedException();
 
 		IMarketDataStorageDrive IMarketDataStorage.Drive => throw new NotSupportedException();
 
@@ -392,89 +405,32 @@ namespace StockSharp.Algo.Storages
 			set => throw new NotSupportedException();
 		}
 
-		int IMarketDataStorage.Save(IEnumerable data)
-		{
-			throw new NotSupportedException();
-		}
-
-		void IMarketDataStorage.Delete(IEnumerable data)
-		{
-			throw new NotSupportedException();
-		}
-
-		void IMarketDataStorage.Delete(DateTime date)
-		{
-			throw new NotSupportedException();
-		}
-
-		IEnumerable<TMessage> IMarketDataStorage<TMessage>.Load(DateTime date)
-		{
-			return OnLoad(date);
-		}
-
-		private class BasketMarketDataSerializer : IMarketDataSerializer<TMessage>
-		{
-			private readonly BasketMarketDataStorage<TMessage> _parent;
-
-			public BasketMarketDataSerializer(BasketMarketDataStorage<TMessage> parent)
-			{
-				_parent = parent ?? throw new ArgumentNullException(nameof(parent));
-			}
-
-			StorageFormats IMarketDataSerializer.Format => _parent.InnerStorages.First().Serializer.Format;
-
-			TimeSpan IMarketDataSerializer.TimePrecision => _parent.InnerStorages.First().Serializer.TimePrecision;
-
-			IMarketDataMetaInfo IMarketDataSerializer.CreateMetaInfo(DateTime date)
-			{
-				throw new NotSupportedException();
-			}
-
-			void IMarketDataSerializer.Serialize(Stream stream, IEnumerable data, IMarketDataMetaInfo metaInfo)
-			{
-				throw new NotSupportedException();
-			}
-
-			IEnumerable<TMessage> IMarketDataSerializer<TMessage>.Deserialize(Stream stream, IMarketDataMetaInfo metaInfo)
-			{
-				throw new NotSupportedException();
-			}
-
-			void IMarketDataSerializer<TMessage>.Serialize(Stream stream, IEnumerable<TMessage> data, IMarketDataMetaInfo metaInfo)
-			{
-				throw new NotSupportedException();
-			}
-
-			IEnumerable IMarketDataSerializer.Deserialize(Stream stream, IMarketDataMetaInfo metaInfo)
-			{
-				throw new NotSupportedException();
-			}
-		}
-
-		private readonly IMarketDataSerializer<TMessage> _serializer;
-
-		IMarketDataSerializer<TMessage> IMarketDataStorage<TMessage>.Serializer => _serializer;
-
-		int IMarketDataStorage<TMessage>.Save(IEnumerable<TMessage> data)
-		{
-			throw new NotSupportedException();
-		}
-
-		void IMarketDataStorage<TMessage>.Delete(IEnumerable<TMessage> data)
-		{
-			throw new NotSupportedException();
-		}
-
-		IEnumerable IMarketDataStorage.Load(DateTime date)
-		{
-			return OnLoad(date);
-		}
+		int IMarketDataStorage.Save(IEnumerable<Message> data) => throw new NotSupportedException();
+		int IMarketDataStorage<TMessage>.Save(IEnumerable<TMessage> data) => throw new NotSupportedException();
+		
+		void IMarketDataStorage.Delete(IEnumerable<Message> data) => throw new NotSupportedException();
+		void IMarketDataStorage<TMessage>.Delete(IEnumerable<TMessage> data) => throw new NotSupportedException();
+		
+		void IMarketDataStorage.Delete(DateTime date) => throw new NotSupportedException();
+		
+		IEnumerable<Message> IMarketDataStorage.Load(DateTime date) => Load(date);
+		IEnumerable<TMessage> IMarketDataStorage<TMessage>.Load(DateTime date) => Load(date);
 
 		IMarketDataMetaInfo IMarketDataStorage.GetMetaInfo(DateTime date)
 		{
-			throw new NotSupportedException();
-		}
+			date = date.Date.UtcKind();
 
+			foreach (var inner in _innerStorages.Cache)
+			{
+				if (inner.Dates.Contains(date))
+					return inner.GetMetaInfo(date);
+			}
+
+			return null;
+		}
+		
+		private readonly IMarketDataSerializer<TMessage> _serializer;
+		IMarketDataSerializer<TMessage> IMarketDataStorage<TMessage>.Serializer => _serializer;
 		IMarketDataSerializer IMarketDataStorage.Serializer => ((IMarketDataStorage<TMessage>)this).Serializer;
 
 		/// <summary>
@@ -482,34 +438,9 @@ namespace StockSharp.Algo.Storages
 		/// </summary>
 		/// <param name="date">Date.</param>
 		/// <returns>The messages loader.</returns>
-		public IBasketMarketDataStorageEnumerable<TMessage> Load(DateTime date)
-		{
-			return new BasketEnumerable(this, date);
-		}
+		public IBasketMarketDataStorageEnumerable<TMessage> Load(DateTime date) => new BasketEnumerable(this, date);
 
-		/// <summary>
-		/// To load messages from embedded storages for specified date.
-		/// </summary>
-		/// <param name="date">Date.</param>
-		/// <returns>The messages.</returns>
-		protected virtual IEnumerable<TMessage> OnLoad(DateTime date)
-		{
-			return Load(date);
-		}
-
-		DateTimeOffset IMarketDataStorageInfo<TMessage>.GetTime(TMessage data)
-		{
-			return GetServerTime(data);
-		}
-
-		DateTimeOffset IMarketDataStorageInfo.GetTime(object data)
-		{
-			return GetServerTime((Message)data);
-		}
-
-		private static DateTimeOffset GetServerTime(Message message)
-		{
-			return message.GetServerTime();
-		}
+		DateTimeOffset IMarketDataStorageInfo<TMessage>.GetTime(TMessage data) => data.GetServerTime();
+		DateTimeOffset IMarketDataStorageInfo.GetTime(object data) => ((IMarketDataStorageInfo<TMessage>)this).GetTime((TMessage)data);
 	}
 }

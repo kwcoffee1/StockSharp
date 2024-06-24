@@ -1,7 +1,6 @@
 namespace StockSharp.Algo
 {
 	using System;
-	using System.Collections.Generic;
 	using System.Linq;
 
 	using Ecng.Collections;
@@ -20,17 +19,19 @@ namespace StockSharp.Algo
 		{
 			public IBasketSecurityProcessor Processor { get; }
 			public long TransactionId { get; }
-			public HashSet<long> LegsSubscriptions { get; } = new HashSet<long>();
+			public CachedSynchronizedDictionary<long, SubscriptionStates> LegsSubscriptions { get; } = new CachedSynchronizedDictionary<long, SubscriptionStates>();
 
 			public SubscriptionInfo(IBasketSecurityProcessor processor, long transactionId)
 			{
 				Processor = processor ?? throw new ArgumentNullException(nameof(processor));
 				TransactionId = transactionId;
 			}
+
+			public SubscriptionStates State { get; set; } = SubscriptionStates.Stopped;
 		}
 
-		private readonly SynchronizedDictionary<MarketDataTypes, SynchronizedDictionary<long, SubscriptionInfo>> _subscriptions = new SynchronizedDictionary<MarketDataTypes, SynchronizedDictionary<long, SubscriptionInfo>>();
-		private readonly SynchronizedDictionary<long, SubscriptionInfo> _subscriptionsById = new SynchronizedDictionary<long, SubscriptionInfo>();
+		private readonly SynchronizedDictionary<long, SubscriptionInfo> _subscriptionsByChildId = new();
+		private readonly SynchronizedDictionary<long, SubscriptionInfo> _subscriptionsByParentId = new();
 
 		private readonly ISecurityProvider _securityProvider;
 		private readonly IBasketSecurityProcessorProvider _processorProvider;
@@ -39,11 +40,11 @@ namespace StockSharp.Algo
 		/// <summary>
 		/// Initializes a new instance of the <see cref="BasketSecurityMessageAdapter"/>.
 		/// </summary>
+		/// <param name="innerAdapter">Underlying adapter.</param>
 		/// <param name="securityProvider">The provider of information about instruments.</param>
 		/// <param name="processorProvider">Basket security processors provider.</param>
 		/// <param name="exchangeInfoProvider">Exchanges and trading boards provider.</param>
-		/// <param name="innerAdapter">Underlying adapter.</param>
-		public BasketSecurityMessageAdapter(ISecurityProvider securityProvider, IBasketSecurityProcessorProvider processorProvider, IExchangeInfoProvider exchangeInfoProvider, IMessageAdapter innerAdapter)
+		public BasketSecurityMessageAdapter(IMessageAdapter innerAdapter, ISecurityProvider securityProvider, IBasketSecurityProcessorProvider processorProvider, IExchangeInfoProvider exchangeInfoProvider)
 			: base(innerAdapter)
 		{
 			_securityProvider = securityProvider ?? throw new ArgumentNullException(nameof(securityProvider));
@@ -52,14 +53,14 @@ namespace StockSharp.Algo
 		}
 
 		/// <inheritdoc />
-		public override void SendInMessage(Message message)
+		protected override bool OnSendInMessage(Message message)
 		{
 			switch (message.Type)
 			{
 				case MessageTypes.Reset:
 				{
-					_subscriptions.Clear();
-					_subscriptionsById.Clear();
+					_subscriptionsByChildId.Clear();
+					_subscriptionsByParentId.Clear();
 					break;
 				}
 
@@ -67,7 +68,7 @@ namespace StockSharp.Algo
 				{
 					var mdMsg = (MarketDataMessage)message;
 
-					if (mdMsg.SecurityId.IsDefault())
+					if (mdMsg.SecurityId == default)
 						break;
 
 					var security = _securityProvider.LookupById(mdMsg.SecurityId);
@@ -87,37 +88,37 @@ namespace StockSharp.Algo
 						var processor = _processorProvider.CreateProcessor(security);
 						var info = new SubscriptionInfo(processor, mdMsg.TransactionId);
 
-						var dict = _subscriptions.SafeAdd(mdMsg.DataType);
-						_subscriptionsById.Add(mdMsg.TransactionId, info);
+						_subscriptionsByParentId.Add(mdMsg.TransactionId, info);
 
 						var inners = new MarketDataMessage[processor.BasketLegs.Length];
 
 						for (var i = 0; i < inners.Length; i++)
 						{
-							var inner = (MarketDataMessage)mdMsg.Clone();
+							var inner = mdMsg.TypedClone();
 
 							inner.TransactionId = TransactionIdGenerator.GetNextId();
 							inner.SecurityId = processor.BasketLegs[i];
 
 							inners[i] = inner;
 
-							info.LegsSubscriptions.Add(inner.TransactionId);
-							dict.Add(inner.TransactionId, info);
+							info.LegsSubscriptions.Add(inner.TransactionId, SubscriptionStates.Stopped);
+							_subscriptionsByChildId.Add(inner.TransactionId, info);
 						}
 
 						foreach (var inner in inners)
-							base.SendInMessage(inner);
+							base.OnSendInMessage(inner);
 					}
 					else
 					{
-						if (!_subscriptionsById.TryGetValue(mdMsg.OriginalTransactionId, out var info))
+						if (!_subscriptionsByParentId.TryGetValue(mdMsg.OriginalTransactionId, out var info))
 							break;
 
-						_subscriptionsById.Remove(mdMsg.OriginalTransactionId);
+						// TODO
+						//_subscriptionsByParentId.Remove(mdMsg.OriginalTransactionId);
 
-						foreach (var id in info.LegsSubscriptions)
+						foreach (var id in info.LegsSubscriptions.CachedKeys)
 						{
-							base.SendInMessage(new MarketDataMessage
+							base.OnSendInMessage(new MarketDataMessage
 							{
 								TransactionId = TransactionIdGenerator.GetNextId(),
 								IsSubscribe = false,
@@ -126,16 +127,21 @@ namespace StockSharp.Algo
 						}
 					}
 
-					RaiseNewOutMessage(new MarketDataMessage
+					RaiseNewOutMessage(new SubscriptionResponseMessage
 					{
 						OriginalTransactionId = mdMsg.TransactionId
 					});
 
-					return;
+					return true;
 				}
 			}
 
-			base.SendInMessage(message);
+			return base.OnSendInMessage(message);
+		}
+
+		private void ChangeState(SubscriptionInfo info, SubscriptionStates state)
+		{
+			info.State = info.State.ChangeSubscriptionState(state, info.TransactionId, this);
 		}
 
 		/// <inheritdoc />
@@ -143,87 +149,71 @@ namespace StockSharp.Algo
 		{
 			switch (message.Type)
 			{
-				case MessageTypes.MarketData:
+				case MessageTypes.SubscriptionResponse:
 				{
-					var mdMsg = (MarketDataMessage)message;
-					break;
-				}
-
-				case MessageTypes.CandleTimeFrame:
-				case MessageTypes.CandleRange:
-				case MessageTypes.CandleTick:
-				case MessageTypes.CandleVolume:
-				case MessageTypes.CandlePnF:
-				case MessageTypes.CandleRenko:
-				{
-					var candleMsg = (CandleMessage)message;
-
-					if (_subscriptions.TryGetValue(message.Type.ToCandleMarketDataType(), out var dict))
+					var responseMsg = (SubscriptionResponseMessage)message;
+					
+					if (_subscriptionsByChildId.TryGetValue(responseMsg.OriginalTransactionId, out var info))
 					{
-						if (dict.TryGetValue(candleMsg.OriginalTransactionId, out var info))
+						lock (info.LegsSubscriptions.SyncRoot)
 						{
-							var basketMsgs = info.Processor.Process(candleMsg).Cast<CandleMessage>();
-
-							foreach (var basketMsg in basketMsgs)
+							if (responseMsg.Error == null)
 							{
-								basketMsg.OriginalTransactionId = info.TransactionId;
-								RaiseNewOutMessage(basketMsg);
+								info.LegsSubscriptions[responseMsg.OriginalTransactionId] = SubscriptionStates.Active;
+
+								if (info.State != SubscriptionStates.Active)
+									ChangeState(info, SubscriptionStates.Active);
 							}
-
-							return;
-						}
-					}
-
-					break;
-				}
-
-				case MessageTypes.QuoteChange:
-				{
-					var quotesMsg = (QuoteChangeMessage)message;
-					var info = _subscriptions.TryGetValue(MarketDataTypes.MarketDepth);
-					break;
-				}
-
-				case MessageTypes.Execution:
-				{
-					var execMsg = (ExecutionMessage)message;
-
-					SynchronizedDictionary<long, SubscriptionInfo> dict;
-
-					switch (execMsg.ExecutionType)
-					{
-						case ExecutionTypes.Tick:
-							dict = _subscriptions.TryGetValue(MarketDataTypes.Trades);
-							break;
-						case ExecutionTypes.Transaction:
-							dict = null;
-							break;
-						case ExecutionTypes.OrderLog:
-							dict = _subscriptions.TryGetValue(MarketDataTypes.OrderLog);
-							break;
-						default:
-							throw new ArgumentOutOfRangeException();
-					}
-
-					if (dict != null)
-					{
-						if (execMsg.OriginalTransactionId == 0)
-						{
-
-						}
-						else
-						{
-							if (dict.TryGetValue(execMsg.OriginalTransactionId, out var info))
+							else
 							{
-								var basketMsgs = info.Processor.Process(execMsg).Cast<ExecutionMessage>();
+								info.LegsSubscriptions[responseMsg.OriginalTransactionId] = SubscriptionStates.Error;
+
+								if (info.State != SubscriptionStates.Error)
+									ChangeState(info, SubscriptionStates.Error);
+							}
+						}
+					}
+
+					break;
+				}
+
+				case MessageTypes.SubscriptionOnline:
+				case MessageTypes.SubscriptionFinished:
+				{
+					var originIdMsg = (IOriginalTransactionIdMessage)message;
+					var id = originIdMsg.OriginalTransactionId;
+
+					var state = message.Type == MessageTypes.SubscriptionOnline ? SubscriptionStates.Online : SubscriptionStates.Finished;
+
+					if (_subscriptionsByChildId.TryGetValue(id, out var info))
+					{
+						lock (info.LegsSubscriptions.SyncRoot)
+						{
+							info.LegsSubscriptions[id] = state;
+
+							if (info.LegsSubscriptions.CachedValues.All(s => s == state))
+								ChangeState(info, state);
+						}
+					}
+
+					break;
+				}
+
+				default:
+				{
+					if (message is ISubscriptionIdMessage subscrMsg && _subscriptionsByChildId.Count > 0)
+					{
+						foreach (var id in subscrMsg.GetSubscriptionIds())
+						{
+							if (_subscriptionsByChildId.TryGetValue(id, out var info))
+							{
+								var basketMsgs = info.Processor.Process(message);
 
 								foreach (var basketMsg in basketMsgs)
 								{
-									basketMsg.OriginalTransactionId = info.TransactionId;
-									RaiseNewOutMessage(basketMsg);
+									((ISubscriptionIdMessage)basketMsg).SetSubscriptionIds(subscriptionId: info.TransactionId);
+									base.OnInnerAdapterNewOutMessage(basketMsg);
 								}
-
-								return;
 							}
 						}
 					}
@@ -235,10 +225,13 @@ namespace StockSharp.Algo
 			base.OnInnerAdapterNewOutMessage(message);
 		}
 
-		/// <inheritdoc />
+		/// <summary>
+		/// Create a copy of <see cref="BasketSecurityMessageAdapter"/>.
+		/// </summary>
+		/// <returns>Copy.</returns>
 		public override IMessageChannel Clone()
 		{
-			return new BasketSecurityMessageAdapter(_securityProvider, _processorProvider, _exchangeInfoProvider, InnerAdapter);
+			return new BasketSecurityMessageAdapter(InnerAdapter, _securityProvider, _processorProvider, _exchangeInfoProvider);
 		}
 	}
 }

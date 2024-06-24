@@ -15,12 +15,10 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
-
 	/// <summary>
 	/// The signaling part of indicator <see cref="RelativeVigorIndex"/>.
 	/// </summary>
-	[Browsable(false)]
+	[IndicatorHidden]
 	public class RelativeVigorIndexSignal : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -31,21 +29,14 @@ namespace StockSharp.Algo.Indicators
 			Length = 4;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
 
 			if (input.IsFinal)
 			{
-				Buffer.Add(newValue);
-
-				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
+				Buffer.AddEx(newValue);
 			}
 
 			if (IsFormed)

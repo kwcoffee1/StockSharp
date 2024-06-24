@@ -18,7 +18,6 @@ namespace StockSharp.Algo.Strategies
 	using System;
 	using System.Collections.Generic;
 	using System.Linq;
-
 	using Ecng.Collections;
 
 	using SmartFormat;
@@ -51,7 +50,7 @@ namespace StockSharp.Algo.Strategies
 
 			bool ISource.TryEvaluateSelector(ISelectorInfo selectorInfo)
 			{
-				var value = _values?.TryGetValue(selectorInfo.Selector.Text);
+				var value = _values?.TryGetValue(selectorInfo.SelectorText);
 
 				if (value == null)
 					return false;
@@ -74,14 +73,9 @@ namespace StockSharp.Algo.Strategies
 		public StrategyNameGenerator(Strategy strategy)
 		{
 			_strategy = strategy ?? throw new ArgumentNullException(nameof(strategy));
-			_strategy.SecurityChanged += () =>
+			_strategy.PropertyChanged += (s, e) =>
 			{
-				if (_selectors.Contains("Security"))
-					Refresh();
-			};
-			_strategy.PortfolioChanged += () =>
-			{
-				if (_selectors.Contains("Portfolio"))
+				if (_selectors.Contains(e.PropertyName))
 					Refresh();
 			};
 
@@ -91,7 +85,7 @@ namespace StockSharp.Algo.Strategies
 			_formatter.SourceExtensions.Add(new Source(_formatter, new Dictionary<string, string>
 			{
 				{ "FullName", _strategy.GetType().Name },
-				{ "ShortName", ShortName },
+				{ nameof(ShortName), ShortName },
 			}));
 
 			_selectors = new SynchronizedSet<string>();
@@ -128,12 +122,12 @@ namespace StockSharp.Algo.Strategies
 
 				_pattern = value;
 
-				var format = _formatter.Parser.ParseFormat(value);
+				var format = _formatter.Parser.ParseFormat(value, Array.Empty<string>());
 				var selectors = format
 					.Items
 					.OfType<Placeholder>()
 					.SelectMany(ph => ph.Selectors)
-					.Select(s => s.Text)
+					.Select(s => s.RawText)
 					.Distinct();
 
 				_selectors.Clear();
@@ -153,7 +147,6 @@ namespace StockSharp.Algo.Strategies
 			{
 				if (AutoGenerateStrategyName)
 					AutoGenerateStrategyName = false;
-					//throw new InvalidOperationException("Используется автоматическая генерация имени стратегии. Ручное изменение не допускается.");
 
 				_value = value;
 				Changed?.Invoke(_value);

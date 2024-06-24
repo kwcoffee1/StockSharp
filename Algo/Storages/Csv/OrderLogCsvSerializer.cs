@@ -37,22 +37,13 @@ namespace StockSharp.Algo.Storages.Csv
 		{
 		}
 
-		/// <summary>
-		/// To create empty meta-information.
-		/// </summary>
-		/// <param name="date">Date.</param>
-		/// <returns>Meta-information on data for one day.</returns>
+		/// <inheritdoc />
 		public override IMarketDataMetaInfo CreateMetaInfo(DateTime date)
 		{
 			return new CsvMetaInfo(date, Encoding, r => r.ReadNullableLong());
 		}
 
-		/// <summary>
-		/// Write data to the specified writer.
-		/// </summary>
-		/// <param name="writer">CSV writer.</param>
-		/// <param name="data">Data.</param>
-		/// <param name="metaInfo">Meta-information on data for one day.</param>
+		/// <inheritdoc />
 		protected override void Write(CsvFileWriter writer, ExecutionMessage data, IMarketDataMetaInfo metaInfo)
 		{
 			writer.WriteRow(new[]
@@ -63,34 +54,40 @@ namespace StockSharp.Algo.Storages.Csv
 				data.OrderId.ToString(),
 				data.OrderPrice.ToString(),
 				data.OrderVolume.ToString(),
-				data.Side.ToString(),
-				data.OrderState.ToString(),
-				data.TimeInForce.ToString(),
+				data.Side.To<int?>().ToString(),
+				data.OrderState.To<int?>().ToString(),
+				data.TimeInForce.To<int?>().ToString(),
 				data.TradeId.ToString(),
 				data.TradePrice.ToString(),
 				data.PortfolioName,
-				data.IsSystem.ToString()
+				data.IsSystem.To<int?>().ToString(),
+				data.Balance.ToString(),
+				data.SeqNum.DefaultAsNull().ToString(),
+				data.OrderStringId,
+				data.TradeStringId,
+				data.OrderBuyId.ToString(),
+				data.OrderSellId.ToString(),
+				data.IsUpTick.To<int?>().ToString(),
+				data.Yield.ToString(),
+				data.TradeStatus.ToString(),
+				data.OpenInterest.ToString(),
+				data.OriginSide.To<int?>().ToString(),
 			});
 
 			metaInfo.LastTime = data.ServerTime.UtcDateTime;
 			metaInfo.LastId = data.TransactionId;
 		}
 
-		/// <summary>
-		/// Read data from the specified reader.
-		/// </summary>
-		/// <param name="reader">CSV reader.</param>
-		/// <param name="metaInfo">Meta-information on data for one day.</param>
-		/// <returns>Data.</returns>
+		/// <inheritdoc />
 		protected override ExecutionMessage Read(FastCsvReader reader, IMarketDataMetaInfo metaInfo)
 		{
-			return new ExecutionMessage
+			var ol = new ExecutionMessage
 			{
 				SecurityId = SecurityId,
-				ExecutionType = ExecutionTypes.OrderLog,
+				DataTypeEx = DataType.OrderLog,
 				ServerTime = reader.ReadTime(metaInfo.Date),
 				TransactionId = reader.ReadLong(),
-				OrderId = reader.ReadLong(),
+				OrderId = reader.ReadNullableLong(),
 				OrderPrice = reader.ReadDecimal(),
 				OrderVolume = reader.ReadDecimal(),
 				Side = reader.ReadEnum<Sides>(),
@@ -101,6 +98,29 @@ namespace StockSharp.Algo.Storages.Csv
 				PortfolioName = reader.ReadString(),
 				IsSystem = reader.ReadNullableBool(),
 			};
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				ol.Balance = reader.ReadNullableDecimal();
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				ol.SeqNum = reader.ReadNullableLong() ?? 0L;
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+			{
+				ol.OrderStringId = reader.ReadString();
+				ol.TradeStringId = reader.ReadString();
+
+				ol.OrderBuyId = reader.ReadNullableLong();
+				ol.OrderSellId = reader.ReadNullableLong();
+
+				ol.IsUpTick = reader.ReadNullableBool();
+				ol.Yield = reader.ReadNullableDecimal();
+				ol.TradeStatus = reader.ReadNullableLong();
+				ol.OpenInterest = reader.ReadNullableDecimal();
+				ol.OriginSide = reader.ReadNullableEnum<Sides>();
+			}
+
+			return ol;
 		}
 	}
 }

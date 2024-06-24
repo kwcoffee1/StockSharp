@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -16,21 +16,29 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Linq;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
+	using StockSharp.Messages;
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// True range.
 	/// </summary>
-	[DisplayName("TR")]
-	[DescriptionLoc(LocalizedStrings.Str775Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/true_range.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TRKey,
+		Description = LocalizedStrings.TrueRangeKey)]
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/true_range.html")]
 	public class TrueRange : BaseIndicator
 	{
-		private Candle _prevCandle;
+		private ICandleMessage _prevCandle;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="TrueRange"/>.
@@ -39,9 +47,13 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		public override int NumValuesToInitialize => 2;
+
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -54,7 +66,7 @@ namespace StockSharp.Algo.Indicators
 		/// <param name="currentCandle">The current candle.</param>
 		/// <param name="prevCandle">The previous candle.</param>
 		/// <returns>Price components.</returns>
-		protected virtual decimal[] GetPriceMovements(Candle currentCandle, Candle prevCandle)
+		protected virtual decimal[] GetPriceMovements(ICandleMessage currentCandle, ICandleMessage prevCandle)
 		{
 			return new[]
 			{
@@ -64,14 +76,10 @@ namespace StockSharp.Algo.Indicators
 			};
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
+			var candle = input.GetValue<ICandleMessage>();
 
 			if (_prevCandle != null)
 			{

@@ -17,6 +17,8 @@ namespace StockSharp.Algo.Testing
 {
 	using System;
 	using System.ComponentModel.DataAnnotations;
+	using System.Collections.Generic;
+	using System.Linq;
 
 	using Ecng.ComponentModel;
 	using Ecng.Serialization;
@@ -24,6 +26,7 @@ namespace StockSharp.Algo.Testing
 	using StockSharp.Localization;
 	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
+	using StockSharp.Algo.Commissions;
 
 	/// <summary>
 	/// Settings of exchange emulator.
@@ -44,9 +47,9 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1176Key,
-			Description = LocalizedStrings.Str1177Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.MatchOnTouchKey,
+			Description = LocalizedStrings.MatchOnTouchDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 200)]
 		public bool MatchOnTouch
 		{
@@ -57,31 +60,7 @@ namespace StockSharp.Algo.Testing
 					return;
 
 				_matchOnTouch = value;
-				NotifyChanged(nameof(MatchOnTouch));
-			}
-		}
-
-		private TimeSpan _depthExpirationTime = TimeSpan.FromDays(1);
-
-		/// <summary>
-		/// The maximal time, during which the order book is in the emulator, if no renewal during this time, the order book is deleted, This feature may be used to remove old order books if the are holes in data. By default is equal to 1 day.
-		/// </summary>
-		[Display(
-			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1178Key,
-			Description = LocalizedStrings.Str1179Key,
-			GroupName = LocalizedStrings.Str1175Key,
-			Order = 201)]
-		public TimeSpan DepthExpirationTime
-		{
-			get => _depthExpirationTime;
-			set
-			{
-				if (_depthExpirationTime == value)
-					return;
-
-				_depthExpirationTime = value;
-				NotifyChanged(nameof(DepthExpirationTime));
+				NotifyChanged();
 			}
 		}
 
@@ -92,36 +71,33 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1180Key,
-			Description = LocalizedStrings.Str1181Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.ErrorPercentKey,
+			Description = LocalizedStrings.ErrorPercentDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 202)]
 		public double Failing
 		{
 			get => _failing;
 			set
 			{
-				if (value < 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1182);
-
-				if (value > 100)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1183);
+				if (value < 0 || value > 100)
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_failing = value;
-				NotifyChanged(nameof(Failing));
+				NotifyChanged();
 			}
 		}
 
 		private TimeSpan _latency;
 
 		/// <summary>
-		/// The minimal value of the registered orders delay. By default, it is <see cref="TimeSpan.Zero"/>, which means instant adoption of registered orders by  exchange.
+		/// The minimal value of the registered orders delay. By default, it is <see cref="TimeSpan.Zero"/>, which means instant adoption of registered orders by exchange.
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str161Key,
-			Description = LocalizedStrings.Str1184Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.LatencyKey,
+			Description = LocalizedStrings.LatencyDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 203)]
 		public TimeSpan Latency
 		{
@@ -129,81 +105,12 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				if (value < TimeSpan.Zero)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1185);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_latency = value;
-				NotifyChanged(nameof(Latency));
+				NotifyChanged();
 			}
 		}
-
-		private bool _isSupportAtomicReRegister = true;
-
-		/// <summary>
-		/// Gets a value indicating whether the re-registration orders as a single transaction. By default is enabled.
-		/// </summary>
-		[Display(
-			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.ReregisteringKey,
-			Description = LocalizedStrings.Str60Key,
-			GroupName = LocalizedStrings.Str1175Key,
-			Order = 204)]
-		public bool IsSupportAtomicReRegister
-		{
-			get => _isSupportAtomicReRegister;
-			set
-			{
-				_isSupportAtomicReRegister = value;
-				NotifyChanged(nameof(_isSupportAtomicReRegister));
-			}
-		}
-
-		private TimeSpan _bufferTime;
-
-		/// <summary>
-		/// Responses shall be sent in intervals by whole package. The network delay and buffered operation of exchange are emulated. The default is 0 ms.
-		/// </summary>
-		[Display(
-			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1186Key,
-			Description = LocalizedStrings.Str1187Key,
-			GroupName = LocalizedStrings.Str1175Key,
-			Order = 205)]
-		public TimeSpan BufferTime
-		{
-			get => _bufferTime;
-			set
-			{
-				if (value < TimeSpan.Zero)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str940);
-
-				_bufferTime = value;
-				NotifyChanged(nameof(BufferTime));
-			}
-		}
-
-		//private TimeSpan? _useCandlesTimeFrame;
-
-		///// <summary>
-		///// Использовать свечи с заданным тайм-фреймом. Если тайм-фрейм равен <see langword="null"/>, свечи не используются.
-		///// </summary>
-		//[CategoryLoc(LocalizedStrings.Str1174Key)]
-		//[PropertyOrder(10)]
-		//[DisplayNameLoc(LocalizedStrings.CandlesKey)]
-		//[DescriptionLoc(LocalizedStrings.Str1188Key)]
-		//[Nullable]
-		//[DefaultValue(typeof(TimeSpan), "00:05:00")]
-		//public TimeSpan? UseCandlesTimeFrame
-		//{
-		//	get { return _useCandlesTimeFrame; }
-		//	set
-		//	{
-		//		if (value <= TimeSpan.Zero)
-		//			throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1189);
-
-		//		_useCandlesTimeFrame = value;
-		//		NotifyChanged(nameof(UseCandlesTimeFrame));
-		//	}
-		//}
 
 		private long _initialOrderId;
 
@@ -212,9 +119,9 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1190Key,
-			Description = LocalizedStrings.Str1191Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.OrderIdKey,
+			Description = LocalizedStrings.OrderIdGenerationKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 206)]
 		public long InitialOrderId
 		{
@@ -222,7 +129,7 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				_initialOrderId = value;
-				NotifyChanged(nameof(InitialOrderId));
+				NotifyChanged();
 			}
 		}
 
@@ -233,9 +140,9 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1192Key,
-			Description = LocalizedStrings.Str1193Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.TradeIdKey,
+			Description = LocalizedStrings.TradeIdGenerationKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 207)]
 		public long InitialTradeId
 		{
@@ -243,28 +150,7 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				_initialTradeId = value;
-				NotifyChanged(nameof(InitialTradeId));
-			}
-		}
-
-		private long _initialTransactionId;
-
-		/// <summary>
-		/// The number, starting at which the emulator will generate numbers for order trades <see cref="Order.TransactionId"/>.
-		/// </summary>
-		[Display(
-			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.TransactionKey,
-			Description = LocalizedStrings.Str1194Key,
-			GroupName = LocalizedStrings.Str1175Key,
-			Order = 208)]
-		public long InitialTransactionId
-		{
-			get => _initialTransactionId;
-			set
-			{
-				_initialTransactionId = value;
-				NotifyChanged(nameof(InitialTransactionId));
+				NotifyChanged();
 			}
 		}
 
@@ -275,9 +161,9 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1195Key,
-			Description = LocalizedStrings.Str1196Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.SpreadKey,
+			Description = LocalizedStrings.SpreadSizeDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 209)]
 		public int SpreadSize
 		{
@@ -285,10 +171,10 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				if (value < 1)
-					throw new ArgumentOutOfRangeException();
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_spreadSize = value;
-				NotifyChanged(nameof(SpreadSize));
+				NotifyChanged();
 			}
 		}
 
@@ -299,9 +185,9 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1197Key,
-			Description = LocalizedStrings.Str1198Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.DepthOfBookKey,
+			Description = LocalizedStrings.DepthOfBookDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 210)]
 		public int MaxDepth
 		{
@@ -309,34 +195,10 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				if (value < 1)
-					throw new ArgumentOutOfRangeException();
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_maxDepth = value;
-				NotifyChanged(nameof(MaxDepth));
-			}
-		}
-
-		private int _volumeMultiplier = 2;
-
-		/// <summary>
-		/// The number of volume increments, at which the order exceeds the tick trade. It used at testing on tick trades. By default equals to 2.
-		/// </summary>
-		[Display(
-			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1199Key,
-			Description = LocalizedStrings.Str1200Key,
-			GroupName = LocalizedStrings.Str1175Key,
-			Order = 211)]
-		public int VolumeMultiplier
-		{
-			get => _volumeMultiplier;
-			set
-			{
-				if (value < 0)
-					throw new ArgumentOutOfRangeException();
-
-				_volumeMultiplier = value;
-				NotifyChanged(nameof(VolumeMultiplier));
+				NotifyChanged();
 			}
 		}
 
@@ -347,9 +209,9 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1201Key,
-			Description = LocalizedStrings.Str1202Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.PortfoliosIntervalKey,
+			Description = LocalizedStrings.PortfoliosIntervalDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 212)]
 		public TimeSpan PortfolioRecalcInterval
 		{
@@ -357,10 +219,10 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				if (value < TimeSpan.Zero)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str940);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_portfolioRecalcInterval = value;
-				NotifyChanged(nameof(PortfolioRecalcInterval));
+				NotifyChanged();
 			}
 		}
 
@@ -371,9 +233,9 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1203Key,
-			Description = LocalizedStrings.Str1204Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.ConvertTimeKey,
+			Description = LocalizedStrings.ConvertTimeDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 213)]
 		public bool ConvertTime
 		{
@@ -381,7 +243,7 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				_convertTime = value;
-				NotifyChanged(nameof(ConvertTime));
+				NotifyChanged();
 			}
 		}
 
@@ -393,8 +255,8 @@ namespace StockSharp.Algo.Testing
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.TimeZoneKey,
-			Description = LocalizedStrings.Str68Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Description = LocalizedStrings.BoardTimeZoneKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 214)]
 		public TimeZoneInfo TimeZone
 		{
@@ -402,30 +264,28 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				_timeZone = value;
-				NotifyChanged(nameof(TimeZone));
+				NotifyChanged();
 			}
 		}
 
-		private Unit _priceLimitOffset = new Unit(40, UnitTypes.Percent);
+		private Unit _priceLimitOffset = new(40, UnitTypes.Percent);
 
 		/// <summary>
 		/// The price shift from the previous trade, determining boundaries of maximal and minimal prices for the next session. Used only if there is no saved information <see cref="Level1ChangeMessage"/>. By default, it equals to 40%.
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1205Key,
-			Description = LocalizedStrings.Str1206Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.PriceShiftKey,
+			Description = LocalizedStrings.PriceShiftDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 215)]
 		public Unit PriceLimitOffset
 		{
 			get => _priceLimitOffset;
 			set
 			{
-				if (value == null)
-					throw new ArgumentNullException(nameof(value));
-
-				_priceLimitOffset = value;
+				_priceLimitOffset = value ?? throw new ArgumentNullException(nameof(value));
+				NotifyChanged();
 			}
 		}
 
@@ -436,9 +296,9 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1207Key,
-			Description = LocalizedStrings.Str1208Key,
-			GroupName = LocalizedStrings.Str1175Key,
+			Name = LocalizedStrings.ExtraVolumeKey,
+			Description = LocalizedStrings.ExtraVolumeDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 216)]
 		public bool IncreaseDepthVolume
 		{
@@ -446,7 +306,7 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				_increaseDepthVolume = value;
-				NotifyChanged(nameof(IncreaseDepthVolume));
+				NotifyChanged();
 			}
 		}
 
@@ -459,7 +319,7 @@ namespace StockSharp.Algo.Testing
 			ResourceType = typeof(LocalizedStrings),
 			Name = LocalizedStrings.SessionStateKey,
 			Description = LocalizedStrings.CheckTradingStateKey,
-			GroupName = LocalizedStrings.Str1175Key,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 217)]
 		public bool CheckTradingState
 		{
@@ -467,7 +327,7 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				_checkTradingState = value;
-				NotifyChanged(nameof(CheckTradingState));
+				NotifyChanged();
 			}
 		}
 
@@ -478,9 +338,9 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		[Display(
 			ResourceType = typeof(LocalizedStrings),
-			Name = LocalizedStrings.Str1543Key,
+			Name = LocalizedStrings.MoneyKey,
 			Description = LocalizedStrings.CheckMoneyKey,
-			GroupName = LocalizedStrings.Str1175Key,
+			GroupName = LocalizedStrings.BacktestExtraKey,
 			Order = 218)]
 		public bool CheckMoney
 		{
@@ -488,7 +348,71 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				_checkMoney = value;
-				NotifyChanged(nameof(CheckMoney));
+				NotifyChanged();
+			}
+		}
+
+		/// <summary>
+		/// Can have short positions.
+		/// </summary>
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ShortableKey,
+			Description = LocalizedStrings.ShortableDescKey,
+			GroupName = LocalizedStrings.BacktestExtraKey,
+			Order = 218)]
+		public bool CheckShortable { get; set; }
+
+		/// <summary>
+		/// Allow store generated by <see cref="IMarketEmulator"/> messages.
+		/// </summary>
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.StorageKey,
+			//Description = ,
+			GroupName = LocalizedStrings.BacktestExtraKey,
+			Order = 219)]
+		public bool AllowStoreGenerateMessages { get; set; }
+
+		private bool _checkTradableDates;
+
+		/// <summary>
+		/// Check loading dates are they tradable.
+		/// </summary>
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CheckDatesKey,
+			Description = LocalizedStrings.CheckDatesDescKey,
+			GroupName = LocalizedStrings.BacktestKey,
+			Order = 106)]
+		public bool CheckTradableDates
+		{
+			get => _checkTradableDates;
+			set
+			{
+				_checkTradableDates = value;
+				NotifyPropertyChanged();
+			}
+		}
+
+		private IEnumerable<ICommissionRule> _commissionRules = Enumerable.Empty<ICommissionRule>();
+
+		/// <summary>
+		/// Commission rules.
+		/// </summary>
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			GroupName = LocalizedStrings.BacktestKey,
+			Name = LocalizedStrings.CommissionKey,
+			Description = LocalizedStrings.CommissionDescKey,
+			Order = 110)]
+		public IEnumerable<ICommissionRule> CommissionRules
+		{
+			get => _commissionRules;
+			set
+			{
+				_commissionRules = value ?? throw new ArgumentNullException(nameof(value));
+				NotifyChanged();
 			}
 		}
 
@@ -498,28 +422,27 @@ namespace StockSharp.Algo.Testing
 		/// <param name="storage">Storage.</param>
 		public virtual void Save(SettingsStorage storage)
 		{
-			storage.SetValue(nameof(DepthExpirationTime), DepthExpirationTime);
-			storage.SetValue(nameof(MatchOnTouch), MatchOnTouch);
-			storage.SetValue(nameof(Failing), Failing);
-			storage.SetValue(nameof(Latency), Latency);
-			storage.SetValue(nameof(IsSupportAtomicReRegister), IsSupportAtomicReRegister);
-			storage.SetValue(nameof(BufferTime), BufferTime);
-			//storage.SetValue(nameof(UseCandlesTimeFrame), UseCandlesTimeFrame);
-			storage.SetValue(nameof(InitialOrderId), InitialOrderId);
-			storage.SetValue(nameof(InitialTradeId), InitialTradeId);
-			storage.SetValue(nameof(InitialTransactionId), InitialTransactionId);
-			storage.SetValue(nameof(SpreadSize), SpreadSize);
-			storage.SetValue(nameof(MaxDepth), MaxDepth);
-			storage.SetValue(nameof(VolumeMultiplier), VolumeMultiplier);
-			storage.SetValue(nameof(PortfolioRecalcInterval), PortfolioRecalcInterval);
-			storage.SetValue(nameof(ConvertTime), ConvertTime);
-			storage.SetValue(nameof(PriceLimitOffset), PriceLimitOffset);
-			storage.SetValue(nameof(IncreaseDepthVolume), IncreaseDepthVolume);
-			storage.SetValue(nameof(CheckTradingState), CheckTradingState);
-			storage.SetValue(nameof(CheckMoney), CheckMoney);
+			storage
+				.Set(nameof(MatchOnTouch), MatchOnTouch)
+				.Set(nameof(Failing), Failing)
+				.Set(nameof(Latency), Latency)
+				.Set(nameof(InitialOrderId), InitialOrderId)
+				.Set(nameof(InitialTradeId), InitialTradeId)
+				.Set(nameof(SpreadSize), SpreadSize)
+				.Set(nameof(MaxDepth), MaxDepth)
+				.Set(nameof(PortfolioRecalcInterval), PortfolioRecalcInterval)
+				.Set(nameof(ConvertTime), ConvertTime)
+				.Set(nameof(PriceLimitOffset), PriceLimitOffset)
+				.Set(nameof(IncreaseDepthVolume), IncreaseDepthVolume)
+				.Set(nameof(CheckTradingState), CheckTradingState)
+				.Set(nameof(CheckMoney), CheckMoney)
+				.Set(nameof(CheckShortable), CheckShortable)
+				.Set(nameof(AllowStoreGenerateMessages), AllowStoreGenerateMessages)
+				.Set(nameof(CheckTradableDates), CheckTradableDates)
+				.Set(nameof(CommissionRules), CommissionRules.Select(c => c.SaveEntire(false)).ToArray());
 
 			if (TimeZone != null)
-				storage.SetValue(nameof(TimeZone), TimeZone);
+				storage.Set(nameof(TimeZone), TimeZone);
 		}
 
 		/// <summary>
@@ -528,28 +451,29 @@ namespace StockSharp.Algo.Testing
 		/// <param name="storage">Storage.</param>
 		public virtual void Load(SettingsStorage storage)
 		{
-			DepthExpirationTime = storage.GetValue(nameof(DepthExpirationTime), DepthExpirationTime);
 			MatchOnTouch = storage.GetValue(nameof(MatchOnTouch), MatchOnTouch);
 			Failing = storage.GetValue(nameof(Failing), Failing);
 			Latency = storage.GetValue(nameof(Latency), Latency);
-			IsSupportAtomicReRegister = storage.GetValue(nameof(IsSupportAtomicReRegister), IsSupportAtomicReRegister);
-			BufferTime = storage.GetValue(nameof(BufferTime), BufferTime);
-			//UseCandlesTimeFrame = storage.GetValue(nameof(UseCandlesTimeFrame), UseCandlesTimeFrame);
 			InitialOrderId = storage.GetValue(nameof(InitialOrderId), InitialOrderId);
 			InitialTradeId = storage.GetValue(nameof(InitialTradeId), InitialTradeId);
-			InitialTransactionId = storage.GetValue(nameof(InitialTransactionId), InitialTransactionId);
 			SpreadSize = storage.GetValue(nameof(SpreadSize), SpreadSize);
 			MaxDepth = storage.GetValue(nameof(MaxDepth), MaxDepth);
-			VolumeMultiplier = storage.GetValue(nameof(VolumeMultiplier), VolumeMultiplier);
 			PortfolioRecalcInterval = storage.GetValue(nameof(PortfolioRecalcInterval), PortfolioRecalcInterval);
 			ConvertTime = storage.GetValue(nameof(ConvertTime), ConvertTime);
 			PriceLimitOffset = storage.GetValue(nameof(PriceLimitOffset), PriceLimitOffset);
 			IncreaseDepthVolume = storage.GetValue(nameof(IncreaseDepthVolume), IncreaseDepthVolume);
 			CheckTradingState = storage.GetValue(nameof(CheckTradingState), CheckTradingState);
 			CheckMoney = storage.GetValue(nameof(CheckMoney), CheckMoney);
+			CheckShortable = storage.GetValue(nameof(CheckShortable), CheckShortable);
+			AllowStoreGenerateMessages = storage.GetValue(nameof(AllowStoreGenerateMessages), AllowStoreGenerateMessages);
+			CheckTradableDates = storage.GetValue(nameof(CheckTradableDates), CheckTradableDates);
 
 			if (storage.Contains(nameof(TimeZone)))
 				TimeZone = storage.GetValue<TimeZoneInfo>(nameof(TimeZone));
+
+			var commRules = storage.GetValue<SettingsStorage[]>(nameof(CommissionRules));
+			if (commRules is not null)
+				CommissionRules = commRules.Select(i => i.LoadEntire<ICommissionRule>()).ToArray();
 		}
 	}
 }

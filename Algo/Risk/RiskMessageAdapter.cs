@@ -17,6 +17,7 @@ namespace StockSharp.Algo.Risk
 {
 	using System;
 
+	using Ecng.Common;
 	using Ecng.ComponentModel;
 	using Ecng.Serialization;
 
@@ -55,35 +56,34 @@ namespace StockSharp.Algo.Risk
 			}
 		}
 
-		/// <summary>
-		/// Send message.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		public override void SendInMessage(Message message)
+		/// <inheritdoc />
+		public override bool SendInMessage(Message message)
 		{
-			if (message.IsBack)
+			if (message.IsBack())
 			{
 				if (message.Adapter == this)
 				{
-					message.Adapter = null;
-					message.IsBack = false;
+					message.UndoBack();
+
+					return base.OnSendInMessage(message);
 				}
-				
-				base.SendInMessage(message);
-				return;
 			}
 
-			ProcessRisk(message);
-			base.SendInMessage(message);
+			return base.SendInMessage(message);
 		}
 
-		/// <summary>
-		/// Process <see cref="MessageAdapterWrapper.InnerAdapter"/> output message.
-		/// </summary>
-		/// <param name="message">The message.</param>
+		/// <inheritdoc />
+		protected override bool OnSendInMessage(Message message)
+		{
+			ProcessRisk(message);
+			
+			return base.OnSendInMessage(message);
+		}
+
+		/// <inheritdoc />
 		protected override void OnInnerAdapterNewOutMessage(Message message)
 		{
-			if (!message.IsBack)
+			if (message.Type != MessageTypes.Reset)
 				ProcessRisk(message);
 
 			base.OnInnerAdapterNewOutMessage(message);
@@ -93,7 +93,7 @@ namespace StockSharp.Algo.Risk
 		{
 			foreach (var rule in RiskManager.ProcessRules(message))
 			{
-				this.AddWarningLog(LocalizedStrings.Str855Params,
+				this.AddWarningLog(LocalizedStrings.ActivatingRiskRule,
 					rule.GetType().GetDisplayName(), rule.Title, rule.Action);
 
 				switch (rule.Action)
@@ -103,18 +103,13 @@ namespace StockSharp.Algo.Risk
 						break;
 					}
 					//case RiskActions.StopTrading:
-					//	base.SendInMessage(new DisconnectMessage());
+					//	base.OnSendInMessage(new DisconnectMessage());
 					//	break;
 					case RiskActions.CancelOrders:
-						RaiseNewOutMessage(new OrderGroupCancelMessage
-						{
-							TransactionId = TransactionIdGenerator.GetNextId(),
-							IsBack = true,
-							Adapter = this,
-						});
+						RaiseNewOutMessage(new OrderGroupCancelMessage { TransactionId = TransactionIdGenerator.GetNextId() }.LoopBack(this));
 						break;
 					default:
-						throw new ArgumentOutOfRangeException();
+						throw new InvalidOperationException(rule.Action.To<string>());
 				}
 			}
 		}
@@ -125,7 +120,7 @@ namespace StockSharp.Algo.Risk
 		/// <returns>Copy.</returns>
 		public override IMessageChannel Clone()
 		{
-			return new RiskMessageAdapter((IMessageAdapter)InnerAdapter.Clone())
+			return new RiskMessageAdapter(InnerAdapter.TypedClone())
 			{
 				RiskManager = RiskManager.Clone(),
 			};

@@ -17,6 +17,8 @@ namespace StockSharp.Algo.Slippage
 {
 	using System;
 
+	using Ecng.Common;
+
 	using StockSharp.Messages;
 
 	/// <summary>
@@ -44,29 +46,17 @@ namespace StockSharp.Algo.Slippage
 			set => _slippageManager = value ?? throw new ArgumentNullException(nameof(value));
 		}
 
-		/// <summary>
-		/// Send message.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		public override void SendInMessage(Message message)
+		/// <inheritdoc />
+		protected override bool OnSendInMessage(Message message)
 		{
-			if (message.IsBack)
-			{
-				base.SendInMessage(message);
-				return;
-			}
-
 			SlippageManager.ProcessMessage(message);
-			base.SendInMessage(message);
+			return base.OnSendInMessage(message);
 		}
 
-		/// <summary>
-		/// Process <see cref="MessageAdapterWrapper.InnerAdapter"/> output message.
-		/// </summary>
-		/// <param name="message">The message.</param>
+		/// <inheritdoc />
 		protected override void OnInnerAdapterNewOutMessage(Message message)
 		{
-			if (!message.IsBack)
+			if (message.Type != MessageTypes.Reset)
 			{
 				var slippage = SlippageManager.ProcessMessage(message);
 
@@ -76,7 +66,7 @@ namespace StockSharp.Algo.Slippage
 
 					if (execMsg.Slippage == null)
 						execMsg.Slippage = slippage;
-				}	
+				}
 			}
 
 			base.OnInnerAdapterNewOutMessage(message);
@@ -88,7 +78,7 @@ namespace StockSharp.Algo.Slippage
 		/// <returns>Copy.</returns>
 		public override IMessageChannel Clone()
 		{
-			return new SlippageMessageAdapter((IMessageAdapter)InnerAdapter.Clone());
+			return new SlippageMessageAdapter(InnerAdapter.TypedClone());
 		}
 	}
 }

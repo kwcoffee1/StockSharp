@@ -70,12 +70,10 @@ namespace StockSharp.Algo.Strategies
 			set => _interval.Value = value;
 		}
 
-		/// <summary>
-		/// The method is called when the <see cref="Strategy.Start"/> method has been called and the <see cref="Strategy.ProcessState"/> state has been taken the <see cref="ProcessStates.Started"/> value.
-		/// </summary>
-		protected override void OnStarted()
+		/// <inheritdoc />
+		protected override void OnStarted(DateTimeOffset time)
 		{
-			base.OnStarted();
+			base.OnStarted(time);
 
 			SafeGetConnector()
 				.WhenIntervalElapsed(Interval/*, true*/)

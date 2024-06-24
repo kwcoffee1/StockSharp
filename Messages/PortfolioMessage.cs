@@ -19,6 +19,8 @@ namespace StockSharp.Messages
 	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
 
+	using Ecng.Common;
+
 	using StockSharp.Localization;
 
 	/// <summary>
@@ -32,14 +34,14 @@ namespace StockSharp.Messages
 		/// Active.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str248Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.ActiveKey)]
 		Active,
 		
 		/// <summary>
 		/// Blocked.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str249Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.BlockedKey)]
 		Blocked,
 	}
 
@@ -48,73 +50,93 @@ namespace StockSharp.Messages
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class PortfolioMessage : Message, ITransactionIdMessage
+	public class PortfolioMessage : BaseSubscriptionIdMessage<PortfolioMessage>,
+	        ISubscriptionMessage, IPortfolioNameMessage
 	{
-		/// <summary>
-		/// Portfolio code name.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.NameKey)]
-		[DescriptionLoc(LocalizedStrings.Str247Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.NameKey,
+			Description = LocalizedStrings.PortfolioNameKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string PortfolioName { get; set; }
 
 		/// <summary>
 		/// Portfolio currency.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.CurrencyKey)]
-		[DescriptionLoc(LocalizedStrings.Str251Key)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CurrencyKey,
+			Description = LocalizedStrings.PortfolioCurrencyKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public CurrencyTypes? Currency { get; set; }
 
 		/// <summary>
 		/// Electronic board code.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.BoardKey)]
-		[DescriptionLoc(LocalizedStrings.BoardCodeKey, true)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.BoardKey,
+			Description = LocalizedStrings.BoardCodeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string BoardCode { get; set; }
 
 		/// <summary>
 		/// Client code assigned by the broker.
 		/// </summary>
 		[DataMember]
-		[MainCategory]
-		[DisplayNameLoc(LocalizedStrings.ClientCodeKey)]
-		[DescriptionLoc(LocalizedStrings.ClientCodeDescKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ClientCodeKey,
+			Description = LocalizedStrings.ClientCodeDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string ClientCode { get; set; }
 
-		///// <summary>
-		///// Portfolio state.
-		///// </summary>
-		//[DataMember]
-		//[DisplayNameLoc(LocalizedStrings.StateKey)]
-		//[DescriptionLoc(LocalizedStrings.Str252Key)]
-		//[MainCategory]
-		//public PortfolioStates? State { get; set; }
-
-		/// <summary>
-		/// ID of the original message <see cref="TransactionId"/> for which this message is a response.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
-		public long OriginalTransactionId { get; set; }
-
-		/// <summary>
-		/// Subscription/unsubscription portfolio changes transaction id.
-		/// </summary>
-		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.TransactionKey)]
-		[DescriptionLoc(LocalizedStrings.TransactionIdKey, true)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.TransactionKey,
+			Description = LocalizedStrings.TransactionIdKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public long TransactionId { get; set; }
 
-		/// <summary>
-		/// Is the message subscription portfolio changes.
-		/// </summary>
+		/// <inheritdoc />
 		[DataMember]
 		public bool IsSubscribe { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.FromKey,
+			Description = LocalizedStrings.StartDateDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public DateTimeOffset? From { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.UntilKey,
+			Description = LocalizedStrings.ToDateDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public DateTimeOffset? To { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		public long? Skip { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		public long? Count { get; set; }
+
+		/// <inheritdoc />
+		[DataMember]
+		public FillGapsDays? FillGaps { get; set; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="PortfolioMessage"/>.
@@ -134,39 +156,65 @@ namespace StockSharp.Messages
 		}
 
 		/// <inheritdoc />
+		public override DataType DataType => DataType.Portfolio(PortfolioName);
+
+		bool ISubscriptionMessage.FilterEnabled
+			=>
+			!PortfolioName.IsEmpty() || Currency != null ||
+			!BoardCode.IsEmpty() || !ClientCode.IsEmpty();
+
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",Name={PortfolioName}";
+			var str = base.ToString() + $",Name={PortfolioName}";
+
+			if (TransactionId > 0)
+				str += $",TransId={TransactionId}";
+
+			if (Currency != default)
+				str += $",Curr={Currency}";
+
+			if (!BoardCode.IsEmpty())
+				str += $",Board={BoardCode}";
+
+			if (IsSubscribe)
+				str += $",IsSubscribe={IsSubscribe}";
+
+			if (From != default)
+				str += $",From={From}";
+
+			if (To != default)
+				str += $",To={To}";
+
+			if (Skip != default)
+				str += $",Skip={Skip}";
+
+			if (Count != default)
+				str += $",Count={Count}";
+
+			if (FillGaps != default)
+				str += $",Gaps={FillGaps}";
+
+			return str;
 		}
 
-		/// <summary>
-		/// Create a copy of <see cref="PortfolioMessage"/>.
-		/// </summary>
-		/// <returns>Copy.</returns>
-		public override Message Clone()
+		/// <inheritdoc />
+		public override void CopyTo(PortfolioMessage destination)
 		{
-			return CopyTo(new PortfolioMessage());
-		}
+			base.CopyTo(destination);
 
-		/// <summary>
-		/// Copy the message into the <paramref name="destination" />.
-		/// </summary>
-		/// <param name="destination">The object, to which copied information.</param>
-		/// <returns>The object, to which copied information.</returns>
-		protected PortfolioMessage CopyTo(PortfolioMessage destination)
-		{
 			destination.PortfolioName = PortfolioName;
 			destination.Currency = Currency;
 			destination.BoardCode = BoardCode;
-			destination.OriginalTransactionId = OriginalTransactionId;
 			destination.IsSubscribe = IsSubscribe;
 			//destination.State = State;
 			destination.TransactionId = TransactionId;
 			destination.ClientCode = ClientCode;
-
-			this.CopyExtensionInfo(destination);
-
-			return destination;
+			destination.From = From;
+			destination.To = To;
+			destination.Skip = Skip;
+			destination.Count = Count;
+			destination.FillGaps = FillGaps;
 		}
 	}
 }

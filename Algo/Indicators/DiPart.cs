@@ -15,7 +15,7 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using StockSharp.Algo.Candles;
+	using StockSharp.Messages;
 
 	/// <summary>
 	/// The part of the indicator <see cref="DirectionalIndex"/>.
@@ -25,8 +25,7 @@ namespace StockSharp.Algo.Indicators
 	{
 		private readonly AverageTrueRange _averageTrueRange;
 		private readonly LengthIndicator<decimal> _movingAverage;
-		private Candle _lastCandle;
-		private bool _isFormed;
+		private ICandleMessage _lastCandle;
 
 		/// <summary>
 		/// Initialize <see cref="DiPart"/>.
@@ -39,9 +38,7 @@ namespace StockSharp.Algo.Indicators
 			Length = 5;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			base.Reset();
@@ -50,27 +47,18 @@ namespace StockSharp.Algo.Indicators
 			_movingAverage.Length = Length;
 
 			_lastCandle = null;
-			_isFormed = false;
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _isFormed;
-
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			decimal? result = null;
 
-			var candle = input.GetValue<Candle>();
+			var candle = input.GetValue<ICandleMessage>();
 
 			// 1 period delay
-			_isFormed = _averageTrueRange.IsFormed && _movingAverage.IsFormed;
+			if (_averageTrueRange.IsFormed && _movingAverage.IsFormed)
+				IsFormed = true;
 
 			_averageTrueRange.Process(input);
 
@@ -96,6 +84,6 @@ namespace StockSharp.Algo.Indicators
 		/// <param name="current">The current candle.</param>
 		/// <param name="prev">The previous candle.</param>
 		/// <returns>Value.</returns>
-		protected abstract decimal GetValue(Candle current, Candle prev);
+		protected abstract decimal GetValue(ICandleMessage current, ICandleMessage prev);
 	}
 }

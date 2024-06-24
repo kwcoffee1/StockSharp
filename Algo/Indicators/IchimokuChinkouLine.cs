@@ -15,15 +15,11 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
-
-	using StockSharp.Algo.Candles;
-
 	/// <summary>
 	/// Chinkou line.
 	/// </summary>
 	[IndicatorIn(typeof(CandleIndicatorValue))]
-	[Browsable(false)]
+	[IndicatorHidden]
 	public class IchimokuChinkouLine : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -33,22 +29,15 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var price = input.GetValue<Candle>().ClosePrice;
-
-			if (Buffer.Count > Length)
-				Buffer.RemoveAt(0);
+			var (_, _, _, close) = input.GetOhlc();
 
 			if (input.IsFinal)
-				Buffer.Add(price);
+				Buffer.PushBack(close);
 
-			return new DecimalIndicatorValue(this, price);
+			return new DecimalIndicatorValue(this, close);
 		}
 	}
 }

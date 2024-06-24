@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,15 +15,16 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
 
 	/// <summary>
 	/// QStick.
 	/// </summary>
 	/// <remarks>
-	/// http://www2.wealth-lab.com/WL5Wiki/QStick.ashx.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/qstick.html
 	/// </remarks>
 	[IndicatorIn(typeof(CandleIndicatorValue))]
+	[Doc("topics/api/indicators/list_of_indicators/qstick.html")]
 	public class QStick : LengthIndicator<IIndicatorValue>
 	{
 		private readonly SimpleMovingAverage _sma;
@@ -37,29 +38,26 @@ namespace StockSharp.Algo.Indicators
 			Length = 15;
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _sma.IsFormed;
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _sma.IsFormed;
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_sma.Length = Length;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var candle = input.GetValue<Candle>();
-			return _sma.Process(input.SetValue(this, candle.OpenPrice - candle.ClosePrice));
+			var (open, _, _, close) = input.GetOhlc();
+
+			var val = _sma.Process(input.SetValue(this, open - close));
+			return val.SetValue(this, val.GetValue<decimal>());
 		}
 	}
 }

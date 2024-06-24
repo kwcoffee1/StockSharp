@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,18 +15,24 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System;
-	using System.ComponentModel;
-	using System.Linq;
+	using System.Collections.Generic;
+	using System.ComponentModel.DataAnnotations;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Minimum value for a period.
 	/// </summary>
-	[DisplayName("Lowest")]
-	[DescriptionLoc(LocalizedStrings.Str743Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/lowest.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.LowestKey,
+		Description = LocalizedStrings.MinValuePeriodKey)]
+	[Doc("topics/api/indicators/list_of_indicators/lowest.html")]
 	public class Lowest : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -35,42 +41,23 @@ namespace StockSharp.Algo.Indicators
 		public Lowest()
 		{
 			Length = 5;
+			Buffer.MinComparer = Comparer<decimal>.Default;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var newValue = input.IsSupport(typeof(Candle)) ? input.GetValue<Candle>().LowPrice : input.GetValue<decimal>();
+			var (_, _, low, _) = input.GetOhlc();
 
-			var lastValue = Buffer.Count == 0 ? newValue : this.GetCurrentValue();
+			var lastValue = Buffer.Count == 0 ? low : this.GetCurrentValue();
 
-			// добавляем новое начало
+			if (low < lastValue)
+				lastValue = low;
+
 			if (input.IsFinal)
-				Buffer.Add(newValue);
-
-			if (newValue < lastValue)
 			{
-				// Новое значение и есть экстремум 
-				lastValue = newValue;
-			}
-
-			if (Buffer.Count > Length) // IsFormed не использовать, т.к. сначала добавляется и >= не подходит
-			{
-				var first = Buffer[0];
-
-				// удаляем хвостовое значение
-				if (input.IsFinal)
-					Buffer.RemoveAt(0);
-
-				if (first == lastValue && lastValue != newValue) // удаляется экстремум, для поиска нового значения необходим проход по всему буфферу
-				{
-					// ищем новый экстремум
-					lastValue = Buffer.Aggregate(newValue, (current, t) => Math.Min(t, current));
-				}
+				Buffer.AddEx(low);
+				lastValue = Buffer.Min.Value;
 			}
 
 			return new DecimalIndicatorValue(this, lastValue);

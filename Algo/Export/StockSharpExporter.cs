@@ -19,11 +19,11 @@ namespace StockSharp.Algo.Export
 	using System.Collections.Generic;
 	using System.Linq;
 
-	using MoreLinq;
+	using Ecng.Common;
 
 	using StockSharp.Algo.Storages;
-	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
+	using StockSharp.Localization;
 
 	/// <summary>
 	/// The export into the StockSharp format.
@@ -37,14 +37,13 @@ namespace StockSharp.Algo.Export
 		/// <summary>
 		/// Initializes a new instance of the <see cref="StockSharpExporter"/>.
 		/// </summary>
-		/// <param name="security">Security.</param>
-		/// <param name="arg">The data parameter.</param>
+		/// <param name="dataType">Data type info.</param>
 		/// <param name="isCancelled">The processor, returning process interruption sign.</param>
 		/// <param name="storageRegistry">The storage of market data.</param>
 		/// <param name="drive">Storage.</param>
 		/// <param name="format">Format type.</param>
-		public StockSharpExporter(Security security, object arg, Func<int, bool> isCancelled, IStorageRegistry storageRegistry, IMarketDataDrive drive, StorageFormats format)
-			: base(security, arg, isCancelled, drive.Path)
+		public StockSharpExporter(DataType dataType, Func<int, bool> isCancelled, IStorageRegistry storageRegistry, IMarketDataDrive drive, StorageFormats format)
+			: base(dataType, isCancelled, drive.CheckOnNull(nameof(drive)).Path)
 		{
 			_storageRegistry = storageRegistry ?? throw new ArgumentNullException(nameof(storageRegistry));
 			_drive = drive ?? throw new ArgumentNullException(nameof(drive));
@@ -62,86 +61,76 @@ namespace StockSharp.Algo.Export
 			set
 			{
 				if (value < 1)
-					throw new ArgumentOutOfRangeException();
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_batchSize = value;
 			}
 		}
 
-		private void Export<TMessage>(IEnumerable<TMessage> messages)
-			where TMessage : Message
+		private (int, DateTimeOffset?) Export(IEnumerable<Message> messages)
 		{
-			Export(typeof(TMessage), messages);
-		}
+			var count = 0;
+			var lastTime = default(DateTimeOffset?);
 
-		private void Export(Type messageType, IEnumerable<Message> messages)
-		{
-			IMarketDataStorage storage = null;
-
-			foreach (var batch in messages.Batch(BatchSize).Select(b => b.ToArray()))
+			foreach (var batch in messages.Chunk(BatchSize))
 			{
-				if (storage == null)
-					storage = _storageRegistry.GetStorage(Security, messageType, Arg, _drive, _format);
+				foreach (var group in batch.GroupBy(m => m.TryGetSecurityId()))
+				{
+					var b = group.ToArray();
 
-				if (!CanProcess(batch.Length))
-					break;
+					var storage = _storageRegistry.GetStorage(group.Key ?? default, DataType.MessageType, DataType.Arg, _drive, _format);
 
-				storage.Save(batch);
+					if (!CanProcess(b.Length))
+						break;
+
+					storage.Save(b);
+
+					count += b.Length;
+
+					if (b.LastOrDefault() is IServerTimeMessage timeMsg)
+						lastTime = timeMsg.ServerTime;
+				}
 			}
+
+			return (count, lastTime);
 		}
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<ExecutionMessage> messages)
-		{
-			Export(messages);
-		}
+		protected override (int, DateTimeOffset?) ExportOrderLog(IEnumerable<ExecutionMessage> messages)
+			=> Export(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<QuoteChangeMessage> messages)
-		{
-			Export(messages);
-		}
+		protected override (int, DateTimeOffset?) ExportTicks(IEnumerable<ExecutionMessage> messages)
+			=> Export(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<Level1ChangeMessage> messages)
-		{
-			Export(messages);
-		}
+		protected override (int, DateTimeOffset?) ExportTransactions(IEnumerable<ExecutionMessage> messages)
+			=> Export(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<PositionChangeMessage> messages)
-		{
-			Export(messages);
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<QuoteChangeMessage> messages)
+			=> Export(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<IndicatorValue> values)
-		{
-			throw new NotSupportedException();
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<Level1ChangeMessage> messages)
+			=> Export(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<CandleMessage> messages)
-		{
-			foreach (var group in messages.GroupBy(m => m.GetType()))
-			{
-				Export(group.Key, group);
-
-				if (!CanProcess())
-					break;
-			}
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<PositionChangeMessage> messages)
+			=> Export(messages);
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<NewsMessage> messages)
-		{
-			Export(messages);
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<IndicatorValue> values) => throw new NotSupportedException();
 
 		/// <inheritdoc />
-		protected override void Export(IEnumerable<SecurityMessage> messages)
-		{
-			throw new NotSupportedException();
-		}
+		protected override (int, DateTimeOffset?) Export(IEnumerable<CandleMessage> messages)
+			=> Export(messages);
+
+		/// <inheritdoc />
+		protected override (int, DateTimeOffset?) Export(IEnumerable<NewsMessage> messages)
+			=> Export(messages);
+
+		/// <inheritdoc />
+		protected override (int, DateTimeOffset?) Export(IEnumerable<SecurityMessage> messages) => throw new NotSupportedException();
 	}
 }

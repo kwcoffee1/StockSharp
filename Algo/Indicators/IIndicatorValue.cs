@@ -21,8 +21,6 @@ namespace StockSharp.Algo.Indicators
 
 	using Ecng.Common;
 
-	using StockSharp.Algo.Candles;
-	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
 	using StockSharp.Localization;
 
@@ -49,12 +47,7 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Whether the indicator is set.
 		/// </summary>
-		bool IsFormed { get; }
-
-		/// <summary>
-		/// The input value.
-		/// </summary>
-		IIndicatorValue InputValue { get; set; }
+		bool IsFormed { get; set; }
 
 		/// <summary>
 		/// Does value support data type, required for the indicator.
@@ -67,8 +60,9 @@ namespace StockSharp.Algo.Indicators
 		/// To get the value by the data type.
 		/// </summary>
 		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
+		/// <param name="field">Field specified value source.</param>
 		/// <returns>Value.</returns>
-		T GetValue<T>();
+		T GetValue<T>(Level1Fields? field = default);
 
 		/// <summary>
 		/// To replace the indicator input value by new one (for example it is received from another indicator).
@@ -78,6 +72,18 @@ namespace StockSharp.Algo.Indicators
 		/// <param name="value">Value.</param>
 		/// <returns>New object, containing input value.</returns>
 		IIndicatorValue SetValue<T>(IIndicator indicator, T value);
+
+		/// <summary>
+		/// Convert to primitive values.
+		/// </summary>
+		/// <returns>Primitive values.</returns>
+		IEnumerable<object> ToValues();
+
+		/// <summary>
+		/// Convert to indicator value.
+		/// </summary>
+		/// <param name="values"><see cref="ToValues"/></param>
+		void FromValues(object[] values);
 	}
 
 	/// <summary>
@@ -95,75 +101,46 @@ namespace StockSharp.Algo.Indicators
 			IsFormed = indicator.IsFormed;
 		}
 
-		/// <summary>
-		/// Indicator.
-		/// </summary>
+		/// <inheritdoc />
 		public IIndicator Indicator { get; }
 
-		/// <summary>
-		/// No indicator value.
-		/// </summary>
+		/// <inheritdoc />
 		public abstract bool IsEmpty { get; set; }
 
-		/// <summary>
-		/// Is the value final (indicator finalizes its value and will not be changed anymore in the given point of time).
-		/// </summary>
+		/// <inheritdoc />
 		public abstract bool IsFinal { get; set; }
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public bool IsFormed { get; }
+		/// <inheritdoc />
+		public bool IsFormed { get; set; }
 
-		/// <summary>
-		/// The input value.
-		/// </summary>
-		public abstract IIndicatorValue InputValue { get; set; }
-
-		/// <summary>
-		/// Does value support data type, required for the indicator.
-		/// </summary>
-		/// <param name="valueType">The data type, operated by indicator.</param>
-		/// <returns><see langword="true" />, if data type is supported, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
 		public abstract bool IsSupport(Type valueType);
 
-		/// <summary>
-		/// To get the value by the data type.
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <returns>Value.</returns>
-		public abstract T GetValue<T>();
+		/// <inheritdoc />
+		public abstract T GetValue<T>(Level1Fields? field);
 
-		/// <summary>
-		/// To replace the indicator input value by new one (for example it is received from another indicator).
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="value">Value.</param>
-		/// <returns>New object, containing input value.</returns>
+		/// <inheritdoc />
 		public abstract IIndicatorValue SetValue<T>(IIndicator indicator, T value);
 
-		/// <summary>
-		/// Compare <see cref="IIndicatorValue"/> on the equivalence.
-		/// </summary>
-		/// <param name="other">Another value with which to compare.</param>
-		/// <returns>The result of the comparison.</returns>
+		/// <inheritdoc />
 		public abstract int CompareTo(IIndicatorValue other);
 
-		/// <summary>
-		/// Compare <see cref="IIndicatorValue"/> on the equivalence.
-		/// </summary>
-		/// <param name="other">Another value with which to compare.</param>
-		/// <returns>The result of the comparison.</returns>
+		/// <inheritdoc />
 		int IComparable.CompareTo(object other)
 		{
 			var value = other as IIndicatorValue;
 
 			if (other == null)
-				throw new ArgumentException(LocalizedStrings.Str911, nameof(other));
+				throw new ArgumentOutOfRangeException(nameof(other), other, LocalizedStrings.InvalidValue);
 
 			return CompareTo(value);
 		}
+
+		/// <inheritdoc />
+		public abstract IEnumerable<object> ToValues();
+
+		/// <inheritdoc />
+		public abstract void FromValues(object[] values);
 	}
 
 	/// <summary>
@@ -197,79 +174,68 @@ namespace StockSharp.Algo.Indicators
 		/// <summary>
 		/// Value.
 		/// </summary>
-		public TValue Value { get; }
+		public TValue Value { get; protected set; }
 
-		/// <summary>
-		/// No indicator value.
-		/// </summary>
+		/// <inheritdoc />
 		public override bool IsEmpty { get; set; }
 
-		/// <summary>
-		/// Is the value final (indicator finalizes its value and will not be changed anymore in the given point of time).
-		/// </summary>
+		/// <inheritdoc />
 		public override bool IsFinal { get; set; }
 
-		/// <summary>
-		/// The input value.
-		/// </summary>
-		public override IIndicatorValue InputValue { get; set; }
+		/// <inheritdoc />
+		public override bool IsSupport(Type valueType) => valueType.IsAssignableFrom(typeof(TValue));
 
-		/// <summary>
-		/// Does value support data type, required for the indicator.
-		/// </summary>
-		/// <param name="valueType">The data type, operated by indicator.</param>
-		/// <returns><see langword="true" />, if data type is supported, otherwise, <see langword="false" />.</returns>
-		public override bool IsSupport(Type valueType)
-		{
-			return valueType == typeof(TValue);
-		}
-
-		/// <summary>
-		/// To get the value by the data type.
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <returns>Value.</returns>
-		public override T GetValue<T>()
+		/// <inheritdoc />
+		public override T GetValue<T>(Level1Fields? field)
 		{
 			ThrowIfEmpty();
-			return Value.To<T>();
+			return Value is T t ? t : throw new InvalidCastException($"Cannot convert {typeof(TValue).Name} to {typeof(T).Name}."); ;
 		}
 
-		/// <summary>
-		/// To replace the indicator input value by new one (for example it is received from another indicator).
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="value">Value.</param>
-		/// <returns>New object, containing input value.</returns>
+		/// <inheritdoc />
 		public override IIndicatorValue SetValue<T>(IIndicator indicator, T value)
 		{
-			return new SingleIndicatorValue<T>(indicator, value) { IsFinal = IsFinal, InputValue = this };
+			return new SingleIndicatorValue<T>(indicator, value) { IsFinal = IsFinal };
 		}
 
 		private void ThrowIfEmpty()
 		{
 			if (IsEmpty)
-				throw new InvalidOperationException(LocalizedStrings.Str910);
+				throw new InvalidOperationException(LocalizedStrings.NoData2);
 		}
 
-		/// <summary>
-		/// Compare <see cref="SingleIndicatorValue{T}"/> on the equivalence.
-		/// </summary>
-		/// <param name="other">Another value with which to compare.</param>
-		/// <returns>The result of the comparison.</returns>
-		public override int CompareTo(IIndicatorValue other)
-		{
-			return Value.Compare(other.GetValue<TValue>());
-		}
+		/// <inheritdoc />
+		public override int CompareTo(IIndicatorValue other) => Value.Compare(other.GetValue<TValue>());
+
+		/// <inheritdoc />
+		public override string ToString() => IsEmpty ? "Empty" : Value.ToString();
 
 		/// <summary>
-		/// Returns a string that represents the current object.
+		/// Cast object from <see cref="SingleIndicatorValue{TValue}"/> to <typeparamref name="TValue"/>.
 		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
-		public override string ToString()
+		/// <param name="value">Object <see cref="SingleIndicatorValue{TValue}"/>.</param>
+		/// <returns><typeparamref name="TValue"/> value.</returns>
+		public static explicit operator TValue(SingleIndicatorValue<TValue> value)
+			=> value.Value;
+
+		/// <inheritdoc />
+		public override IEnumerable<object> ToValues()
 		{
-			return IsEmpty ? "Empty" : Value.ToString();
+			if (!IsEmpty)
+				yield return Value;
+		}
+
+		/// <inheritdoc />
+		public override void FromValues(object[] values)
+		{
+			if (values.Length == 0)
+			{
+				IsEmpty = true;
+				return;
+			}
+
+			IsEmpty = false;
+			Value = values[0].To<TValue>();
 		}
 	}
 
@@ -297,51 +263,38 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
-		/// <summary>
-		/// To replace the indicator input value by new one (for example it is received from another indicator).
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="value">Value.</param>
-		/// <returns>New object, containing input value.</returns>
+		/// <inheritdoc />
 		public override IIndicatorValue SetValue<T>(IIndicator indicator, T value)
 		{
 			return typeof(T) == typeof(decimal)
-				? new DecimalIndicatorValue(indicator, value.To<decimal>()) { IsFinal = IsFinal, InputValue = this }
+				? new DecimalIndicatorValue(indicator, value.To<decimal>()) { IsFinal = IsFinal }
 				: base.SetValue(indicator, value);
 		}
+
+		/// <summary>
+		/// Cast object from <see cref="DecimalIndicatorValue"/> to <see cref="decimal"/>.
+		/// </summary>
+		/// <param name="value">Object <see cref="DecimalIndicatorValue"/>.</param>
+		/// <returns><see cref="decimal"/> value.</returns>
+		public static explicit operator decimal(DecimalIndicatorValue value)
+			=> value.Value;
 	}
 
 	/// <summary>
-	/// The indicator value, operating with data type <see cref="Candle"/>.
+	/// The indicator value, operating with data type <see cref="ICandleMessage"/>.
 	/// </summary>
-	public class CandleIndicatorValue : SingleIndicatorValue<Candle>
+	public class CandleIndicatorValue : SingleIndicatorValue<ICandleMessage>
 	{
-		private readonly Func<Candle, decimal> _getPart;
-
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CandleIndicatorValue"/>.
 		/// </summary>
 		/// <param name="indicator">Indicator.</param>
 		/// <param name="value">Value.</param>
-		public CandleIndicatorValue(IIndicator indicator, Candle value)
-			: this(indicator, value, ByClose)
-		{
-		}
-
-		/// <summary>
-		/// Initializes a new instance of the <see cref="CandleIndicatorValue"/>.
-		/// </summary>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="value">Value.</param>
-		/// <param name="getPart">The candle converter, through which its parameter can be got. By default, the <see cref="CandleIndicatorValue.ByClose"/> is used.</param>
-		public CandleIndicatorValue(IIndicator indicator, Candle value, Func<Candle, decimal> getPart)
+		public CandleIndicatorValue(IIndicator indicator, ICandleMessage value)
 			: base(indicator, value)
 		{
 			if (value == null)
 				throw new ArgumentNullException(nameof(value));
-
-			_getPart = getPart ?? throw new ArgumentNullException(nameof(getPart));
 
 			IsFinal = value.State == CandleStates.Finished;
 		}
@@ -355,140 +308,99 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
-		/// <summary>
-		/// The converter, taking from candle closing price <see cref="Candle.ClosePrice"/>.
-		/// </summary>
-		public static readonly Func<Candle, decimal> ByClose = c => c.ClosePrice;
+		/// <inheritdoc />
+		public override bool IsSupport(Type valueType) => valueType == typeof(decimal) || valueType.Is<ICandleMessage>();
 
-		/// <summary>
-		/// The converter, taking from candle opening price <see cref="Candle.OpenPrice"/>.
-		/// </summary>
-		public static readonly Func<Candle, decimal> ByOpen = c => c.OpenPrice;
-
-		/// <summary>
-		/// The converter, taking from candle middle of the body (<see cref="Candle.OpenPrice"/> + <see cref="Candle.ClosePrice"/>) / 2.
-		/// </summary>
-		public static readonly Func<Candle, decimal> ByMiddle = c => (c.ClosePrice + c.OpenPrice) / 2;
-
-		/// <summary>
-		/// Does value support data type, required for the indicator.
-		/// </summary>
-		/// <param name="valueType">The data type, operated by indicator.</param>
-		/// <returns><see langword="true" />, if data type is supported, otherwise, <see langword="false" />.</returns>
-		public override bool IsSupport(Type valueType)
+		/// <inheritdoc />
+		public override T GetValue<T>(Level1Fields? field)
 		{
-			return valueType == typeof(decimal) || base.IsSupport(valueType);
+			var candle = base.GetValue<ICandleMessage>(default);
+
+			if (typeof(T) == typeof(decimal) || typeof(T) == typeof(decimal?))
+			{
+				var candlePart = field switch
+				{
+					null or Level1Fields.LastTradePrice or Level1Fields.ClosePrice => candle.ClosePrice,
+					Level1Fields.OpenPrice => candle.OpenPrice,
+					Level1Fields.HighPrice => candle.HighPrice,
+					Level1Fields.LowPrice => candle.LowPrice,
+
+					Level1Fields.Volume => candle.TotalVolume,
+					Level1Fields.OpenInterest => candle.OpenInterest,
+
+					_ => throw new ArgumentOutOfRangeException(nameof(field), field, LocalizedStrings.InvalidValue),
+				};
+
+				return candlePart is T t ? t : throw new InvalidCastException($"Cannot convert decimal to {typeof(T).Name}.");
+			}
+			else
+				return candle is T t ? t : throw new InvalidCastException($"Cannot convert candle to {typeof(T).Name}.");
 		}
 
-		/// <summary>
-		/// To get the value by the data type.
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <returns>Value.</returns>
-		public override T GetValue<T>()
-		{
-			var candle = base.GetValue<Candle>();
-			return typeof(T) == typeof(decimal) ? _getPart(candle).To<T>() : candle.To<T>();
-		}
-
-		/// <summary>
-		/// To replace the indicator input value by new one (for example it is received from another indicator).
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="value">Value.</param>
-		/// <returns>New object, containing input value.</returns>
+		/// <inheritdoc />
 		public override IIndicatorValue SetValue<T>(IIndicator indicator, T value)
 		{
-			var candle = value as Candle;
-
-			return candle != null
-					? new CandleIndicatorValue(indicator, candle) { InputValue = this }
+			return value is ICandleMessage candle
+					? new CandleIndicatorValue(indicator, candle)
 					: value.IsNull() ? new CandleIndicatorValue(indicator) : base.SetValue(indicator, value);
 		}
 	}
 
 	/// <summary>
-	/// The indicator value, operating with data type <see cref="MarketDepth"/>.
+	/// The indicator value, operating with data type <see cref="IOrderBookMessage"/>.
 	/// </summary>
-	public class MarketDepthIndicatorValue : SingleIndicatorValue<MarketDepth>
+	public class MarketDepthIndicatorValue : SingleIndicatorValue<IOrderBookMessage>
 	{
-		private readonly Func<MarketDepth, decimal?> _getPart;
-
 		/// <summary>
 		/// Initializes a new instance of the <see cref="MarketDepthIndicatorValue"/>.
 		/// </summary>
 		/// <param name="indicator">Indicator.</param>
 		/// <param name="depth">Market depth.</param>
-		public MarketDepthIndicatorValue(IIndicator indicator, MarketDepth depth)
-			: this(indicator, depth, ByMiddle)
-		{
-		}
-
-		/// <summary>
-		/// Initializes a new instance of the <see cref="MarketDepthIndicatorValue"/>.
-		/// </summary>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="depth">Market depth.</param>
-		/// <param name="getPart">The order book converter, through which its parameter can be got. By default, the <see cref="MarketDepthIndicatorValue.ByMiddle"/> is used.</param>
-		public MarketDepthIndicatorValue(IIndicator indicator, MarketDepth depth, Func<MarketDepth, decimal?> getPart)
+		public MarketDepthIndicatorValue(IIndicator indicator, IOrderBookMessage depth)
 			: base(indicator, depth)
 		{
-			if (depth == null)
+			if (depth is null)
 				throw new ArgumentNullException(nameof(depth));
-
-			_getPart = getPart ?? throw new ArgumentNullException(nameof(getPart));
 		}
 
-		/// <summary>
-		/// The converter, taking from the order book the best bid price <see cref="MarketDepth.BestBid"/>.
-		/// </summary>
-		public static readonly Func<MarketDepth, decimal?> ByBestBid = d => d.BestBid?.Price;
-
-		/// <summary>
-		/// The converter, taking from the order book the best offer price <see cref="MarketDepth.BestAsk"/>.
-		/// </summary>
-		public static readonly Func<MarketDepth, decimal?> ByBestAsk = d => d.BestAsk?.Price;
-
-		/// <summary>
-		/// The converter, taking from the order book the middle of the spread <see cref="MarketDepthPair.MiddlePrice"/>.
-		/// </summary>
-		public static readonly Func<MarketDepth, decimal?> ByMiddle = d => d.BestPair?.MiddlePrice;
-
-		/// <summary>
-		/// Does value support data type, required for the indicator.
-		/// </summary>
-		/// <param name="valueType">The data type, operated by indicator.</param>
-		/// <returns><see langword="true" />, if data type is supported, otherwise, <see langword="false" />.</returns>
+		/// <inheritdoc />
 		public override bool IsSupport(Type valueType)
 		{
 			return valueType == typeof(decimal) || base.IsSupport(valueType);
 		}
 
-		/// <summary>
-		/// To get the value by the data type.
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <returns>Value.</returns>
-		public override T GetValue<T>()
+		/// <inheritdoc />
+		public override T GetValue<T>(Level1Fields? field)
 		{
-			var depth = base.GetValue<MarketDepth>();
-			return typeof(T) == typeof(decimal) ? (_getPart(depth) ?? 0).To<T>() : depth.To<T>();
+			var depth = base.GetValue<IOrderBookMessage>(default);
+
+			if (typeof(T) == typeof(decimal) || typeof(T) == typeof(decimal?))
+			{
+				var value = field switch
+				{
+					null or Level1Fields.SpreadMiddle => depth.GetSpreadMiddle(null),
+					Level1Fields.BestBidPrice => depth.GetBestBid()?.Price,
+					Level1Fields.BestAskPrice => depth.GetBestAsk()?.Price,
+					Level1Fields.BestBidVolume => depth.GetBestBid()?.Volume,
+					Level1Fields.BestAskVolume => depth.GetBestAsk()?.Volume,
+					_ => throw new ArgumentOutOfRangeException(nameof(field), field, LocalizedStrings.InvalidValue),
+				};
+
+				if (value is null && typeof(T) == typeof(decimal))
+					return default;
+
+				return value.To<T>();
+			}
+			else
+				return depth.To<T>();
 		}
 
-		/// <summary>
-		/// To replace the indicator input value by new one (for example it is received from another indicator).
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="value">Value.</param>
-		/// <returns>New object, containing input value.</returns>
+		/// <inheritdoc />
 		public override IIndicatorValue SetValue<T>(IIndicator indicator, T value)
 		{
-			return new MarketDepthIndicatorValue(indicator, base.GetValue<MarketDepth>(), _getPart)
+			return new MarketDepthIndicatorValue(indicator, base.GetValue<IOrderBookMessage>(default))
 			{
-				IsFinal = IsFinal,
-				InputValue = this
+				IsFinal = IsFinal
 			};
 		}
 	}
@@ -518,19 +430,12 @@ namespace StockSharp.Algo.Indicators
 		{
 		}
 
-		/// <summary>
-		/// To replace the indicator input value by new one (for example it is received from another indicator).
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="value">Value.</param>
-		/// <returns>New object, containing input value.</returns>
+		/// <inheritdoc />
 		public override IIndicatorValue SetValue<T>(IIndicator indicator, T value)
 		{
-			return new PairIndicatorValue<TValue>(indicator, GetValue<Tuple<TValue, TValue>>())
+			return new PairIndicatorValue<TValue>(indicator, GetValue<Tuple<TValue, TValue>>(default))
 			{
-				IsFinal = IsFinal,
-				InputValue = this
+				IsFinal = IsFinal
 			};
 		}
 	}
@@ -544,72 +449,62 @@ namespace StockSharp.Algo.Indicators
 		/// Initializes a new instance of the <see cref="ComplexIndicatorValue"/>.
 		/// </summary>
 		/// <param name="indicator">Indicator.</param>
-		public ComplexIndicatorValue(IIndicator indicator)
+		public ComplexIndicatorValue(IComplexIndicator indicator)
 			: base(indicator)
 		{
 			InnerValues = new Dictionary<IIndicator, IIndicatorValue>();
 		}
 
-		/// <summary>
-		/// No indicator value.
-		/// </summary>
+		/// <inheritdoc />
 		public override bool IsEmpty { get; set; }
 
-		/// <summary>
-		/// Is the value final (indicator finalizes its value and will not be changed anymore in the given point of time).
-		/// </summary>
+		/// <inheritdoc />
 		public override bool IsFinal { get; set; }
-
-		/// <summary>
-		/// The input value.
-		/// </summary>
-		public override IIndicatorValue InputValue { get; set; }
 
 		/// <summary>
 		/// Embedded values.
 		/// </summary>
 		public IDictionary<IIndicator, IIndicatorValue> InnerValues { get; }
 
-		/// <summary>
-		/// Does value support data type, required for the indicator.
-		/// </summary>
-		/// <param name="valueType">The data type, operated by indicator.</param>
-		/// <returns><see langword="true" />, if data type is supported, otherwise, <see langword="false" />.</returns>
-		public override bool IsSupport(Type valueType)
+		/// <inheritdoc />
+		public override bool IsSupport(Type valueType) => InnerValues.Any(v => v.Value.IsSupport(valueType));
+
+		/// <inheritdoc />
+		public override T GetValue<T>(Level1Fields? field) => throw new NotSupportedException();
+
+		/// <inheritdoc />
+		public override IIndicatorValue SetValue<T>(IIndicator indicator, T value) => throw new NotSupportedException();
+
+		/// <inheritdoc />
+		public override int CompareTo(IIndicatorValue other) => throw new NotSupportedException();
+
+		/// <inheritdoc />
+		public override IEnumerable<object> ToValues()
 		{
-			return InnerValues.Any(v => v.Value.IsSupport(valueType));
+			if (IsEmpty)
+				yield break;
+
+			foreach (var inner in ((IComplexIndicator)Indicator).InnerIndicators)
+				yield return InnerValues[inner].ToValues();
 		}
 
-		/// <summary>
-		/// To get the value by the data type.
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <returns>Value.</returns>
-		public override T GetValue<T>()
+		/// <inheritdoc />
+		public override void FromValues(object[] values)
 		{
-			throw new NotSupportedException();
-		}
+			if (values.Length == 0)
+			{
+				IsEmpty = true;
+				return;
+			}
 
-		/// <summary>
-		/// To replace the indicator input value by new one (for example it is received from another indicator).
-		/// </summary>
-		/// <typeparam name="T">The data type, operated by indicator.</typeparam>
-		/// <param name="indicator">Indicator.</param>
-		/// <param name="value">Value.</param>
-		/// <returns>Replaced copy of the input value.</returns>
-		public override IIndicatorValue SetValue<T>(IIndicator indicator, T value)
-		{
-			throw new NotSupportedException();
-		}
+			IsEmpty = false;
 
-		/// <summary>
-		/// Compare <see cref="ComplexIndicatorValue"/> on the equivalence.
-		/// </summary>
-		/// <param name="other">Another value with which to compare.</param>
-		/// <returns>The result of the comparison.</returns>
-		public override int CompareTo(IIndicatorValue other)
-		{
-			throw new NotSupportedException();
+			InnerValues.Clear();
+
+			var idx = 0;
+
+			foreach (var inner in ((IComplexIndicator)Indicator).InnerIndicators)
+				InnerValues.Add(inner, inner.CreateValue(values[idx++].To<object[]>()));
 		}
 	}
 }

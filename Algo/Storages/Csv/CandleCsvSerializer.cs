@@ -17,7 +17,6 @@ namespace StockSharp.Algo.Storages.Csv
 {
 	using System;
 	using System.Collections.Generic;
-	using System.Globalization;
 	using System.IO;
 	using System.Linq;
 	using System.Text;
@@ -38,7 +37,7 @@ namespace StockSharp.Algo.Storages.Csv
 		private class CandleCsvMetaInfo : MetaInfo
 			//where TCandleMessage : CandleMessage, new()
 		{
-			private readonly Dictionary<DateTime, TCandleMessage> _items = new Dictionary<DateTime, TCandleMessage>();
+			private readonly Dictionary<DateTime, TCandleMessage> _items = new();
 
 			private readonly CandleCsvSerializer<TCandleMessage> _serializer;
 			private readonly Encoding _encoding;
@@ -62,12 +61,12 @@ namespace StockSharp.Algo.Storages.Csv
 
 			public override void Read(Stream stream)
 			{
-				CultureInfo.InvariantCulture.DoInCulture(() =>
+				Do.Invariant(() =>
 				{
 					var count = 0;
 					var firstTimeRead = false;
 
-					var reader = new FastCsvReader(stream, _encoding);
+					var reader = new FastCsvReader(stream, _encoding, StringHelper.RN);
 
 					while (reader.NextLine())
 					{
@@ -117,46 +116,34 @@ namespace StockSharp.Algo.Storages.Csv
 			}
 		}
 
+		private readonly DataType _dataType;
+
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CandleCsvSerializer{TCandleMessage}"/>.
 		/// </summary>
 		/// <param name="securityId">Security ID.</param>
-		/// <param name="arg">Candle arg.</param>
+		/// <param name="dataType"><see cref="DataType"/>.</param>
 		/// <param name="encoding">Encoding.</param>
-		public CandleCsvSerializer(SecurityId securityId, object arg, Encoding encoding = null)
+		public CandleCsvSerializer(SecurityId securityId, DataType dataType, Encoding encoding = null)
 			: base(securityId, encoding)
 		{
-			Arg = arg ?? throw new ArgumentNullException(nameof(arg));
+			_dataType = dataType ?? throw new ArgumentNullException(nameof(dataType));
 		}
 
-		/// <summary>
-		/// Candle arg.
-		/// </summary>
-		public object Arg { get; set; }
-
-		/// <summary>
-		/// To create empty meta-information.
-		/// </summary>
-		/// <param name="date">Date.</param>
-		/// <returns>Meta-information on data for one day.</returns>
+		/// <inheritdoc />
 		public override IMarketDataMetaInfo CreateMetaInfo(DateTime date)
 		{
 			return new CandleCsvMetaInfo(this, date, Encoding);
 		}
 
-		/// <summary>
-		/// Save data into stream.
-		/// </summary>
-		/// <param name="stream">Data stream.</param>
-		/// <param name="data">Data.</param>
-		/// <param name="metaInfo">Meta-information on data for one day.</param>
+		/// <inheritdoc />
 		public override void Serialize(Stream stream, IEnumerable<TCandleMessage> data, IMarketDataMetaInfo metaInfo)
 		{
 			var candleMetaInfo = (CandleCsvMetaInfo)metaInfo;
 
 			var toWrite = candleMetaInfo.Process(data);
 
-			CultureInfo.InvariantCulture.DoInCulture(() =>
+			Do.Invariant(() =>
 			{
 				var writer = new CsvFileWriter(stream, Encoding);
 
@@ -174,12 +161,7 @@ namespace StockSharp.Algo.Storages.Csv
 			});
 		}
 
-		/// <summary>
-		/// Write data to the specified writer.
-		/// </summary>
-		/// <param name="writer">CSV writer.</param>
-		/// <param name="data">Data.</param>
-		/// <param name="metaInfo">Meta-information on data for one day.</param>
+		/// <inheritdoc />
 		protected override void Write(CsvFileWriter writer, TCandleMessage data, IMarketDataMetaInfo metaInfo)
 		{
 			if (data.State == CandleStates.Active)
@@ -194,21 +176,19 @@ namespace StockSharp.Algo.Storages.Csv
 				data.LowPrice.ToString(),
 				data.ClosePrice.ToString(),
 				data.TotalVolume.ToString()
-			});
+			}.Concat(data.BuildFrom.ToCsv()).Concat(new[]
+			{
+				data.SeqNum.DefaultAsNull().ToString(),
+			}));
 		}
 
-		/// <summary>
-		/// Read data from the specified reader.
-		/// </summary>
-		/// <param name="reader">CSV reader.</param>
-		/// <param name="metaInfo">Meta-information on data for one day.</param>
-		/// <returns>Data.</returns>
+		/// <inheritdoc />
 		protected override TCandleMessage Read(FastCsvReader reader, IMarketDataMetaInfo metaInfo)
 		{
-			return new TCandleMessage
+			var message = new TCandleMessage
 			{
 				SecurityId = SecurityId,
-				Arg = Arg,
+				DataType = _dataType,
 				OpenTime = reader.ReadTime(metaInfo.Date),
 				OpenPrice = reader.ReadDecimal(),
 				HighPrice = reader.ReadDecimal(),
@@ -217,6 +197,14 @@ namespace StockSharp.Algo.Storages.Csv
 				TotalVolume = reader.ReadDecimal(),
 				State = CandleStates.Finished
 			};
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				message.BuildFrom = reader.ReadBuildFrom();
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				message.SeqNum = reader.ReadNullableLong() ?? 0L;
+
+			return message;
 		}
 	}
 }

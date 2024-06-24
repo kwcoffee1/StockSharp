@@ -27,13 +27,6 @@ namespace StockSharp.Algo.Storages
 		/// </summary>
 		string Name { get; }
 
-		///// <summary>
-		///// Get snapshot size in bytes.
-		///// </summary>
-		///// <param name="version">Version of data format.</param>
-		///// <returns>Snapshot size in bytes.</returns>
-		//int GetSnapshotSize(Version version);
-
 		/// <summary>
 		/// Serialize the specified message to byte array.
 		/// </summary>
@@ -56,13 +49,6 @@ namespace StockSharp.Algo.Storages
 		/// <param name="message">Message.</param>
 		/// <returns>Key.</returns>
 		TKey GetKey(TMessage message);
-
-		/// <summary>
-		/// Create copy for the new snapshot.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		/// <returns>Copy.</returns>
-		TMessage CreateCopy(TMessage message);
 
 		/// <summary>
 		/// Update the specified message by new changes.

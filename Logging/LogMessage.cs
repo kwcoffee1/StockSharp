@@ -62,7 +62,7 @@ namespace StockSharp.Logging
 		/// <summary>
 		/// The log source.
 		/// </summary>
-		public ILogSource Source { get; }
+		public ILogSource Source { get; set; }
 
 		/// <summary>
 		/// Message creating time.
@@ -73,6 +73,8 @@ namespace StockSharp.Logging
 		/// The level of the log message.
 		/// </summary>
 		public LogLevels Level { get; }
+
+		private readonly SyncObject _messageLock = new();
 
 		private string _message;
 
@@ -86,30 +88,30 @@ namespace StockSharp.Logging
 				if (_message != null)
 					return _message;
 
-				try
+				lock (_messageLock)
 				{
-					_message = _getMessage();
-				}
-				catch (Exception ex)
-				{
-					_message = ex.ToString();
-				}
+					if (_getMessage != null)
+					{
+						try
+						{
+							_message = _getMessage();
+						}
+						catch (Exception ex)
+						{
+							_message = ex.ToString();
+						}
 
-				// делегат может захватить из внешнего кода лишние данные, что не будут удаляться GC
-				// в случае, если LogMessage будет храниться где-то (например, в LogControl)
-				_getMessage = null;
+						// делегат может захватить из внешнего кода лишние данные, что не будут удаляться GC
+						// в случае, если LogMessage будет храниться где-то (например, в LogControl)
+						_getMessage = null;
+					}
+				}
 
 				return _message;
 			}
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
-		public override string ToString()
-		{
-			return "{0} {1}".Put(Time, Message);
-		}
+		/// <inheritdoc />
+		public override string ToString() => $"{Time} {Message}";
 	}
 }

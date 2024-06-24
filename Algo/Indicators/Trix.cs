@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,7 +15,10 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
+	using Ecng.Serialization;
 
 	using StockSharp.Localization;
 
@@ -23,60 +26,75 @@ namespace StockSharp.Algo.Indicators
 	/// Triple Exponential Moving Average.
 	/// </summary>
 	/// <remarks>
-	/// http://www2.wealth-lab.com/WL5Wiki/TRIX.ashx http://www.incrediblecharts.com/indicators/trix_indicator.php.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/trix.html
 	/// </remarks>
-	[DisplayName("Trix")]
-	[DescriptionLoc(LocalizedStrings.Str752Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.TrixKey,
+		Description = LocalizedStrings.TripleExponentialMovingAverageKey)]
+	[Doc("topics/api/indicators/list_of_indicators/trix.html")]
 	public class Trix : LengthIndicator<IIndicatorValue>
 	{
-		private readonly ExponentialMovingAverage _ema1;
-		private readonly ExponentialMovingAverage _ema2;
-		private readonly ExponentialMovingAverage _ema3;
-		private readonly RateOfChange _roc;
+		private readonly ExponentialMovingAverage _ema1 = new();
+		private readonly ExponentialMovingAverage _ema2 = new();
+		private readonly ExponentialMovingAverage _ema3 = new();
+		private readonly RateOfChange _roc = new() { Length = 1 };
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="VolumeWeightedMovingAverage"/>.
+		/// Initializes a new instance of the <see cref="Trix"/>.
 		/// </summary>
 		public Trix()
 		{
-			_ema1 = new ExponentialMovingAverage();
-			_ema2 = new ExponentialMovingAverage();
-			_ema3 = new ExponentialMovingAverage();
-			_roc = new RateOfChange { Length = 1 };
 		}
+
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
 
 		/// <summary>
 		/// The length of period <see cref="RateOfChange"/>.
 		/// </summary>
-		[DisplayName("ROC")]
-		[DescriptionLoc(LocalizedStrings.Str753Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ROCKey,
+			Description = LocalizedStrings.RocLengthKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public int RocLength
 		{
 			get => _roc.Length;
-			set => _roc.Length = value;
+			set
+			{
+				_roc.Length = value;
+				Reset();
+			}
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		public override int Length
+		{
+			get => _ema1.Length;
+			set
+			{
+				_ema3.Length = _ema2.Length = _ema1.Length = value;
+				Reset();
+			}
+		}
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
-			_ema3.Length = _ema2.Length = _ema1.Length = Length;
+			_ema1.Reset();
+			_ema2.Reset();
+			_ema3.Reset();
+
 			_roc.Reset();
+
 			base.Reset();
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _ema1.IsFormed && _ema2.IsFormed && _ema3.IsFormed && _roc.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _roc.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var ema1Value = _ema1.Process(input);
@@ -91,9 +109,25 @@ namespace StockSharp.Algo.Indicators
 
 			var ema3Value = _ema3.Process(ema2Value);
 
-			return _ema3.IsFormed ? 
-				new DecimalIndicatorValue(this, _roc.Process(ema3Value).GetValue<decimal>()) :
+			return _ema3.IsFormed ?
+				new DecimalIndicatorValue(this, 10m * _roc.Process(ema3Value).GetValue<decimal>()) :
 				new DecimalIndicatorValue(this);
+		}
+
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
+		{
+			base.Load(storage);
+
+			RocLength = storage.GetValue(nameof(RocLength), RocLength);
+		}
+
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
+		{
+			base.Save(storage);
+
+			storage.SetValue(nameof(RocLength), RocLength);
 		}
 	}
 }

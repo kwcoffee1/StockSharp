@@ -30,7 +30,7 @@ namespace StockSharp.Algo.PnL
 	public class PnLQueue
 	{
 		private Sides _openedPosSide;
-		private readonly SynchronizedStack<RefPair<decimal, decimal>> _openedTrades = new SynchronizedStack<RefPair<decimal, decimal>>();
+		private readonly SynchronizedStack<RefPair<decimal, decimal>> _openedTrades = new();
 		private decimal _multiplier;
 
 		/// <summary>
@@ -59,7 +59,7 @@ namespace StockSharp.Algo.PnL
 			private set
 			{
 				if (value <= 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_priceStep = value;
 				UpdateMultiplier();
@@ -77,7 +77,7 @@ namespace StockSharp.Algo.PnL
 			private set
 			{
 				if (value <= 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_stepPrice = value;
 				UpdateMultiplier();
@@ -95,7 +95,7 @@ namespace StockSharp.Algo.PnL
 			set
 			{
 				if (value <= 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_leverage = value;
 				UpdateMultiplier();
@@ -113,7 +113,7 @@ namespace StockSharp.Algo.PnL
 			set
 			{
 				if (value <= 0)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_lotMultiplier = value;
 				UpdateMultiplier();
@@ -123,7 +123,7 @@ namespace StockSharp.Algo.PnL
 		/// <summary>
 		/// Last price of tick trade.
 		/// </summary>
-		public decimal? TradePrice { get; private set; }
+		public decimal? LastPrice { get; private set; }
 
 		/// <summary>
 		/// Last price of bid.
@@ -151,10 +151,7 @@ namespace StockSharp.Algo.PnL
 				var sum = _openedTrades
 					.SyncGet(c => c.Sum(t =>
 					{
-						var price = _openedPosSide == Sides.Buy ? AskPrice : BidPrice;
-
-						if (price == null)
-							price = TradePrice;
+						var price = (_openedPosSide == Sides.Buy ? AskPrice : BidPrice) ?? LastPrice;
 
 						if (price == null)
 							return null;
@@ -201,8 +198,7 @@ namespace StockSharp.Algo.PnL
 					{
 						while (volume > 0)
 						{
-							if (currTrade == null)
-								currTrade = _openedTrades.Peek();
+							currTrade ??= _openedTrades.Peek();
 
 							var diff = currTrade.Second.Min(volume);
 							closedVolume += diff;
@@ -234,7 +230,7 @@ namespace StockSharp.Algo.PnL
 				RealizedPnL += tradePnL;
 			}
 
-			return new PnLInfo(trade, closedVolume, tradePnL);
+			return new(trade.ServerTime, closedVolume, tradePnL);
 		}
 
 		/// <summary>
@@ -243,47 +239,58 @@ namespace StockSharp.Algo.PnL
 		/// <param name="levelMsg">The message, containing market data.</param>
 		public void ProcessLevel1(Level1ChangeMessage levelMsg)
 		{
-			var priceStep = levelMsg.Changes.TryGetValue(Level1Fields.PriceStep);
+			var priceStep = levelMsg.TryGetDecimal(Level1Fields.PriceStep);
 			if (priceStep != null)
 			{
 				PriceStep = (decimal)priceStep;
 				_recalcUnrealizedPnL = true;
 			}
 
-			var stepPrice = levelMsg.Changes.TryGetValue(Level1Fields.StepPrice);
+			var stepPrice = levelMsg.TryGetDecimal(Level1Fields.StepPrice);
 			if (stepPrice != null)
 			{
 				StepPrice = (decimal)stepPrice;
 				_recalcUnrealizedPnL = true;
 			}
 
-			var lotMultiplier = levelMsg.Changes.TryGetValue(Level1Fields.Multiplier);
+			var lotMultiplier = levelMsg.TryGetDecimal(Level1Fields.Multiplier);
 			if (lotMultiplier != null)
 			{
 				LotMultiplier = (decimal)lotMultiplier;
 				_recalcUnrealizedPnL = true;
 			}
 
-			var tradePrice = levelMsg.Changes.TryGetValue(Level1Fields.LastTradePrice);
+			var tradePrice = levelMsg.TryGetDecimal(Level1Fields.LastTradePrice);
 			if (tradePrice != null)
 			{
-				TradePrice = (decimal)tradePrice;
+				LastPrice = (decimal)tradePrice;
 				_recalcUnrealizedPnL = true;
 			}
 
-			var bidPrice = levelMsg.Changes.TryGetValue(Level1Fields.BestBidPrice);
+			var bidPrice = levelMsg.TryGetDecimal(Level1Fields.BestBidPrice);
 			if (bidPrice != null)
 			{
 				BidPrice = (decimal)bidPrice;
 				_recalcUnrealizedPnL = true;
 			}
 
-			var askPrice = levelMsg.Changes.TryGetValue(Level1Fields.BestAskPrice);
+			var askPrice = levelMsg.TryGetDecimal(Level1Fields.BestAskPrice);
 			if (askPrice != null)
 			{
 				AskPrice = (decimal)askPrice;
 				_recalcUnrealizedPnL = true;
 			}
+		}
+
+		/// <summary>
+		/// To process <see cref="CandleMessage"/> message.
+		/// </summary>
+		/// <param name="candleMsg"><see cref="CandleMessage"/>.</param>
+		public void ProcessCandle(CandleMessage candleMsg)
+		{
+			LastPrice = candleMsg.ClosePrice;
+
+			_recalcUnrealizedPnL = true;
 		}
 
 		/// <summary>
@@ -295,7 +302,7 @@ namespace StockSharp.Algo.PnL
 			if (execMsg.TradePrice == null)
 				return;
 
-			TradePrice = execMsg.TradePrice.Value;
+			LastPrice = execMsg.TradePrice.Value;
 
 			_recalcUnrealizedPnL = true;
 		}

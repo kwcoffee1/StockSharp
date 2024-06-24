@@ -16,7 +16,7 @@ namespace StockSharp.Algo
 	{
 		private sealed class QuoteChangeDepthBuilder
 		{
-			private readonly Dictionary<SecurityId, QuoteChangeMessage> _feeds = new Dictionary<SecurityId, QuoteChangeMessage>();
+			private readonly Dictionary<SecurityId, QuoteChangeMessage> _feeds = new();
 
 			private readonly string _securityCode;
 			private readonly string _boardCode;
@@ -49,7 +49,7 @@ namespace StockSharp.Algo
 			}
 		}
 
-		private readonly SynchronizedDictionary<string, QuoteChangeDepthBuilder> _quoteChangeDepthBuilders = new SynchronizedDictionary<string, QuoteChangeDepthBuilder>(StringComparer.InvariantCultureIgnoreCase);
+		private readonly SynchronizedDictionary<string, QuoteChangeDepthBuilder> _quoteChangeDepthBuilders = new(StringComparer.InvariantCultureIgnoreCase);
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AssociatedSecurityAdapter"/>.
@@ -60,18 +60,9 @@ namespace StockSharp.Algo
 		{
 		}
 
-		/// <summary>
-		/// Process <see cref="MessageAdapterWrapper.InnerAdapter"/> output message.
-		/// </summary>
-		/// <param name="message">The message.</param>
+		/// <inheritdoc />
 		protected override void OnInnerAdapterNewOutMessage(Message message)
 		{
-			if (message.IsBack)
-			{
-				base.OnInnerAdapterNewOutMessage(message);
-				return;
-			}
-
 			switch (message.Type)
 			{
 				case MessageTypes.Security:
@@ -79,9 +70,9 @@ namespace StockSharp.Algo
 					var secMsg = (SecurityMessage)message;
 					if (!IsAssociated(secMsg.SecurityId.BoardCode))
 					{
-						var clone = (SecurityMessage)secMsg.Clone();
+						var clone = secMsg.TypedClone();
 						clone.SecurityId = CreateAssociatedId(clone.SecurityId);
-						RaiseNewOutMessage(clone);
+						base.OnInnerAdapterNewOutMessage(clone);
 					}
 					break;
 				}
@@ -93,9 +84,9 @@ namespace StockSharp.Algo
 					if (!IsAssociated(level1Msg.SecurityId.BoardCode))
 					{
 						// обновление BestXXX для ALL из конкретных тикеров
-						var clone = (Level1ChangeMessage)level1Msg.Clone();
+						var clone = level1Msg.TypedClone();
 						clone.SecurityId = CreateAssociatedId(clone.SecurityId);
-						RaiseNewOutMessage(clone);
+						base.OnInnerAdapterNewOutMessage(clone);
 					}
 
 					break;
@@ -105,18 +96,21 @@ namespace StockSharp.Algo
 				{
 					var quoteMsg = (QuoteChangeMessage)message;
 
-					if (quoteMsg.SecurityId.IsDefault())
-						return;
+					if (quoteMsg.State != null)
+						break;
+
+					if (quoteMsg.SecurityId == default)
+						break;
 
 					//if (IsAssociated(quoteMsg.SecurityId.BoardCode))
 					//	return;
 
 					var builder = _quoteChangeDepthBuilders
-						.SafeAdd(quoteMsg.SecurityId.SecurityCode, c => new QuoteChangeDepthBuilder(c, AssociatedBoardCode));
+						.SafeAdd(quoteMsg.SecurityId.SecurityCode, c => new QuoteChangeDepthBuilder(c, SecurityId.AssociatedBoardCode));
 
 					quoteMsg = builder.Process(quoteMsg);
 
-					RaiseNewOutMessage(quoteMsg);
+					base.OnInnerAdapterNewOutMessage(quoteMsg);
 
 					break;
 				}
@@ -125,19 +119,14 @@ namespace StockSharp.Algo
 				{
 					var executionMsg = (ExecutionMessage)message;
 
-					switch (executionMsg.ExecutionType)
+					if (executionMsg.DataType == DataType.Ticks ||
+						executionMsg.DataType == DataType.OrderLog)
 					{
-						case ExecutionTypes.Tick:
-						case ExecutionTypes.OrderLog:
+						if (!IsAssociated(executionMsg.SecurityId.BoardCode))
 						{
-							if (!IsAssociated(executionMsg.SecurityId.BoardCode))
-							{
-								var clone = (ExecutionMessage)executionMsg.Clone();
-								clone.SecurityId = CreateAssociatedId(clone.SecurityId);
-								RaiseNewOutMessage(clone);
-							}
-
-							break;
+							var clone = executionMsg.TypedClone();
+							clone.SecurityId = CreateAssociatedId(clone.SecurityId);
+							base.OnInnerAdapterNewOutMessage(clone);
 						}
 					}
 
@@ -148,18 +137,17 @@ namespace StockSharp.Algo
 			base.OnInnerAdapterNewOutMessage(message);
 		}
 
-		private bool IsAssociated(string boardCode)
+		private static bool IsAssociated(string boardCode)
 		{
-			return /*boardCode.IsEmpty() || */boardCode.CompareIgnoreCase(AssociatedBoardCode);
+			return /*boardCode.IsEmpty() || */boardCode.EqualsIgnoreCase(SecurityId.AssociatedBoardCode);
 		}
 
-		private SecurityId CreateAssociatedId(SecurityId securityId)
+		private static SecurityId CreateAssociatedId(SecurityId securityId)
 		{
-			return new SecurityId
+			return new()
 			{
 				SecurityCode = securityId.SecurityCode,
-				BoardCode = AssociatedBoardCode,
-				SecurityType = securityId.SecurityType,
+				BoardCode = SecurityId.AssociatedBoardCode,
 				Bloomberg = securityId.Bloomberg,
 				Cusip = securityId.Cusip,
 				IQFeed = securityId.IQFeed,

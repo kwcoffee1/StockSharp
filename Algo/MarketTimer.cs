@@ -32,7 +32,7 @@ namespace StockSharp.Algo
 		private readonly Action _activated;
 		private bool _started;
 		private TimeSpan _interval;
-		private readonly object _syncLock = new object();
+		private readonly object _syncLock = new();
 		private TimeSpan _elapsedTime;
 
 		/// <summary>
@@ -54,7 +54,7 @@ namespace StockSharp.Algo
 		public MarketTimer Interval(TimeSpan interval)
 		{
 			if (interval <= TimeSpan.Zero)
-				throw new ArgumentOutOfRangeException(nameof(interval), interval, LocalizedStrings.Str944);
+				throw new ArgumentOutOfRangeException(nameof(interval), interval, LocalizedStrings.InvalidValue);
 
 			lock (_syncLock)
 			{
@@ -71,8 +71,8 @@ namespace StockSharp.Algo
 		/// <returns>The timer.</returns>
 		public MarketTimer Start()
 		{
-			if (_interval == default(TimeSpan))
-				throw new InvalidOperationException(LocalizedStrings.Str945);
+			if (_interval == default)
+				throw new InvalidOperationException(LocalizedStrings.IntervalNotSet);
 
 			lock (_syncLock)
 			{

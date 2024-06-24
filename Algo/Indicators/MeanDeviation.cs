@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -17,15 +17,24 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Linq;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Average deviation.
 	/// </summary>
-	[DisplayName("MeanDeviation")]
-	[DescriptionLoc(LocalizedStrings.Str744Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/mean_deviation.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MeanDevKey,
+		Description = LocalizedStrings.AverageDeviationKey)]
+	[Doc("topics/api/indicators/list_of_indicators/mean_deviation.html")]
 	public class MeanDeviation : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -37,42 +46,37 @@ namespace StockSharp.Algo.Indicators
 			Length = 5;
 		}
 
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
 		/// <summary>
 		/// Moving Average.
 		/// </summary>
 		[Browsable(false)]
 		public SimpleMovingAverage Sma { get; }
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => Sma.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => Sma.IsFormed;
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			Sma.Length = Length;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var val = input.GetValue<decimal>();
 
 			if (input.IsFinal)
-				Buffer.Add(val);
+				Buffer.PushBack(val);
 
 			var smaValue = Sma.Process(input).GetValue<decimal>();
 
 			if (Buffer.Count > Length)
-				Buffer.RemoveAt(0);
+				Buffer.PopFront();
 
 			// считаем значение отклонения
 			var md = input.IsFinal

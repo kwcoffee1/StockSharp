@@ -46,7 +46,7 @@ namespace StockSharp.Algo.Testing
 		/// <summary>
 		/// Market data type.
 		/// </summary>
-		public abstract MarketDataTypes DataType { get; }
+		public abstract DataType DataType { get; }
 
 		/// <summary>
 		/// The length of massive of preliminarily generated random numbers. The default is 100.
@@ -100,7 +100,7 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				if (value < 1)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1133);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_maxVolume = value;
 			}
@@ -120,7 +120,7 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				if (value < 1)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1134);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_minVolume = value;
 			}
@@ -140,7 +140,7 @@ namespace StockSharp.Algo.Testing
 			set
 			{
 				if (value < 1)
-					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.Str1135);
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
 				_maxPriceStepCount = value;
 			}
@@ -184,14 +184,14 @@ namespace StockSharp.Algo.Testing
 		private RandomArray<int> _volumes;
 
 		/// <summary>
-		/// The massive of random volumes in the range from <see cref="MarketDataGenerator.MinVolume"/> to <see cref="MarketDataGenerator.MaxVolume"/>.
+		/// The massive of random volumes in the range from <see cref="MinVolume"/> to <see cref="MaxVolume"/>.
 		/// </summary>
 		public RandomArray<int> Volumes
 		{
 			get
 			{
 				if (_volumes == null)
-					throw new InvalidOperationException(LocalizedStrings.Str1136);
+					throw new InvalidOperationException(LocalizedStrings.GeneratorNotInitialized);
 
 				return _volumes;
 			}
@@ -201,18 +201,32 @@ namespace StockSharp.Algo.Testing
 		private RandomArray<int> _steps;
 
 		/// <summary>
-		/// The massive of random price increments in the range from 1 to <see cref="MarketDataGenerator.MaxPriceStepCount"/>.
+		/// The massive of random price increments in the range from 1 to <see cref="MaxPriceStepCount"/>.
 		/// </summary>
 		public RandomArray<int> Steps
 		{
 			get
 			{
 				if (_steps == null)
-					throw new InvalidOperationException(LocalizedStrings.Str1136);
+					throw new InvalidOperationException(LocalizedStrings.GeneratorNotInitialized);
 
 				return _steps;
 			}
 			protected set => _steps = value ?? throw new ArgumentNullException(nameof(value));
+		}
+
+		/// <summary>
+		/// Copy the message into the <paramref name="destination" />.
+		/// </summary>
+		/// <param name="destination">The object, to which copied information.</param>
+		protected void CopyTo(MarketDataGenerator destination)
+		{
+			destination.Interval = Interval;
+			destination.MinVolume = MinVolume;
+			destination.MaxVolume = MaxVolume;
+			destination.MaxPriceStepCount = MaxPriceStepCount;
+			destination._volumes = _volumes;
+			destination._steps = _steps;
 		}
 	}
 }

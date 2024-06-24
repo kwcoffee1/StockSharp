@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -17,16 +17,22 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Range Action Verification Index.
 	/// </summary>
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/ravi.html
+	/// </remarks>
 	[DisplayName("RAVI")]
 	[Description("Range Action Verification Index.")]
+	[Doc("topics/api/indicators/list_of_indicators/ravi.html")]
 	public class RangeActionVerificationIndex : BaseIndicator
 	{
 		/// <summary>
@@ -34,38 +40,42 @@ namespace StockSharp.Algo.Indicators
 		/// </summary>
 		public RangeActionVerificationIndex()
 		{
-			ShortSma = new SimpleMovingAverage();
-			LongSma = new SimpleMovingAverage();
+			ShortSma = new SimpleMovingAverage { Length = 7 };
+			LongSma = new SimpleMovingAverage { Length = 65 };
 		}
+
+		/// <inheritdoc />
+		public override int NumValuesToInitialize => Math.Max(LongSma.NumValuesToInitialize, ShortSma.NumValuesToInitialize);
+
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
 
 		/// <summary>
 		/// Short moving average.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayNameLoc(LocalizedStrings.Str800Key)]
-		[DescriptionLoc(LocalizedStrings.Str801Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ShortMaKey,
+			Description = LocalizedStrings.ShortMaDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public SimpleMovingAverage ShortSma { get; }
 
 		/// <summary>
 		/// Long moving average.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayNameLoc(LocalizedStrings.Str798Key)]
-		[DescriptionLoc(LocalizedStrings.Str799Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LongMaKey,
+			Description = LocalizedStrings.LongMaDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public SimpleMovingAverage LongSma { get; }
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => LongSma.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => LongSma.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var shortValue = ShortSma.Process(input).GetValue<decimal>();
@@ -74,28 +84,22 @@ namespace StockSharp.Algo.Indicators
 			return new DecimalIndicatorValue(this, Math.Abs(100m * (shortValue - longValue) / longValue));
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
+			base.Load(storage);
 
-			ShortSma.LoadNotNull(settings, nameof(ShortSma));
-			LongSma.LoadNotNull(settings, nameof(LongSma));
+			ShortSma.LoadIfNotNull(storage, nameof(ShortSma));
+			LongSma.LoadIfNotNull(storage, nameof(LongSma));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
+			base.Save(storage);
 
-			settings.SetValue(nameof(ShortSma), ShortSma.Save());
-			settings.SetValue(nameof(LongSma), LongSma.Save());
+			storage.SetValue(nameof(ShortSma), ShortSma.Save());
+			storage.SetValue(nameof(LongSma), LongSma.Save());
 		}
 	}
 }

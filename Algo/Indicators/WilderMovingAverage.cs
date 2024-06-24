@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,17 +15,24 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.Collections.Generic;
-	using System.ComponentModel;
-	using System.Linq;
-	using Ecng.Collections;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.Common;
+	using Ecng.ComponentModel;
+
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Welles Wilder Moving Average.
 	/// </summary>
-	[DisplayName("WilderMA")]
-	[DescriptionLoc(LocalizedStrings.Str825Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/wilder_ma.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.WilderMAKey,
+		Description = LocalizedStrings.WilderMovingAverageKey)]
+	[Doc("topics/api/indicators/list_of_indicators/wilder_ma.html")]
 	public class WilderMovingAverage : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -36,32 +43,17 @@ namespace StockSharp.Algo.Indicators
 			Length = 32;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();
 
 			if (input.IsFinal)
-			{
-				Buffer.Add(newValue);
+				Buffer.AddEx(newValue);
 
-				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
-			}
+			var buffCount = input.IsFinal ? Buffer.Count : ((Buffer.Count - 1).Max(0) + 1);
 
-			var buff = Buffer;
-			if (!input.IsFinal)
-			{
-				buff = new List<decimal>();
-				buff.AddRange(Buffer.Skip(1));
-				buff.Add(newValue);
-			}
-
-			return new DecimalIndicatorValue(this, (this.GetCurrentValue() * (buff.Count - 1) + newValue) / buff.Count);
+			return new DecimalIndicatorValue(this, (this.GetCurrentValue() * (buffCount - 1) + newValue) / buffCount);
 		}
 	}
 }

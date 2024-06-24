@@ -18,7 +18,6 @@ namespace StockSharp.Logging
 	using System;
 
 	using Ecng.Common;
-	using Ecng.Interop;
 
 	using StockSharp.Localization;
 
@@ -32,14 +31,9 @@ namespace StockSharp.Logging
 		/// </summary>
 		public ConsoleLogListener()
 		{
-			if (!WinApi.AllocateConsole())
-				throw new InvalidOperationException(LocalizedStrings.CannotCreateConsoleWindow);
 		}
 
-		/// <summary>
-		/// To record a message.
-		/// </summary>
-		/// <param name="message">A debug message.</param>
+		/// <inheritdoc />
 		protected override void OnWriteMessage(LogMessage message)
 		{
 			if (message.IsDispose)
@@ -64,7 +58,7 @@ namespace StockSharp.Logging
 					color = ConsoleHelper.Error;
 					break;
 				default:
-					throw new ArgumentOutOfRangeException(nameof(message), message.Level, LocalizedStrings.Str1219);
+					throw new ArgumentOutOfRangeException(nameof(message), message.Level, LocalizedStrings.InvalidValue);
 			}
 
 			var newLine = "{0} | {1, -15} | {2}".Put(message.Time.ToString(TimeFormat), message.Source.Name, message.Message);

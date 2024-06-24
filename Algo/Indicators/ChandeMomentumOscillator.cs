@@ -15,19 +15,27 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Chande Momentum Oscillator.
 	/// </summary>
-	[DisplayName("CMO")]
-	[DescriptionLoc(LocalizedStrings.Str759Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/cmo.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.CMOKey,
+		Description = LocalizedStrings.ChandeMomentumOscillatorKey)]
+	[Doc("topics/api/indicators/list_of_indicators/cmo.html")]
 	public class ChandeMomentumOscillator : LengthIndicator<decimal>
 	{
-		private readonly Sum _cmoUp = new Sum();
-		private readonly Sum _cmoDn = new Sum();
+		private readonly Sum _cmoUp = new();
+		private readonly Sum _cmoDn = new();
 		private bool _isInitialized;
 		private decimal _last;
 
@@ -39,9 +47,10 @@ namespace StockSharp.Algo.Indicators
 			Length = 15;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.Percent;
+
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_cmoDn.Length = _cmoUp.Length = Length;
@@ -51,16 +60,10 @@ namespace StockSharp.Algo.Indicators
 			base.Reset();
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _cmoUp.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _cmoUp.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var newValue = input.GetValue<decimal>();

@@ -13,11 +13,14 @@ Created: 2015, 11, 11, 2:32 PM
 Copyright 2010 by StockSharp, LLC
 *******************************************************************************************/
 #endregion S# License
+
 namespace StockSharp.Messages
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 	using System.Runtime.Serialization;
+	using System.Globalization;
 
 	using Ecng.Common;
 	using Ecng.Serialization;
@@ -27,23 +30,36 @@ namespace StockSharp.Messages
 	/// <summary>
 	/// Security ID.
 	/// </summary>
-	[System.Runtime.Serialization.DataContract]
+	[DataContract]
 	[Serializable]
 	public struct SecurityId : IEquatable<SecurityId>, IPersistable
 	{
+		static SecurityId()
+		{
+			Money.EnsureGetHashCode();
+			News.EnsureGetHashCode();
+		}
+
 		private string _securityCode;
 
 		/// <summary>
 		/// Security code.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.Str349Key)]
-		[DescriptionLoc(LocalizedStrings.Str349Key, true)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SecCodeKey,
+			Description = LocalizedStrings.SecCodeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string SecurityCode
 		{
 			get => _securityCode;
-			set => _securityCode = value;
+			set
+			{
+				CheckImmutable();
+				_securityCode = value;
+				_hashCode = default;
+			}
 		}
 
 		private string _boardCode;
@@ -52,13 +68,20 @@ namespace StockSharp.Messages
 		/// Electronic board code.
 		/// </summary>
 		[DataMember]
-		[DisplayNameLoc(LocalizedStrings.BoardKey)]
-		[DescriptionLoc(LocalizedStrings.BoardCodeKey, true)]
-		[MainCategory]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.BoardKey,
+			Description = LocalizedStrings.BoardCodeKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public string BoardCode
 		{
 			get => _boardCode;
-			set => _boardCode = value;
+			set
+			{
+				CheckImmutable();
+				_boardCode = value;
+				_hashCode = default;
+			}
 		}
 
 		private object _native;
@@ -71,12 +94,16 @@ namespace StockSharp.Messages
 			get => _nativeAsInt != 0 ? _nativeAsInt : _native;
 			set
 			{
+				CheckImmutable();
+
 				_native = value;
 
 				_nativeAsInt = 0;
 
 				if (value is long l)
 					_nativeAsInt = l;
+
+				_hashCode = default;
 			}
 		}
 
@@ -88,7 +115,13 @@ namespace StockSharp.Messages
 		public long NativeAsInt
 		{
 			get => _nativeAsInt;
-			set => _nativeAsInt = value;
+			set
+			{
+				CheckImmutable();
+
+				_nativeAsInt = value;
+				_hashCode = default;
+			}
 		}
 
 		private SecurityTypes? _securityType;
@@ -96,6 +129,7 @@ namespace StockSharp.Messages
 		/// <summary>
 		/// Security type.
 		/// </summary>
+		[Obsolete]
 		public SecurityTypes? SecurityType
 		{
 			get => _securityType;
@@ -106,65 +140,81 @@ namespace StockSharp.Messages
 		/// ID in SEDOL format (Stock Exchange Daily Official List).
 		/// </summary>
 		[DataMember]
-		[DisplayName("SEDOL")]
-		[DescriptionLoc(LocalizedStrings.Str351Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SedolKey,
+			Description = LocalizedStrings.SedolDescKey)]
 		public string Sedol { get; set; }
 
 		/// <summary>
 		/// ID in CUSIP format (Committee on Uniform Securities Identification Procedures).
 		/// </summary>
 		[DataMember]
-		[DisplayName("CUSIP")]
-		[DescriptionLoc(LocalizedStrings.Str352Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.CusipKey,
+			Description = LocalizedStrings.CusipDescKey)]
 		public string Cusip { get; set; }
 
 		/// <summary>
 		/// ID in ISIN format (International Securities Identification Number).
 		/// </summary>
 		[DataMember]
-		[DisplayName("ISIN")]
-		[DescriptionLoc(LocalizedStrings.Str353Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.IsinKey,
+			Description = LocalizedStrings.IsinDescKey)]
 		public string Isin { get; set; }
 
 		/// <summary>
 		/// ID in RIC format (Reuters Instrument Code).
 		/// </summary>
 		[DataMember]
-		[DisplayName("RIC")]
-		[DescriptionLoc(LocalizedStrings.Str354Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.RicKey,
+			Description = LocalizedStrings.RicDescKey)]
 		public string Ric { get; set; }
 
 		/// <summary>
 		/// ID in Bloomberg format.
 		/// </summary>
 		[DataMember]
-		[DisplayName("Bloomberg")]
-		[DescriptionLoc(LocalizedStrings.Str355Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.BloombergKey,
+			Description = LocalizedStrings.BloombergDescKey)]
 		public string Bloomberg { get; set; }
 
 		/// <summary>
 		/// ID in IQFeed format.
 		/// </summary>
 		[DataMember]
-		[DisplayName("IQFeed")]
-		[DescriptionLoc(LocalizedStrings.Str356Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.IQFeedKey,
+			Description = LocalizedStrings.IQFeedDescKey)]
 		public string IQFeed { get; set; }
 
 		/// <summary>
 		/// ID in Interactive Brokers format.
 		/// </summary>
 		[DataMember]
-		[DisplayName("InteractiveBrokers")]
-		[DescriptionLoc(LocalizedStrings.Str357Key)]
-		[Nullable]
+		//[Nullable]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.InteractiveBrokersKey,
+			Description = LocalizedStrings.InteractiveBrokersDescKey)]
 		public int? InteractiveBrokers { get; set; }
 
 		/// <summary>
 		/// ID in Plaza format.
 		/// </summary>
 		[DataMember]
-		[DisplayName("Plaza")]
-		[DescriptionLoc(LocalizedStrings.Str358Key)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.PlazaKey,
+			Description = LocalizedStrings.PlazaDescKey)]
 		public string Plaza { get; set; }
 
 		private int _hashCode;
@@ -178,21 +228,17 @@ namespace StockSharp.Messages
 			return EnsureGetHashCode();
 		}
 
-		/// <summary>
-		/// Evaluate and cache hash code.
-		/// </summary>
-		public void EnsureHashCode()
+		private int EnsureGetHashCode()
 		{
 			if (_hashCode == 0)
 			{
-				_hashCode = (_nativeAsInt != 0 ? _nativeAsInt.GetHashCode() : _native?.GetHashCode())
-						?? (_securityCode + _boardCode).ToLowerInvariant().GetHashCode();
-			}
-		}
+				if (_nativeAsInt == default && _native == default && _securityCode == default && _boardCode == default)
+					return 0;
 
-		private int EnsureGetHashCode()
-		{
-			EnsureHashCode();
+				_hashCode = (_nativeAsInt != 0 ? _nativeAsInt.GetHashCode() : _native?.GetHashCode())
+				            ?? ((_securityCode ?? string.Empty).GetHashCode() ^ (_boardCode ?? string.Empty).GetHashCode());
+			}
+
 			return _hashCode;
 		}
 
@@ -222,7 +268,7 @@ namespace StockSharp.Messages
 			if (_native != null)
 				return _native.Equals(other._native);
 
-			return _securityCode.CompareIgnoreCase(other._securityCode) && _boardCode.CompareIgnoreCase(other._boardCode);
+			return _securityCode.EqualsIgnoreCase(other._securityCode) && _boardCode.EqualsIgnoreCase(other._boardCode);
 		}
 
 		/// <summary>
@@ -247,13 +293,16 @@ namespace StockSharp.Messages
 			return left.Equals(right);
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			var id = $"S#:{SecurityCode}@{BoardCode}, Native:{Native},Type:{SecurityType}";
+			var id = $"{SecurityCode}@{BoardCode}";
+
+			if (Native != null)
+				id += $",Native:{Native}";
+
+			//if (SecurityType != null)
+			//	id += $",Type:{SecurityType.Value}";
 
 			if (!Isin.IsEmpty())
 				id += $",ISIN:{Isin}";
@@ -285,6 +334,95 @@ namespace StockSharp.Messages
 		{
 			storage.SetValue(nameof(SecurityCode), SecurityCode);
 			storage.SetValue(nameof(BoardCode), BoardCode);
+		}
+
+		/// <summary>
+		/// Board code for combined security.
+		/// </summary>
+		public const string AssociatedBoardCode = "ALL";
+
+		/// <summary>
+		/// Create security id with board code set as <see cref="AssociatedBoardCode"/>.
+		/// </summary>
+		/// <param name="securityCode">Security code.</param>
+		/// <returns>Security ID.</returns>
+		public static SecurityId CreateAssociated(string securityCode)
+		{
+			return new SecurityId
+			{
+				SecurityCode = securityCode,
+				BoardCode = AssociatedBoardCode,
+			};
+		}
+
+		/// <summary>
+		/// "Money" security id.
+		/// </summary>
+		public static readonly SecurityId Money = new SecurityId
+		{
+			SecurityCode = "MONEY",
+			BoardCode = AssociatedBoardCode,
+			IsSpecial = true,
+		}.Immutable();
+
+		/// <summary>
+		/// "News" security id.
+		/// </summary>
+		public static readonly SecurityId News = new SecurityId
+		{
+			SecurityCode = "NEWS",
+			BoardCode = AssociatedBoardCode,
+			IsSpecial = true,
+		}.Immutable();
+
+		/// <summary>
+		/// Determines the id is <see cref="Money"/> or <see cref="News"/>.
+		/// </summary>
+		public bool IsSpecial { get; private set; }
+
+		private bool _immutable;
+
+		/// <summary>
+		/// Make immutable.
+		/// </summary>
+		/// <returns><see cref="SecurityId"/>.</returns>
+		public SecurityId Immutable()
+		{
+			_immutable = true;
+			return this;
+		}
+
+		private void CheckImmutable()
+		{
+			if (_immutable)
+				throw new InvalidOperationException(LocalizedStrings.CannotBeModified);
+		}
+	}
+
+	/// <summary>
+	/// Converter to use with <see cref="SecurityId"/> properties.
+	/// </summary>
+	public class StringToSecurityIdTypeConverter : TypeConverter
+	{
+		/// <inheritdoc />
+		public override bool CanConvertFrom(ITypeDescriptorContext ctx, Type sourceType)
+			=> sourceType == typeof(string) || base.CanConvertFrom(ctx, sourceType);
+
+		/// <inheritdoc />
+		public override object ConvertFrom(ITypeDescriptorContext ctx, CultureInfo culture, object value)
+		{
+			if (value is not string securityId)
+				return base.ConvertFrom(ctx, culture, value);
+
+			var isNullable = ctx.PropertyDescriptor?.PropertyType.IsNullable() == true;
+
+			const string delimiter = "@";
+
+			var index = securityId.LastIndexOfIgnoreCase(delimiter);
+
+			return index < 0 ?
+				isNullable ? (SecurityId?)null : default(SecurityId) :
+				new SecurityId { SecurityCode = securityId.Substring(0, index), BoardCode = securityId.Substring(index + delimiter.Length, securityId.Length - index - delimiter.Length) };
 		}
 	}
 }

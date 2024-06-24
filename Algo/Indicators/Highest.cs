@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -15,18 +15,24 @@ Copyright 2010 by StockSharp, LLC
 #endregion S# License
 namespace StockSharp.Algo.Indicators
 {
-	using System.ComponentModel;
-	using System.Linq;
-	using System;
+	using System.ComponentModel.DataAnnotations;
+	using System.Collections.Generic;
 
-	using StockSharp.Algo.Candles;
+	using Ecng.ComponentModel;
+
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Maximum value for a period.
 	/// </summary>
-	[DisplayName("Highest")]
-	[DescriptionLoc(LocalizedStrings.Str733Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/highest.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.HighestKey,
+		Description = LocalizedStrings.MaxValueForPeriodKey)]
+	[Doc("topics/api/indicators/list_of_indicators/highest.html")]
 	public class Highest : LengthIndicator<decimal>
 	{
 		/// <summary>
@@ -35,43 +41,23 @@ namespace StockSharp.Algo.Indicators
 		public Highest()
 		{
 			Length = 5;
+			Buffer.MaxComparer = Comparer<decimal>.Default;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
-			var newValue = input.IsSupport(typeof(Candle)) ? input.GetValue<Candle>().HighPrice : input.GetValue<decimal>();
+			var (_, high, _, _) = input.GetOhlc();
 
-			var lastValue = Buffer.Count == 0 ? newValue : this.GetCurrentValue();
+			var lastValue = Buffer.Count == 0 ? high : this.GetCurrentValue();
 
-			// добавляем новое начало
+			if (high > lastValue)
+				lastValue = high;
+
 			if (input.IsFinal)
-				Buffer.Add(newValue);
-
-			if (newValue > lastValue)
 			{
-				// Новое значение и есть экстремум 
-				lastValue = newValue;
-			}
-
-			if (Buffer.Count > Length)
-			{
-				var first = Buffer[0];
-
-				// удаляем хвостовое значение
-				if (input.IsFinal)
-					Buffer.RemoveAt(0);
-
-				// удаляется экстремум, для поиска нового значения необходим проход по всему буфферу
-				if (first == lastValue && lastValue != newValue)
-				{
-					// ищем новый экстремум
-					lastValue = Buffer.Aggregate(newValue, (current, t) => Math.Max(t, current));
-				}
+				Buffer.AddEx(high);
+				lastValue = Buffer.Max.Value;
 			}
 
 			return new DecimalIndicatorValue(this, lastValue);

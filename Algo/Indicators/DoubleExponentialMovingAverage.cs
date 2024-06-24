@@ -17,14 +17,17 @@ namespace StockSharp.Algo.Indicators
 {
 	using System.ComponentModel;
 
+	using Ecng.ComponentModel;
+
 	/// <summary>
 	/// Double Exponential Moving Average.
 	/// </summary>
 	/// <remarks>
-	/// ((2 * EMA) – EMA of EMA).
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/dema.html
 	/// </remarks>
 	[DisplayName("DEMA")]
 	[Description("Double Exponential Moving Average")]
+	[Doc("topics/api/indicators/list_of_indicators/dema.html")]
 	public class DoubleExponentialMovingAverage : LengthIndicator<decimal>
 	{
 		private readonly ExponentialMovingAverage _ema1;
@@ -41,25 +44,17 @@ namespace StockSharp.Algo.Indicators
 			Length = 32;
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public override void Reset()
 		{
 			_ema2.Length = _ema1.Length = Length;
 			base.Reset();
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => _ema1.IsFormed && _ema2.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => _ema1.IsFormed && _ema2.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var ema1Value = _ema1.Process(input);

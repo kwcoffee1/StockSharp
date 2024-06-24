@@ -109,7 +109,7 @@ namespace StockSharp.Messages
 		/// News.
 		/// </summary>
 		[EnumMember]
-		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.Str395Key)]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.NewsKey)]
 		News,
 
 		/// <summary>
@@ -139,5 +139,75 @@ namespace StockSharp.Messages
 		[EnumMember]
 		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.CryptocurrencyKey)]
 		CryptoCurrency,
+
+		/// <summary>
+		/// ETF.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.EtfKey)]
+		Etf,
+
+		/// <summary>
+		/// Multi leg.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LegsKey)]
+		MultiLeg,
+		
+		/// <summary>
+		/// Loan.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.LoanKey)]
+		Loan,
+		
+		/// <summary>
+		/// Spread.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.SpreadKey)]
+		Spread,
+		
+		/// <summary>
+		/// Global Depositary Receipts.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.GdrKey)]
+		Gdr,
+		
+		/// <summary>
+		/// Receipt.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.ReceiptKey)]
+		Receipt,
+		
+		/// <summary>
+		/// Indicator.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.IndicatorKey)]
+		Indicator,
+		
+		/// <summary>
+		/// Strategy.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.StrategyKey)]
+		Strategy,
+		
+		/// <summary>
+		/// Volatility.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.VolatilityKey)]
+		Volatility,
+
+		/// <summary>
+		/// REPO.
+		/// </summary>
+		[EnumMember]
+		[Display(ResourceType = typeof(LocalizedStrings), Name = LocalizedStrings.RepoKey)]
+		Repo,
 	}
 }

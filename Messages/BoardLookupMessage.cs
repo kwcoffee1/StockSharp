@@ -8,7 +8,7 @@ namespace StockSharp.Messages
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class BoardLookupMessage : Message, ITransactionIdMessage
+	public class BoardLookupMessage : BaseSubscriptionMessage
 	{
 		/// <summary>
 		/// The filter for board search.
@@ -17,18 +17,15 @@ namespace StockSharp.Messages
 		public string Like { get; set; }
 
 		/// <summary>
-		/// Request identifier.
-		/// </summary>
-		[DataMember]
-		public long TransactionId { get; set; }
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="BoardLookupMessage"/>.
 		/// </summary>
 		public BoardLookupMessage()
 			: base(MessageTypes.BoardLookup)
 		{
 		}
+
+		/// <inheritdoc />
+		public override DataType DataType => DataType.Board;
 
 		/// <summary>
 		/// Create a copy of <see cref="BoardLookupMessage"/>.
@@ -46,10 +43,9 @@ namespace StockSharp.Messages
 		/// <returns>The object, to which copied information.</returns>
 		protected BoardLookupMessage CopyTo(BoardLookupMessage destination)
 		{
-			destination.TransactionId = TransactionId;
-			destination.Like = Like;
+			base.CopyTo(destination);
 
-			this.CopyExtensionInfo(destination);
+			destination.Like = Like;
 
 			return destination;
 		}
@@ -57,7 +53,23 @@ namespace StockSharp.Messages
 		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",Like={Like},TrId={TransactionId}";
+			return base.ToString() + $",Like={Like}";
 		}
+
+		/// <inheritdoc />
+		[DataMember]
+		public override DateTimeOffset? From => null;
+
+		/// <inheritdoc />
+		[DataMember]
+		public override DateTimeOffset? To => DateTimeOffset.MaxValue /* prevent for online mode */;
+
+		/// <inheritdoc />
+		[DataMember]
+		public override bool IsSubscribe => true;
+
+		/// <inheritdoc />
+		[DataMember]
+		public override long OriginalTransactionId => 0;
 	}
 }

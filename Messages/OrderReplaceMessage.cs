@@ -18,6 +18,8 @@ namespace StockSharp.Messages
 	using System;
 	using System.Runtime.Serialization;
 
+	using Ecng.Common;
+
 	/// <summary>
 	/// The message containing the information for modify order.
 	/// </summary>
@@ -38,10 +40,16 @@ namespace StockSharp.Messages
 		public string OldOrderStringId { get; set; }
 
 		/// <summary>
-		/// Modified order transaction id.
+		/// Replaced price.
 		/// </summary>
 		[DataMember]
-		public long OldTransactionId { get; set; }
+		public decimal? OldOrderPrice { get; set; }
+
+		/// <summary>
+		/// Replaced volume.
+		/// </summary>
+		[DataMember]
+		public decimal? OldOrderVolume { get; set; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="OrderReplaceMessage"/>.
@@ -57,12 +65,7 @@ namespace StockSharp.Messages
 		/// <returns>Copy.</returns>
 		public override Message Clone()
 		{
-			var clone = new OrderReplaceMessage
-			{
-				OldOrderId = OldOrderId,
-				OldOrderStringId = OldOrderStringId,
-				OldTransactionId = OldTransactionId,
-			};
+			var clone = new OrderReplaceMessage();
 
 			CopyTo(clone);
 
@@ -70,12 +73,34 @@ namespace StockSharp.Messages
 		}
 
 		/// <summary>
-		/// Returns a string that represents the current object.
+		/// Copy the message into the <paramref name="destination" />.
 		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <param name="destination">The object, to which copied information.</param>
+		public void CopyTo(OrderReplaceMessage destination)
+		{
+			base.CopyTo(destination);
+
+			destination.OldOrderId = OldOrderId;
+			destination.OldOrderStringId = OldOrderStringId;
+			destination.OldOrderPrice = OldOrderPrice;
+			destination.OldOrderVolume = OldOrderVolume;
+		}
+
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",OldTransId={OldTransactionId},OldOrdId={OldOrderId},NewTransId={TransactionId}";
+			var str = base.ToString();
+
+			if (OldOrderId != null || !OldOrderStringId.IsEmpty())
+				str += $"OldOrdId={OldOrderId}/{OldOrderStringId}";
+
+			if (OldOrderPrice != null)
+				str += $"OldOrderPrice={OldOrderPrice.Value}";
+
+			if (OldOrderVolume != null)
+				str += $"OldOrderVol={OldOrderVolume.Value}";
+
+			return str;
 		}
 	}
 }

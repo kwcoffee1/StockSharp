@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -16,21 +16,30 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
 	/// <summary>
 	/// Convergence/divergence of moving averages with signal line.
 	/// </summary>
-	[DisplayName("MACD Signal")]
-	[DescriptionLoc(LocalizedStrings.Str803Key)]
+	/// <remarks>
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/macd_with_signal_line.html
+	/// </remarks>
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.MACDSignalKey,
+		Description = LocalizedStrings.MACDSignalDescKey)]
+	[Doc("topics/api/indicators/list_of_indicators/macd_with_signal_line.html")]
 	public class MovingAverageConvergenceDivergenceSignal : BaseComplexIndicator
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="MovingAverageConvergenceDivergenceSignal"/>.
 		/// </summary>
 		public MovingAverageConvergenceDivergenceSignal()
-			: this(new MovingAverageConvergenceDivergence(), new ExponentialMovingAverage { Length = 9 })
+			: this(new(), new() { Length = 9 })
 		{
 		}
 
@@ -47,22 +56,32 @@ namespace StockSharp.Algo.Indicators
 			Mode = ComplexIndicatorModes.Sequence;
 		}
 
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
 		/// <summary>
 		/// Convergence/divergence of moving averages.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayName("MACD")]
-		[DescriptionLoc(LocalizedStrings.Str797Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.MACDKey,
+			Description = LocalizedStrings.MACDDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public MovingAverageConvergenceDivergence Macd { get; }
 
 		/// <summary>
 		/// Signaling Moving Average.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayNameLoc(LocalizedStrings.Str804Key)]
-		[DescriptionLoc(LocalizedStrings.Str805Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.SignalMaKey,
+			Description = LocalizedStrings.SignalMaDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public ExponentialMovingAverage SignalMa { get; }
+
+		/// <inheritdoc />
+		public override string ToString() => base.ToString() + $" L={Macd.LongMa.Length} S={Macd.ShortMa.Length} Sig={SignalMa.Length}";
 	}
 }

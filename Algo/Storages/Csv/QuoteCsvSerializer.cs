@@ -21,30 +21,17 @@ namespace StockSharp.Algo.Storages.Csv
 	using Ecng.Common;
 
 	using StockSharp.Messages;
+	using StockSharp.Localization;
 
 	class NullableTimeQuoteChange
 	{
-		public NullableTimeQuoteChange()
-		{
-		}
-
-		public NullableTimeQuoteChange(QuoteChange quote, QuoteChangeMessage message)
-		{
-			if (quote == null)
-				throw new ArgumentNullException(nameof(quote));
-
-			ServerTime = message.ServerTime;
-			LocalTime = message.LocalTime;
-			Price = quote.Price;
-			Volume = quote.Volume;
-			Side = quote.Side;
-		}
-
 		public DateTimeOffset ServerTime { get; set; }
 		public DateTimeOffset LocalTime { get; set; }
-		public decimal? Price { get; set; }
-		public decimal Volume { get; set; }
+		public QuoteChange? Quote { get; set; }
 		public Sides Side { get; set; }
+		public QuoteChangeStates? State { get; set; }
+		public DataType BuildFrom { get; set; }
+		public long? SeqNum { get; set; }
 	}
 
 	/// <summary>
@@ -62,41 +49,105 @@ namespace StockSharp.Algo.Storages.Csv
 		{
 		}
 
-		/// <summary>
-		/// Write data to the specified writer.
-		/// </summary>
-		/// <param name="writer">CSV writer.</param>
-		/// <param name="data">Data.</param>
-		/// <param name="metaInfo">Meta-information on data for one day.</param>
+		/// <inheritdoc />
+		public override IMarketDataMetaInfo CreateMetaInfo(DateTime date)
+		{
+			return new CsvMetaInfo(date, Encoding, null, r =>
+			{
+				r.Skip(8);
+				return r.ReadNullableEnum<QuoteChangeStates>() != null;
+			});
+		}
+
+		/// <inheritdoc />
 		protected override void Write(CsvFileWriter writer, NullableTimeQuoteChange data, IMarketDataMetaInfo metaInfo)
 		{
+			var quote = data.Quote;
+
+			if (quote != null && quote.Value.Volume < 0)
+				throw new ArgumentOutOfRangeException(nameof(data), quote.Value.Volume, LocalizedStrings.InvalidValue);
+
 			writer.WriteRow(new[]
 			{
 				data.ServerTime.WriteTimeMls(),
 				data.ServerTime.ToString("zzz"),
-				data.Price?.ToString(),
-				data.Volume.ToString(),
-				data.Side.ToString()
-			});
+				quote?.Price.To<string>(),
+				quote?.Volume.To<string>(),
+				data.Side.To<int>().ToString(),
+				quote?.OrdersCount.To<string>(),
+				quote?.Condition.To<int>().ToString(),
+				quote?.StartPosition.To<string>(),
+				quote?.EndPosition.To<string>(),
+				quote?.Action.To<int?>().ToString(),
+				data?.State.To<int?>().ToString(),
+				data?.SeqNum.ToString(),
+			}.Concat(data.BuildFrom.ToCsv()));
 
 			metaInfo.LastTime = data.ServerTime.UtcDateTime;
 		}
 
-		/// <summary>
-		/// Read data from the specified reader.
-		/// </summary>
-		/// <param name="reader">CSV reader.</param>
-		/// <param name="metaInfo">Meta-information on data for one day.</param>
-		/// <returns>Data.</returns>
+		/// <inheritdoc />
 		protected override NullableTimeQuoteChange Read(FastCsvReader reader, IMarketDataMetaInfo metaInfo)
 		{
-			return new NullableTimeQuoteChange
+			var quote = new NullableTimeQuoteChange
 			{
 				ServerTime = reader.ReadTime(metaInfo.Date),
-				Price = reader.ReadNullableDecimal(),
-				Volume = reader.ReadDecimal(),
-				Side = reader.ReadEnum<Sides>()
 			};
+
+			var price = reader.ReadNullableDecimal();
+			var volume = reader.ReadNullableDecimal();
+
+			quote.Side = reader.ReadEnum<Sides>();
+
+			int? ordersCount = null;
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				ordersCount = reader.ReadNullableInt();
+
+			QuoteConditions condition = default;
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				condition = reader.ReadNullableEnum<QuoteConditions>() ?? default;
+
+			QuoteChange? qq = null;
+
+			if (price != null)
+			{
+				qq = quote.Quote = new QuoteChange
+				{
+					Price = price.Value,
+					Volume = volume ?? 0,
+					OrdersCount = ordersCount,
+					Condition = condition,
+				};
+			}
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+			{
+				var startPosition = reader.ReadNullableInt();
+				var endPosition = reader.ReadNullableInt();
+				var action = reader.ReadNullableEnum<QuoteChangeActions>();
+
+				if (qq != null)
+				{
+					var temp = qq.Value;
+
+					temp.StartPosition = startPosition;
+					temp.EndPosition = endPosition;
+					temp.Action = action;
+
+					quote.Quote = temp;
+				}
+			}
+
+			if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+			{
+				quote.State = reader.ReadNullableEnum<QuoteChangeStates>();
+				quote.SeqNum = reader.ReadNullableLong();
+				quote.BuildFrom = reader.ReadBuildFrom();
+			}
+
+			return quote;
 		}
 	}
 }

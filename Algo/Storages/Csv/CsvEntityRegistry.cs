@@ -2,7 +2,6 @@ namespace StockSharp.Algo.Storages.Csv
 {
 	using System;
 	using System.Collections.Generic;
-	using System.ComponentModel;
 	using System.IO;
 	using System.Linq;
 	using System.Text;
@@ -10,8 +9,6 @@ namespace StockSharp.Algo.Storages.Csv
 	using Ecng.Collections;
 	using Ecng.Common;
 	using Ecng.Serialization;
-
-	using MoreLinq;
 
 	using StockSharp.BusinessEntities;
 	using StockSharp.Localization;
@@ -23,89 +20,19 @@ namespace StockSharp.Algo.Storages.Csv
 	/// </summary>
 	public class CsvEntityRegistry : IEntityRegistry
 	{
-		private class FakeStorage : IStorage
-		{
-			private readonly CsvEntityRegistry _registry;
+		/// <summary>
+		/// </summary>
+		[Obsolete("This property exists only for backward compatibility.")]
+		public object Storage => throw new NotSupportedException();
 
-			public FakeStorage(CsvEntityRegistry registry)
-			{
-				_registry = registry ?? throw new ArgumentNullException(nameof(registry));
-			}
-
-			public long GetCount<TEntity>()
-			{
-				return 0;
-			}
-
-			public TEntity Add<TEntity>(TEntity entity)
-			{
-				Added?.Invoke(entity);
-				return entity;
-			}
-
-			public TEntity GetBy<TEntity>(SerializationItemCollection by)
-			{
-				return _registry.Securities.ReadById(by[0].Value).To<TEntity>();
-				//throw new NotSupportedException();
-			}
-
-			public TEntity GetById<TEntity>(object id)
-			{
-				throw new NotSupportedException();
-			}
-
-			public IEnumerable<TEntity> GetGroup<TEntity>(long startIndex, long count, Field orderBy, ListSortDirection direction)
-			{
-				throw new NotSupportedException();
-			}
-
-			public TEntity Update<TEntity>(TEntity entity)
-			{
-				Updated?.Invoke(entity);
-				return entity;
-			}
-
-			public void Remove<TEntity>(TEntity entity)
-			{
-				Removed?.Invoke(entity);
-			}
-
-			public void Clear<TEntity>()
-			{
-			}
-
-			public void ClearCache()
-			{
-			}
-
-			public IBatchContext BeginBatch()
-			{
-				return new BatchContext(this);
-			}
-
-			public void CommitBatch()
-			{
-			}
-
-			public void EndBatch()
-			{
-			}
-
-			public event Action<object> Added;
-
-			public event Action<object> Updated;
-
-			public event Action<object> Removed;
-		}
-
-		private class ExchangeCsvList : CsvEntityList<Exchange>
+		private class ExchangeCsvList : CsvEntityList<string, Exchange>
 		{
 			public ExchangeCsvList(CsvEntityRegistry registry)
 				: base(registry, "exchange.csv")
 			{
 			}
 
-			protected override object GetKey(Exchange item)
+			protected override string GetKey(Exchange item)
 			{
 				return item.Name;
 			}
@@ -116,10 +43,16 @@ namespace StockSharp.Algo.Storages.Csv
 				{
 					Name = reader.ReadString(),
 					CountryCode = reader.ReadNullableEnum<CountryCodes>(),
-					EngName = reader.ReadString(),
-					RusName = reader.ReadString(),
-					//ExtensionInfo = Deserialize<Dictionary<object, object>>(reader.ReadString())
 				};
+
+				var engName = reader.ReadString();
+
+				reader.Skip();
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+					board.FullNameLoc = reader.ReadString();
+				else
+					board.FullNameLoc = engName;
 
 				return board;
 			}
@@ -130,63 +63,36 @@ namespace StockSharp.Algo.Storages.Csv
 				{
 					data.Name,
 					data.CountryCode.To<string>(),
-					data.EngName,
-					data.RusName,
-					//Serialize(data.ExtensionInfo)
+					string.Empty/*data.EngName*/,
+					string.Empty/*data.RusName*/,
+					data.FullNameLoc,
 				});
 			}
 		}
 
-		private class ExchangeBoardCsvList : CsvEntityList<ExchangeBoard>
+		private class ExchangeBoardCsvList : CsvEntityList<string, ExchangeBoard>
 		{
 			public ExchangeBoardCsvList(CsvEntityRegistry registry)
 				: base(registry, "exchangeboard.csv")
 			{
 			}
 
-			protected override object GetKey(ExchangeBoard item)
+			protected override string GetKey(ExchangeBoard item)
 			{
 				return item.Code;
 			}
 
 			private Exchange GetExchange(string exchangeCode)
 			{
-				var exchange = Registry.Exchanges.ReadById(exchangeCode);
-
-				if (exchange == null)
-					throw new InvalidOperationException(LocalizedStrings.Str1217Params.Put(exchangeCode));
-
-				return exchange;
+				return Registry.Exchanges.ReadById(exchangeCode) ?? throw new InvalidOperationException(LocalizedStrings.BoardNotFound.Put(exchangeCode));
 			}
 
 			protected override ExchangeBoard Read(FastCsvReader reader)
 			{
-				var board = new ExchangeBoard
-				{
-					Code = reader.ReadString(),
-					Exchange = GetExchange(reader.ReadString()),
-					ExpiryTime = reader.ReadString().ToTime(),
-					//IsSupportAtomicReRegister = reader.ReadBool(),
-					//IsSupportMarketOrders = reader.ReadBool(),
-					TimeZone = TimeZoneInfo.FindSystemTimeZoneById(reader.ReadString()),
-				};
+				var msg = reader.ReadBoard(Registry.Encoding);
 
-				var time = board.WorkingTime;
-
-				if (reader.ColumnCount == 7)
-				{
-					time.Periods = Deserialize<List<WorkingTimePeriod>>(reader.ReadString());
-					time.SpecialWorkingDays = Deserialize<IEnumerable<DateTime>>(reader.ReadString()).ToArray();
-					time.SpecialHolidays = Deserialize<IEnumerable<DateTime>>(reader.ReadString()).ToArray();
-				}
-				else
-				{
-					time.Periods.AddRange(reader.ReadString().DecodeToPeriods());
-					time.SpecialDays.AddRange(reader.ReadString().DecodeToSpecialDays());
-				}
-
-				//ExtensionInfo = Deserialize<Dictionary<object, object>>(reader.ReadString())
-
+				var board = msg.ToBoard();
+				board.Exchange = GetExchange(msg.ExchangeCode);
 				return board;
 			}
 
@@ -205,60 +111,22 @@ namespace StockSharp.Algo.Storages.Csv
 					//Serialize(data.WorkingTime.SpecialWorkingDays),
 					//Serialize(data.WorkingTime.SpecialHolidays),
 					data.WorkingTime.SpecialDays.EncodeToString(),
-					//Serialize(data.ExtensionInfo)
+					string.Empty,
+					data.WorkingTime.IsEnabled.ToString(),
 				});
-			}
-
-			private readonly SynchronizedDictionary<Type, IXmlSerializer> _serializers = new SynchronizedDictionary<Type, IXmlSerializer>();
-
-			//private string Serialize<TItem>(TItem item)
-			//	where TItem : class
-			//{
-			//	if (item == null)
-			//		return null;
-
-			//	var serializer = GetSerializer<TItem>();
-
-			//	using (var stream = new MemoryStream())
-			//	{
-			//		serializer.Serialize(item, stream);
-			//		return Registry.Encoding.GetString(stream.ToArray()).Remove(Environment.NewLine).Replace("\"", "'");
-			//	}
-			//}
-
-			private TItem Deserialize<TItem>(string value)
-				where TItem : class
-			{
-				if (value.IsEmpty())
-					return null;
-
-				var serializer = GetSerializer<TItem>();
-				var bytes = Registry.Encoding.GetBytes(value.Replace("'", "\""));
-
-				using (var stream = new MemoryStream(bytes))
-					return serializer.Deserialize(stream);
-			}
-
-			private XmlSerializer<TItem> GetSerializer<TItem>()
-			{
-				return (XmlSerializer<TItem>)_serializers.SafeAdd(typeof(TItem), k => new XmlSerializer<TItem>(false));
 			}
 		}
 
-		private class SecurityCsvList : CsvEntityList<Security>, IStorageSecurityList
+		private class SecurityCsvList : CsvEntityList<SecurityId, Security>, IStorageSecurityList
 		{
 			public SecurityCsvList(CsvEntityRegistry registry)
 				: base(registry, "security.csv")
 			{
-				((ICollectionEx<Security>)this).AddedRange += s => _added?.Invoke(s);
-				((ICollectionEx<Security>)this).RemovedRange += s => _removed?.Invoke(s);
+				AddedRange += s => _added?.Invoke(s);
+				RemovedRange += s => _removed?.Invoke(s);
 			}
 
 			#region IStorageSecurityList
-
-			void IDisposable.Dispose()
-			{
-			}
 
 			private Action<IEnumerable<Security>> _added;
 
@@ -276,142 +144,100 @@ namespace StockSharp.Algo.Storages.Csv
 				remove => _removed -= value;
 			}
 
+			private Security GetById(SecurityId id) => ((IStorageSecurityList)this).ReadById(id);
+
+			Security ISecurityProvider.LookupById(SecurityId id) => GetById(id);
+
 			IEnumerable<Security> ISecurityProvider.Lookup(SecurityLookupMessage criteria)
 			{
-				var secId = criteria.SecurityId.ToStringId(nullIfEmpty: true);
+				var secId = criteria.SecurityId;
 
-				if (secId.IsEmpty())
-					return this.Filter(criteria);
+				if (secId == default || secId.BoardCode.IsEmpty())
+				{
+					lock (SyncRoot)
+						return this.Filter(criteria);
+				}
 
-				var security = ((IStorageSecurityList)this).ReadById(secId);
+				var security = GetById(secId);
 				return security == null ? Enumerable.Empty<Security>() : new[] { security };
 			}
+
+			SecurityMessage ISecurityMessageProvider.LookupMessageById(SecurityId id)
+				=> GetById(id)?.ToMessage();
+
+			IEnumerable<SecurityMessage> ISecurityMessageProvider.LookupMessages(SecurityLookupMessage criteria)
+				=> ((ISecurityProvider)this).Lookup(criteria).Select(s => s.ToMessage());
 
 			void ISecurityStorage.Delete(Security security)
 			{
 				Remove(security);
 			}
 
-			void ISecurityStorage.DeleteBy(Security criteria)
+			void ISecurityStorage.DeleteBy(SecurityLookupMessage criteria)
 			{
 				this.Filter(criteria).ForEach(s => Remove(s));
+			}
+
+			void ISecurityStorage.DeleteRange(IEnumerable<Security> securities)
+			{
+				RemoveRange(securities);
+				OnRemovedRange(securities);
 			}
 
 			#endregion
 
 			#region CsvEntityList
 
-			protected override object GetKey(Security item)
+			protected override SecurityId GetKey(Security item) => item.ToSecurityId();
+
+			private static void UpdateCache(Security cache, Security security)
 			{
-				return item.Id;
+				if (cache is null)		throw new ArgumentNullException(nameof(cache));
+				if (security is null)	throw new ArgumentNullException(nameof(security));
+
+				var boardCode = security.Board?.Code;
+
+				cache.Name = security.Name;
+				cache.Code = security.Code;
+				cache.Class = security.Class;
+				cache.ShortName = security.ShortName;
+				cache.Board = boardCode.IsEmpty() ? null : new() { Code = boardCode };
+				cache.UnderlyingSecurityId = security.UnderlyingSecurityId;
+				cache.PriceStep = security.PriceStep;
+				cache.VolumeStep = security.VolumeStep;
+				cache.MinVolume = security.MinVolume;
+				cache.MaxVolume = security.MaxVolume;
+				cache.Multiplier = security.Multiplier;
+				cache.Decimals = security.Decimals;
+				cache.Type = security.Type;
+				cache.ExpiryDate = security.ExpiryDate;
+				cache.SettlementDate = security.SettlementDate;
+				cache.Strike = security.Strike;
+				cache.OptionType = security.OptionType;
+				cache.Currency = security.Currency;
+				cache.ExternalId = security.ExternalId.Clone();
+				cache.UnderlyingSecurityType = security.UnderlyingSecurityType;
+				cache.UnderlyingSecurityMinVolume = security.UnderlyingSecurityMinVolume;
+				cache.BinaryOptionType = security.BinaryOptionType;
+				cache.CfiCode = security.CfiCode;
+				cache.IssueDate = security.IssueDate;
+				cache.IssueSize = security.IssueSize;
+				cache.Shortable = security.Shortable;
+				cache.BasketCode = security.BasketCode;
+				cache.BasketExpression = security.BasketExpression;
+				cache.PrimaryId = security.PrimaryId;
+				cache.OptionStyle = security.OptionStyle;
+				cache.SettlementType = security.SettlementType;
 			}
 
-			private class LiteSecurity
-			{
-				public string Id { get; set; }
-				public string Name { get; set; }
-				public string Code { get; set; }
-				public string Class { get; set; }
-				public string ShortName { get; set; }
-				public string Board { get; set; }
-				public string UnderlyingSecurityId { get; set; }
-				public decimal? PriceStep { get; set; }
-				public decimal? VolumeStep { get; set; }
-				public decimal? MinVolume { get; set; }
-				public decimal? Multiplier { get; set; }
-				public int? Decimals { get; set; }
-				public SecurityTypes? Type { get; set; }
-				public DateTimeOffset? ExpiryDate { get; set; }
-				public DateTimeOffset? SettlementDate { get; set; }
-				public decimal? Strike { get; set; }
-				public OptionTypes? OptionType { get; set; }
-				public CurrencyTypes? Currency { get; set; }
-				public SecurityExternalId ExternalId { get; set; }
-				public SecurityTypes? UnderlyingSecurityType { get; set; }
-				public decimal? UnderlyingSecurityMinVolume { get; set; }
-				public string BinaryOptionType { get; set; }
-				public string CfiCode { get; set; }
-				public DateTimeOffset? IssueDate { get; set; }
-				public decimal? IssueSize { get; set; }
-				public bool? Shortable { get; set; }
-				public string BasketCode { get; set; }
-				public string BasketExpression { get; set; }
-
-				public Security ToSecurity(SecurityCsvList list)
-				{
-					return new Security
-					{
-						Id = Id,
-						Name = Name,
-						Code = Code,
-						Class = Class,
-						ShortName = ShortName,
-						Board = list.Registry.GetBoard(Board),
-						UnderlyingSecurityId = UnderlyingSecurityId,
-						PriceStep = PriceStep,
-						VolumeStep = VolumeStep,
-						MinVolume = MinVolume,
-						Multiplier = Multiplier,
-						Decimals = Decimals,
-						Type = Type,
-						ExpiryDate = ExpiryDate,
-						SettlementDate = SettlementDate,
-						Strike = Strike,
-						OptionType = OptionType,
-						Currency = Currency,
-						ExternalId = ExternalId.Clone(),
-						UnderlyingSecurityType = UnderlyingSecurityType,
-						UnderlyingSecurityMinVolume = UnderlyingSecurityMinVolume,
-						BinaryOptionType = BinaryOptionType,
-						CfiCode = CfiCode,
-						IssueDate = IssueDate,
-						IssueSize = IssueSize,
-						Shortable = Shortable,
-						BasketCode = BasketCode,
-						BasketExpression = BasketExpression,
-					};
-				}
-
-				public void Update(Security security)
-				{
-					Name = security.Name;
-					Code = security.Code;
-					Class = security.Class;
-					ShortName = security.ShortName;
-					Board = security.Board.Code;
-					UnderlyingSecurityId = security.UnderlyingSecurityId;
-					PriceStep = security.PriceStep;
-					VolumeStep = security.VolumeStep;
-					MinVolume = security.MinVolume;
-					Multiplier = security.Multiplier;
-					Decimals = security.Decimals;
-					Type = security.Type;
-					ExpiryDate = security.ExpiryDate;
-					SettlementDate = security.SettlementDate;
-					Strike = security.Strike;
-					OptionType = security.OptionType;
-					Currency = security.Currency;
-					ExternalId = security.ExternalId.Clone();
-					UnderlyingSecurityType = security.UnderlyingSecurityType;
-					UnderlyingSecurityMinVolume = security.UnderlyingSecurityMinVolume;
-					BinaryOptionType = security.BinaryOptionType;
-					CfiCode = security.CfiCode;
-					IssueDate = security.IssueDate;
-					IssueSize = security.IssueSize;
-					Shortable = security.Shortable;
-					BasketCode = security.BasketCode;
-					BasketExpression = security.BasketExpression;
-				}
-			}
-
-			private readonly Dictionary<string, LiteSecurity> _cache = new Dictionary<string, LiteSecurity>(StringComparer.InvariantCultureIgnoreCase);
+			private readonly Dictionary<SecurityId, Security> _cache = new();
 
 			private static bool IsChanged(string original, string cached, bool forced)
 			{
 				if (original.IsEmpty())
 					return forced && !cached.IsEmpty();
 				else
-					return cached.IsEmpty() || (forced && !cached.CompareIgnoreCase(original));
+					return cached.IsEmpty() || (forced && !cached.EqualsIgnoreCase(original));
 			}
 
 			private static bool IsChanged<T>(T? original, T? cached, bool forced)
@@ -425,98 +251,110 @@ namespace StockSharp.Algo.Storages.Csv
 
 			protected override bool IsChanged(Security security, bool forced)
 			{
-				var liteSec = _cache.TryGetValue(security.Id);
+				var cache = _cache.TryGetValue(security.ToSecurityId())
+					?? throw new InvalidOperationException(LocalizedStrings.SecurityNoFound.Put(security.Id));
 
-				if (liteSec == null)
-					throw new ArgumentOutOfRangeException(nameof(security), security.Id, LocalizedStrings.Str2736);
-
-				if (IsChanged(security.Name, liteSec.Name, forced))
+				if (IsChanged(security.Name, cache.Name, forced))
 					return true;
 
-				if (IsChanged(security.Code, liteSec.Code, forced))
+				if (IsChanged(security.Code, cache.Code, forced))
 					return true;
 
-				if (IsChanged(security.Class, liteSec.Class, forced))
+				if (IsChanged(security.Class, cache.Class, forced))
 					return true;
 
-				if (IsChanged(security.ShortName, liteSec.ShortName, forced))
+				if (IsChanged(security.ShortName, cache.ShortName, forced))
 					return true;
 
-				if (IsChanged(security.UnderlyingSecurityId, liteSec.UnderlyingSecurityId, forced))
+				if (IsChanged(security.UnderlyingSecurityId, cache.UnderlyingSecurityId, forced))
 					return true;
 
-				if (IsChanged(security.UnderlyingSecurityType, liteSec.UnderlyingSecurityType, forced))
+				if (IsChanged(security.UnderlyingSecurityType, cache.UnderlyingSecurityType, forced))
 					return true;
 
-				if (IsChanged(security.UnderlyingSecurityMinVolume, liteSec.UnderlyingSecurityMinVolume, forced))
+				if (IsChanged(security.UnderlyingSecurityMinVolume, cache.UnderlyingSecurityMinVolume, forced))
 					return true;
 
-				if (IsChanged(security.PriceStep, liteSec.PriceStep, forced))
+				if (IsChanged(security.PriceStep, cache.PriceStep, forced))
 					return true;
 
-				if (IsChanged(security.VolumeStep, liteSec.VolumeStep, forced))
+				if (IsChanged(security.VolumeStep, cache.VolumeStep, forced))
 					return true;
 
-				if (IsChanged(security.MinVolume, liteSec.MinVolume, forced))
+				if (IsChanged(security.MinVolume, cache.MinVolume, forced))
 					return true;
 
-				if (IsChanged(security.Multiplier, liteSec.Multiplier, forced))
+				if (IsChanged(security.MaxVolume, cache.MaxVolume, forced))
 					return true;
 
-				if (IsChanged(security.Decimals, liteSec.Decimals, forced))
+				if (IsChanged(security.Multiplier, cache.Multiplier, forced))
 					return true;
 
-				if (IsChanged(security.Type, liteSec.Type, forced))
+				if (IsChanged(security.Decimals, cache.Decimals, forced))
 					return true;
 
-				if (IsChanged(security.ExpiryDate, liteSec.ExpiryDate, forced))
+				if (IsChanged(security.Type, cache.Type, forced))
 					return true;
 
-				if (IsChanged(security.SettlementDate, liteSec.SettlementDate, forced))
+				if (IsChanged(security.ExpiryDate, cache.ExpiryDate, forced))
 					return true;
 
-				if (IsChanged(security.Strike, liteSec.Strike, forced))
+				if (IsChanged(security.SettlementDate, cache.SettlementDate, forced))
 					return true;
 
-				if (IsChanged(security.OptionType, liteSec.OptionType, forced))
+				if (IsChanged(security.Strike, cache.Strike, forced))
 					return true;
 
-				if (IsChanged(security.Currency, liteSec.Currency, forced))
+				if (IsChanged(security.OptionType, cache.OptionType, forced))
 					return true;
 
-				if (IsChanged(security.BinaryOptionType, liteSec.BinaryOptionType, forced))
+				if (IsChanged(security.Currency, cache.Currency, forced))
 					return true;
 
-				if (IsChanged(security.CfiCode, liteSec.CfiCode, forced))
+				if (IsChanged(security.BinaryOptionType, cache.BinaryOptionType, forced))
 					return true;
 
-				if (IsChanged(security.Shortable, liteSec.Shortable, forced))
+				if (IsChanged(security.CfiCode, cache.CfiCode, forced))
 					return true;
 
-				if (IsChanged(security.IssueDate, liteSec.IssueDate, forced))
+				if (IsChanged(security.Shortable, cache.Shortable, forced))
 					return true;
 
-				if (IsChanged(security.IssueSize, liteSec.IssueSize, forced))
+				if (IsChanged(security.IssueDate, cache.IssueDate, forced))
 					return true;
+
+				if (IsChanged(security.IssueSize, cache.IssueSize, forced))
+					return true;
+
+				var cacheBoard = cache.Board;
 
 				if (security.Board == null)
 				{
-					if (!liteSec.Board.IsEmpty() && forced)
+					if (cacheBoard != null && forced)
 						return true;
 				}
 				else
 				{
-					if (liteSec.Board.IsEmpty() || (forced && !liteSec.Board.CompareIgnoreCase(security.Board.Code)))
+					if (cacheBoard is null || (forced && !cacheBoard.Code.EqualsIgnoreCase(security.Board?.Code)))
 						return true;
 				}
 
-				if (forced && security.ExternalId != liteSec.ExternalId)
+				if (forced && security.ExternalId != cache.ExternalId)
 					return true;
 
-				if (IsChanged(security.BasketCode, liteSec.BasketCode, forced))
+				if (IsChanged(security.BasketCode, cache.BasketCode, forced))
 					return true;
 
-				if (IsChanged(security.BasketExpression, liteSec.BasketExpression, forced))
+				if (IsChanged(security.BasketExpression, cache.BasketExpression, forced))
+					return true;
+
+				if (IsChanged(security.PrimaryId, cache.PrimaryId, forced))
+					return true;
+
+				if (IsChanged(security.SettlementType, cache.SettlementType, forced))
+					return true;
+
+				if (IsChanged(security.OptionStyle, cache.OptionStyle, forced))
 					return true;
 
 				return false;
@@ -529,85 +367,65 @@ namespace StockSharp.Algo.Storages.Csv
 
 			protected override void AddCache(Security item)
 			{
-				var sec = new LiteSecurity { Id = item.Id };
-				sec.Update(item);
-				_cache.Add(item.Id, sec);
+				var cache = new Security { Id = item.Id };
+				UpdateCache(cache, item);
+				_cache.Add(item.ToSecurityId(), cache);
 			}
 
 			protected override void RemoveCache(Security item)
 			{
-				_cache.Remove(item.Id);
+				_cache.Remove(item.ToSecurityId());
 			}
 
 			protected override void UpdateCache(Security item)
 			{
-				_cache[item.Id].Update(item);
+				UpdateCache(_cache[item.ToSecurityId()], item);
 			}
-
-			//protected override void WriteMany(Security[] values)
-			//{
-			//	base.WriteMany(_cache.Values.Select(l => l.ToSecurity(this)).ToArray());
-			//}
 
 			protected override Security Read(FastCsvReader reader)
 			{
-				var liteSec = new LiteSecurity
+				var msg = reader.ReadSecurity();
+
+				if (msg.IsAllSecurity())
+					return TraderHelper.AllSecurity;
+
+				var secId = msg.SecurityId;
+
+				return new()
 				{
-					Id = reader.ReadString(),
-					Name = reader.ReadString(),
-					Code = reader.ReadString(),
-					Class = reader.ReadString(),
-					ShortName = reader.ReadString(),
-					Board = reader.ReadString(),
-					UnderlyingSecurityId = reader.ReadString(),
-					PriceStep = reader.ReadNullableDecimal(),
-					VolumeStep = reader.ReadNullableDecimal(),
-					Multiplier = reader.ReadNullableDecimal(),
-					Decimals = reader.ReadNullableInt(),
-					Type = reader.ReadNullableEnum<SecurityTypes>(),
-					ExpiryDate = ReadNullableDateTime(reader),
-					SettlementDate = ReadNullableDateTime(reader),
-					Strike = reader.ReadNullableDecimal(),
-					OptionType = reader.ReadNullableEnum<OptionTypes>(),
-					Currency = reader.ReadNullableEnum<CurrencyTypes>(),
-					ExternalId = new SecurityExternalId
-					{
-						Sedol = reader.ReadString(),
-						Cusip = reader.ReadString(),
-						Isin = reader.ReadString(),
-						Ric = reader.ReadString(),
-						Bloomberg = reader.ReadString(),
-						IQFeed = reader.ReadString(),
-						InteractiveBrokers = reader.ReadNullableInt(),
-						Plaza = reader.ReadString()
-					},
+					Id = secId.ToStringId(),
+					Name = msg.Name,
+					Code = secId.SecurityCode,
+					Class = msg.Class,
+					ShortName = msg.ShortName,
+					Board = Registry.GetBoard(secId.BoardCode),
+					UnderlyingSecurityId = msg.UnderlyingSecurityId.ToStringId(nullIfEmpty: true),
+					PriceStep = msg.PriceStep,
+					VolumeStep = msg.VolumeStep,
+					MinVolume = msg.MinVolume,
+					MaxVolume = msg.MaxVolume,
+					Multiplier = msg.Multiplier,
+					Decimals = msg.Decimals,
+					Type = msg.SecurityType,
+					ExpiryDate = msg.ExpiryDate,
+					SettlementDate = msg.SettlementDate,
+					Strike = msg.Strike,
+					OptionType = msg.OptionType,
+					Currency = msg.Currency,
+					ExternalId = secId.ToExternalId(),
+					UnderlyingSecurityType = msg.UnderlyingSecurityType,
+					UnderlyingSecurityMinVolume = msg.UnderlyingSecurityMinVolume,
+					BinaryOptionType = msg.BinaryOptionType,
+					CfiCode = msg.CfiCode,
+					IssueDate = msg.IssueDate,
+					IssueSize = msg.IssueSize,
+					Shortable = msg.Shortable,
+					BasketCode = msg.BasketCode,
+					BasketExpression = msg.BasketExpression,
+					PrimaryId = msg.PrimaryId.ToStringId(nullIfEmpty: true),
+					OptionStyle = msg.OptionStyle,
+					SettlementType = msg.SettlementType,
 				};
-
-				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
-				{
-					liteSec.UnderlyingSecurityType = reader.ReadNullableEnum<SecurityTypes>();
-					liteSec.BinaryOptionType = reader.ReadString();
-					liteSec.CfiCode = reader.ReadString();
-					liteSec.IssueDate = ReadNullableDateTime(reader);
-					liteSec.IssueSize = reader.ReadNullableDecimal();
-				}
-
-				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
-					liteSec.BasketCode = reader.ReadString();
-
-				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
-					liteSec.BasketExpression = reader.ReadString();
-
-				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
-				{
-					liteSec.MinVolume = reader.ReadNullableDecimal();
-					liteSec.Shortable = reader.ReadNullableBool();
-				}
-
-				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
-					liteSec.UnderlyingSecurityMinVolume = reader.ReadNullableDecimal();
-
-				return liteSec.ToSecurity(this);
 			}
 
 			protected override void Write(CsvFileWriter writer, Security data)
@@ -619,15 +437,15 @@ namespace StockSharp.Algo.Storages.Csv
 					data.Code,
 					data.Class,
 					data.ShortName,
-					data.Board.Code,
+					data.Board?.Code,
 					data.UnderlyingSecurityId,
 					data.PriceStep.To<string>(),
 					data.VolumeStep.To<string>(),
 					data.Multiplier.To<string>(),
 					data.Decimals.To<string>(),
 					data.Type.To<string>(),
-					data.ExpiryDate?.UtcDateTime.ToString(_dateTimeFormat),
-					data.SettlementDate?.UtcDateTime.ToString(_dateTimeFormat),
+					data.ExpiryDate.WriteNullableDateTime(),
+					data.SettlementDate.WriteNullableDateTime(),
 					data.Strike.To<string>(),
 					data.OptionType.To<string>(),
 					data.Currency.To<string>(),
@@ -642,13 +460,17 @@ namespace StockSharp.Algo.Storages.Csv
 					data.UnderlyingSecurityType.To<string>(),
 					data.BinaryOptionType,
 					data.CfiCode,
-					data.IssueDate?.UtcDateTime.ToString(_dateTimeFormat),
+					data.IssueDate.WriteNullableDateTime(),
 					data.IssueSize.To<string>(),
 					data.BasketCode,
 					data.BasketExpression,
 					data.MinVolume.To<string>(),
 					data.Shortable.To<string>(),
 					data.UnderlyingSecurityMinVolume.To<string>(),
+					data.MaxVolume.To<string>(),
+					data.PrimaryId,
+					data.SettlementType.To<string>(),
+					data.OptionStyle.To<string>(),
 				});
 			}
 
@@ -666,14 +488,14 @@ namespace StockSharp.Algo.Storages.Csv
 			#endregion
 		}
 
-		private class PortfolioCsvList : CsvEntityList<Portfolio>
+		private class PortfolioCsvList : CsvEntityList<string, Portfolio>
 		{
 			public PortfolioCsvList(CsvEntityRegistry registry)
 				: base(registry, "portfolio.csv")
 			{
 			}
 
-			protected override object GetKey(Portfolio item)
+			protected override string GetKey(Portfolio item)
 			{
 				return item.Name;
 			}
@@ -693,8 +515,8 @@ namespace StockSharp.Algo.Storages.Csv
 					Currency = reader.ReadNullableEnum<CurrencyTypes>(),
 					State = reader.ReadNullableEnum<PortfolioStates>(),
 					Description = reader.ReadString(),
-					LastChangeTime = _dateTimeParser.Parse(reader.ReadString()).UtcKind(),
-					LocalTime = _dateTimeParser.Parse(reader.ReadString()).UtcKind()
+					LastChangeTime = reader.ReadDateTime(),
+					LocalTime = reader.ReadDateTime(),
 				};
 
 				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
@@ -703,9 +525,7 @@ namespace StockSharp.Algo.Storages.Csv
 				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
 				{
 					portfolio.Currency = reader.ReadString().To<CurrencyTypes?>();
-
-					var str = reader.ReadString();
-					portfolio.ExpirationDate = str.IsEmpty() ? (DateTimeOffset?)null : _dateTimeParser.Parse(str).UtcKind();
+					portfolio.ExpirationDate = reader.ReadNullableDateTime();
 				}
 
 				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
@@ -713,6 +533,9 @@ namespace StockSharp.Algo.Storages.Csv
 					portfolio.CommissionMaker = reader.ReadNullableDecimal();
 					portfolio.CommissionTaker = reader.ReadNullableDecimal();
 				}
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+					/*portfolio.InternalId = */reader.ReadString().To<Guid?>();
 
 				return portfolio;
 			}
@@ -737,47 +560,40 @@ namespace StockSharp.Algo.Storages.Csv
 					data.Currency.To<string>(),
 					data.State.To<string>(),
 					data.Description,
-					data.LastChangeTime.UtcDateTime.ToString(_dateTimeFormat),
-					data.LocalTime.UtcDateTime.ToString(_dateTimeFormat),
+					data.LastChangeTime.WriteDateTime(),
+					data.LocalTime.WriteDateTime(),
 					data.ClientCode,
 					data.Currency?.To<string>(),
-					data.ExpirationDate?.UtcDateTime.ToString(_dateTimeFormat),
+					data.ExpirationDate.WriteNullableDateTime(),
 					data.CommissionMaker.To<string>(),
 					data.CommissionTaker.To<string>(),
+					/*data.InternalId.To<string>()*/string.Empty,
 				});
 			}
 		}
 
-		private class PositionCsvList : CsvEntityList<Position>, IStoragePositionList
+		private class PositionCsvList : CsvEntityList<(Portfolio, Security, string, Sides?), Position>, IStoragePositionList
 		{
 			public PositionCsvList(CsvEntityRegistry registry)
 				: base(registry, "position.csv")
 			{
 			}
 
-			protected override object GetKey(Position item)
-			{
-				return Tuple.Create(item.Portfolio, item.Security);
-			}
+			protected override (Portfolio, Security, string, Sides?) GetKey(Position item)
+				=> CreateKey(item.Portfolio, item.Security, item.StrategyId, item.Side);
 
 			private Portfolio GetPortfolio(string id)
 			{
-				var portfolio = Registry.Portfolios.ReadById(id);
-
-				if (portfolio == null)
-					throw new InvalidOperationException(LocalizedStrings.Str3622Params.Put(id));
-
-				return portfolio;
+				return Registry.Portfolios.ReadById(id)
+					?? throw new InvalidOperationException(LocalizedStrings.PortfolioNotFound.Put(id));
 			}
 
 			private Security GetSecurity(string id)
 			{
-				var security = Registry.Securities.ReadById(id);
+				var secId = id.ToSecurityId();
+				var security = secId.IsMoney() ? TraderHelper.MoneySecurity : Registry.Securities.ReadById(secId);
 
-				if (security == null)
-					throw new InvalidOperationException(LocalizedStrings.Str704Params.Put(id));
-
-				return security;
+				return security ?? throw new InvalidOperationException(LocalizedStrings.SecurityNoFound.Put(id));
 			}
 
 			protected override Position Read(FastCsvReader reader)
@@ -797,8 +613,8 @@ namespace StockSharp.Algo.Storages.Csv
 					VariationMargin = reader.ReadNullableDecimal(),
 					Commission = reader.ReadNullableDecimal(),
 					Currency = reader.ReadNullableEnum<CurrencyTypes>(),
-					LastChangeTime = _dateTimeParser.Parse(reader.ReadString()).UtcKind(),
-					LocalTime = _dateTimeParser.Parse(reader.ReadString()).UtcKind(),
+					LastChangeTime = reader.ReadDateTime(),
+					LocalTime = reader.ReadDateTime(),
 				};
 
 				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
@@ -807,10 +623,40 @@ namespace StockSharp.Algo.Storages.Csv
 				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
 				{
 					position.Currency = reader.ReadString().To<CurrencyTypes?>();
-
-					var str = reader.ReadString();
-					position.ExpirationDate = str.IsEmpty() ? (DateTimeOffset?)null : _dateTimeParser.Parse(str).UtcKind();
+					position.ExpirationDate = reader.ReadNullableDateTime();
 				}
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				{
+					position.Leverage = reader.ReadNullableDecimal();
+					position.CommissionMaker = reader.ReadNullableDecimal();
+					position.CommissionTaker = reader.ReadNullableDecimal();
+					position.AveragePrice = reader.ReadNullableDecimal();
+					position.RealizedPnL = reader.ReadNullableDecimal();
+					position.UnrealizedPnL = reader.ReadNullableDecimal();
+					position.CurrentPrice = reader.ReadNullableDecimal();
+					position.SettlementPrice = reader.ReadNullableDecimal();
+				}
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				{
+					position.BuyOrdersCount = reader.ReadNullableInt();
+					position.SellOrdersCount = reader.ReadNullableInt();
+					position.BuyOrdersMargin = reader.ReadNullableDecimal();
+					position.SellOrdersMargin = reader.ReadNullableDecimal();
+					position.OrdersMargin = reader.ReadNullableDecimal();
+					position.OrdersCount = reader.ReadNullableInt();
+					position.TradesCount = reader.ReadNullableInt();
+				}
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+					position.StrategyId = reader.ReadString();
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+					position.Side = reader.ReadNullableEnum<Sides>();
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+					position.LiquidationPrice = reader.ReadNullableDecimal();
 
 				return position;
 			}
@@ -829,28 +675,48 @@ namespace StockSharp.Algo.Storages.Csv
 					data.VariationMargin.To<string>(),
 					data.Commission.To<string>(),
 					data.Description,
-					data.LastChangeTime.UtcDateTime.ToString(_dateTimeFormat),
-					data.LocalTime.UtcDateTime.ToString(_dateTimeFormat),
+					data.LastChangeTime.WriteDateTime(),
+					data.LocalTime.WriteDateTime(),
 					data.ClientCode,
-					data.Currency?.To<string>(),
-					data.ExpirationDate?.UtcDateTime.ToString(_dateTimeFormat),
+					data.Currency.To<string>(),
+					data.ExpirationDate.WriteNullableDateTime(),
+					data.Leverage.To<string>(),
+					data.CommissionMaker.To<string>(),
+					data.CommissionTaker.To<string>(),
+					data.AveragePrice.To<string>(),
+					data.RealizedPnL.To<string>(),
+					data.UnrealizedPnL.To<string>(),
+					data.CurrentPrice.To<string>(),
+					data.SettlementPrice.To<string>(),
+					data.BuyOrdersCount.To<string>(),
+					data.SellOrdersCount.To<string>(),
+					data.BuyOrdersMargin.To<string>(),
+					data.SellOrdersMargin.To<string>(),
+					data.OrdersMargin.To<string>(),
+					data.OrdersCount.To<string>(),
+					data.TradesCount.To<string>(),
+					data.StrategyId,
+					data.Side.To<string>(),
+					data.LiquidationPrice.To<string>(),
 				});
 			}
 
-			public Position GetPosition(Portfolio portfolio, Security security, string clientCode = "", string depoName = "")
-			{
-				return ((IStorageEntityList<Position>)this).ReadById(Tuple.Create(portfolio, security));
-			}
+			public Position GetPosition(Portfolio portfolio, Security security, string strategyId, Sides? side, string clientCode = "", string depoName = "", TPlusLimits? limit = null)
+				=> ((IStorageEntityList<Position>)this).ReadById(CreateKey(portfolio, security, strategyId, side));
+
+			private static (Portfolio, Security, string, Sides?) CreateKey(Portfolio portfolio, Security security, string strategyId, Sides? side)
+				=> (portfolio, security, strategyId?.ToLowerInvariant() ?? string.Empty, side);
 		}
 
-		private class SubscriptionCsvList : CsvEntityList<MarketDataMessage>
+		private class SubscriptionCsvList : CsvEntityList<(SecurityId, DataType), MarketDataMessage>
 		{
 			public SubscriptionCsvList(CsvEntityRegistry registry)
 				: base(registry, "subscription.csv")
 			{
 			}
 
-			protected override object GetKey(MarketDataMessage item) => item.TransactionId;
+			protected override (SecurityId, DataType) GetKey(MarketDataMessage item)
+				=> (item.SecurityId, item.DataType2);
 
 			protected override void Write(CsvFileWriter writer, MarketDataMessage data)
 			{
@@ -858,95 +724,114 @@ namespace StockSharp.Algo.Storages.Csv
 					throw new ArgumentNullException(nameof(data));
 
 				if (!data.IsSubscribe)
-					throw new ArgumentException(nameof(data));
+					throw new ArgumentException("Must be subscribe request.");
+
+				var (type, arg) = data.DataType2.FormatToString();
+				var buildFromTuples = data.BuildFrom?.FormatToString();
 
 				writer.WriteRow(new[]
 				{
-					data.TransactionId.To<string>(),
+					string.Empty,//data.TransactionId.To<string>(),
 					data.SecurityId.SecurityCode,
 					data.SecurityId.BoardCode,
-					data.DataType.To<string>(),
-					TraderHelper.CandleArgToFolderName(data.Arg),
+					type,
+					arg,
 					data.IsCalcVolumeProfile.To<string>(),
 					data.AllowBuildFromSmallerTimeFrame.To<string>(),
 					data.IsRegularTradingHours.To<string>(),
 					data.MaxDepth.To<string>(),
 					data.NewsId,
-					data.From?.UtcDateTime.ToString(_dateTimeFormat),
-					data.To?.UtcDateTime.ToString(_dateTimeFormat),
+					data.From.WriteNullableDateTime(),
+					data.To.WriteNullableDateTime(),
 					data.Count.To<string>(),
 					data.BuildMode.To<string>(),
-					data.BuildFrom.To<string>(),
+					null,
 					data.BuildField.To<string>(),
-					data.IsFinished.To<string>(),
+					data.IsFinishedOnly.To<string>(),
+					false.To<string>(),
+					buildFromTuples?.type,
+					buildFromTuples?.arg,
+					data.Skip.To<string>(),
+					data.DoNotBuildOrderBookIncrement.To<string>(),
+					data.Fields?.Select(f => ((int)f).To<string>()).JoinComma(),
+					data.FillGaps.To<string>(),
 				});
 			}
 
 			protected override MarketDataMessage Read(FastCsvReader reader)
 			{
+				reader.Skip();
+
 				var message = new MarketDataMessage
 				{
-					TransactionId = reader.ReadLong(),
+					//TransactionId = reader.ReadLong(),
 					SecurityId = new SecurityId
 					{
 						SecurityCode = reader.ReadString(),
 						BoardCode = reader.ReadString(),
 					},
-					DataType = reader.ReadEnum<MarketDataTypes>(),
+
 					IsSubscribe = true,
+
+					DataType2 = reader.ReadString().ToDataType(reader.ReadString()),
+					IsCalcVolumeProfile = reader.ReadBool(),
+					AllowBuildFromSmallerTimeFrame = reader.ReadBool(),
+					IsRegularTradingHours = reader.ReadNullableBool(),
+
+					MaxDepth = reader.ReadNullableInt(),
+					NewsId = reader.ReadString(),
+
+					From = reader.ReadNullableDateTime(),
+					To = reader.ReadNullableDateTime(),
+					Count = reader.ReadNullableLong(),
+
+					BuildMode = reader.ReadEnum<MarketDataBuildModes>(),
 				};
 
-				var argStr = reader.ReadString();
-				message.Arg = message.DataType.IsCandleDataType() ? message.DataType.ToCandleMessage().ToCandleArg(argStr) : argStr;
-
-				message.IsCalcVolumeProfile = reader.ReadBool();
-				message.AllowBuildFromSmallerTimeFrame = reader.ReadBool();
-				message.IsRegularTradingHours = reader.ReadBool();
-
-				message.MaxDepth = reader.ReadNullableInt();
-				message.NewsId = reader.ReadString();
-
-				var str = reader.ReadString();
-				message.From = str.IsEmpty() ? (DateTimeOffset?)null : _dateTimeParser.Parse(str).UtcKind();
-
-				str = reader.ReadString();
-				message.To = str.IsEmpty() ? (DateTimeOffset?)null : _dateTimeParser.Parse(str).UtcKind();
-
-				message.Count = reader.ReadNullableLong();
-
-				message.BuildMode = reader.ReadEnum<MarketDataBuildModes>();
-				message.BuildFrom = reader.ReadNullableEnum<MarketDataTypes>();
+				reader.ReadString();
 				message.BuildField = reader.ReadNullableEnum<Level1Fields>();
 
 				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
-					message.IsFinished = reader.ReadBool();
+					message.IsFinishedOnly = reader.ReadBool();
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+					/*message.FillGaps =*/reader.ReadBool();
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				{
+					var typeStr = reader.ReadString();
+					var argStr = reader.ReadString();
+
+					message.BuildFrom = typeStr.IsEmpty() ? null : typeStr.ToDataType(argStr);
+				}
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+					message.Skip = reader.ReadNullableLong();
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+					message.DoNotBuildOrderBookIncrement = reader.ReadBool();
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+				{
+					var str = reader.ReadString();
+
+					if (!str.IsEmpty())
+						message.Fields = str.SplitByComma().Select(s => (Level1Fields)s.To<int>()).ToArray();
+				}
+
+				if ((reader.ColumnCurr + 1) < reader.ColumnCount)
+					message.FillGaps = reader.ReadNullableEnum<FillGapsDays>();
 
 				return message;
 			}
 		}
 
-		private const string _dateTimeFormat = "yyyyMMddHHmmss";
-		private static readonly FastDateTimeParser _dateTimeParser = new FastDateTimeParser(_dateTimeFormat);
-
-		private static DateTimeOffset? ReadNullableDateTime(FastCsvReader reader)
-		{
-			var str = reader.ReadString();
-
-			if (str == null)
-				return null;
-
-			return _dateTimeParser.Parse(str).UtcKind();
-		}
-
-		private readonly List<ICsvEntityList> _csvLists = new List<ICsvEntityList>();
+		private readonly List<ICsvEntityList> _csvLists = new();
 
 		/// <summary>
 		/// The path to data directory.
 		/// </summary>
 		public string Path { get; set; }
-
-		/// <inheritdoc />
-		public IStorage Storage { get; }
 
 		private Encoding _encoding = Encoding.UTF8;
 
@@ -959,7 +844,7 @@ namespace StockSharp.Algo.Storages.Csv
 			set => _encoding = value ?? throw new ArgumentNullException(nameof(value));
 		}
 
-		private DelayAction _delayAction = new DelayAction(ex => ex.LogError());
+		private DelayAction _delayAction = new(ex => ex.LogError());
 
 		/// <inheritdoc />
 		public virtual DelayAction DelayAction
@@ -1020,7 +905,6 @@ namespace StockSharp.Algo.Storages.Csv
 		public CsvEntityRegistry(string path)
 		{
 			Path = path ?? throw new ArgumentNullException(nameof(path));
-			Storage = new FakeStorage(this);
 
 			Add(_exchanges = new ExchangeCsvList(this));
 			Add(_exchangeBoards = new ExchangeBoardCsvList(this));
@@ -1037,10 +921,11 @@ namespace StockSharp.Algo.Storages.Csv
 		/// <summary>
 		/// Add list of trade objects.
 		/// </summary>
-		/// <typeparam name="T">Entity type.</typeparam>
+		/// <typeparam name="TKey">Key type.</typeparam>
+		/// <typeparam name="TEntity">Entity type.</typeparam>
 		/// <param name="list">List of trade objects.</param>
-		public void Add<T>(CsvEntityList<T> list)
-			where T : class
+		public void Add<TKey, TEntity>(CsvEntityList<TKey, TEntity> list)
+			where TEntity : class
 		{
 			if (list == null)
 				throw new ArgumentNullException(nameof(list));
@@ -1063,7 +948,7 @@ namespace StockSharp.Algo.Storages.Csv
 					list.Init(listErrors);
 
 					if (listErrors.Count > 0)
-						errors.Add(list, new AggregateException(listErrors));
+						errors.Add(list, listErrors.SingleOrAggr());
 				}
 				catch (Exception ex)
 				{
@@ -1081,10 +966,10 @@ namespace StockSharp.Algo.Storages.Csv
 			if (board != null)
 				return board;
 
-			board = ServicesRegistry.EnsureGetExchangeInfoProvider().GetExchangeBoard(boardCode);
+			board = ServicesRegistry.EnsureGetExchangeInfoProvider().TryGetExchangeBoard(boardCode);
 
 			if (board == null)
-				throw new InvalidOperationException(LocalizedStrings.Str1217Params.Put(boardCode));
+				throw new InvalidOperationException(LocalizedStrings.BoardNotFound.Put(boardCode));
 
 			return board;
 		}

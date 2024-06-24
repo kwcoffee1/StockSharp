@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -16,7 +16,9 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.Indicators
 {
 	using System;
-	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
+
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
@@ -24,10 +26,13 @@ namespace StockSharp.Algo.Indicators
 	/// Covariance.
 	/// </summary>
 	/// <remarks>
-	/// https://en.wikipedia.org/wiki/Covariance.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/covariation.html
 	/// </remarks>
-	[DisplayName("COV")]
-	[DescriptionLoc(LocalizedStrings.CovarianceKey, true)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.COVKey,
+		Description = LocalizedStrings.CovarianceKey)]
+	[Doc("topics/api/indicators/list_of_indicators/covariation.html")]
 	[IndicatorIn(typeof(PairIndicatorValue<decimal>))]
 	public class Covariance : LengthIndicator<Tuple<decimal, decimal>>
 	{
@@ -39,31 +44,21 @@ namespace StockSharp.Algo.Indicators
 			Length = 20;
 		}
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var value = input.GetValue<Tuple<decimal, decimal>>();
-
-			Buffer.Add(value);
 
 			Tuple<decimal, decimal> first = null;
 
 			if (input.IsFinal)
 			{
-				if (Buffer.Count > Length)
-					Buffer.RemoveAt(0);
+				Buffer.PushBack(value);
 			}
 			else
 			{
-				if (Buffer.Count > Length)
-				{
-					first = Buffer[0];
-					Buffer.RemoveAt(0);
-				}
+				first = Buffer.Count == Length ? Buffer[0] : default;
+				Buffer.PushBack(value);
 			}
 
 			decimal avgSource = 0;
@@ -90,9 +85,9 @@ namespace StockSharp.Algo.Indicators
 			if (!input.IsFinal)
 			{
 				if (first != null)
-					Buffer.Insert(0, first);
+					Buffer.PushFront(first);
 
-				Buffer.RemoveAt(len - 1);
+				Buffer.PopBack();
 			}
 
 			return new DecimalIndicatorValue(this, covariance / len);

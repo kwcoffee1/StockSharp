@@ -13,17 +13,21 @@ Created: 2015, 11, 11, 2:32 PM
 Copyright 2010 by StockSharp, LLC
 *******************************************************************************************/
 #endregion S# License
+
 namespace StockSharp.Messages
 {
 	using System;
 	using System.Runtime.Serialization;
+	using System.ComponentModel;
+
+	using Ecng.Common;
 
 	/// <summary>
-	/// Message security lookup for specified criteria.
+	/// Message portfolio lookup for specified criteria.
 	/// </summary>
 	[DataContract]
 	[Serializable]
-	public class PortfolioLookupMessage : PortfolioMessage
+	public class PortfolioLookupMessage : PortfolioMessage, INullableSecurityIdMessage, IStrategyIdMessage
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="PortfolioLookupMessage"/>.
@@ -33,22 +37,65 @@ namespace StockSharp.Messages
 		{
 		}
 
+		/// <inheritdoc />
+		[DataMember]
+		public string StrategyId { get; set; }
+
+		/// <summary>
+		/// Side.
+		/// </summary>
+		[DataMember]
+		public Sides? Side { get; set; }
+
+		/// <inheritdoc />
+		public override DataType DataType => DataType.PositionChanges;
+
+		/// <inheritdoc />
+		[TypeConverter(typeof(StringToSecurityIdTypeConverter))]
+		public SecurityId? SecurityId { get; set; }
+
 		/// <summary>
 		/// Create a copy of <see cref="PortfolioLookupMessage"/>.
 		/// </summary>
 		/// <returns>Copy.</returns>
 		public override Message Clone()
 		{
-			return CopyTo(new PortfolioLookupMessage());
+			var clone = new PortfolioLookupMessage();
+			CopyTo(clone);
+			return clone;
 		}
 
 		/// <summary>
-		/// Returns a string that represents the current object.
+		/// Copy the message into the <paramref name="destination" />.
 		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <param name="destination">The object, to which copied information.</param>
+		protected virtual void CopyTo(PortfolioLookupMessage destination)
+		{
+			base.CopyTo(destination);
+
+			destination.SecurityId = SecurityId;
+			destination.StrategyId = StrategyId;
+			destination.Side = Side;
+		}
+
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return base.ToString() + $",TransId={TransactionId},Curr={Currency},Board={BoardCode},IsSubscribe={IsSubscribe}";
+			var str = base.ToString();
+
+			if (!IsSubscribe)
+				str += $",IsSubscribe={IsSubscribe}";
+
+			if (SecurityId != null)
+				str += $",Sec={SecurityId}";
+
+			if (!StrategyId.IsEmpty())
+				str += $",Strategy={StrategyId}";
+
+			if (Side != null)
+				str += $",Side={Side.Value}";
+
+			return str;
 		}
 	}
 }

@@ -1,4 +1,4 @@
-#region S# License
+﻿#region S# License
 /******************************************************************************************
 NOTICE!!!  This program and source code is owned and licensed by
 StockSharp, LLC, www.stocksharp.com
@@ -17,8 +17,10 @@ namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Serialization;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Localization;
 
@@ -26,10 +28,13 @@ namespace StockSharp.Algo.Indicators
 	/// Awesome Oscillator.
 	/// </summary>
 	/// <remarks>
-	/// http://ta.mql4.com/indicators/bills/awesome.
+	/// https://doc.stocksharp.com/topics/api/indicators/list_of_indicators/ao.html
 	/// </remarks>
-	[DisplayName("AO")]
-	[DescriptionLoc(LocalizedStrings.Str836Key)]
+	[Display(
+		ResourceType = typeof(LocalizedStrings),
+		Name = LocalizedStrings.AOKey,
+		Description = LocalizedStrings.AwesomeOscillatorKey)]
+	[Doc("topics/api/indicators/list_of_indicators/ao.html")]
 	public class AwesomeOscillator : BaseIndicator
 	{
 		/// <summary>
@@ -39,6 +44,9 @@ namespace StockSharp.Algo.Indicators
 			: this(new SimpleMovingAverage { Length = 34 }, new SimpleMovingAverage { Length = 5 })
 		{
 		}
+
+		/// <inheritdoc />
+		public override int NumValuesToInitialize => Math.Max(LongMa.NumValuesToInitialize, Math.Max(ShortMa.NumValuesToInitialize, MedianPrice.NumValuesToInitialize));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AwesomeOscillator"/>.
@@ -52,43 +60,46 @@ namespace StockSharp.Algo.Indicators
 			MedianPrice = new MedianPrice();
 		}
 
+		/// <inheritdoc />
+		public override IndicatorMeasures Measure => IndicatorMeasures.MinusOnePlusOne;
+
 		/// <summary>
 		/// Long moving average.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayNameLoc(LocalizedStrings.Str798Key)]
-		[DescriptionLoc(LocalizedStrings.Str799Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.LongMaKey,
+			Description = LocalizedStrings.LongMaDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public SimpleMovingAverage LongMa { get; }
 
 		/// <summary>
 		/// Short moving average.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayNameLoc(LocalizedStrings.Str800Key)]
-		[DescriptionLoc(LocalizedStrings.Str799Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.ShortMaKey,
+			Description = LocalizedStrings.ShortMaDescKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public SimpleMovingAverage ShortMa { get; }
 
 		/// <summary>
 		/// Median price.
 		/// </summary>
 		[TypeConverter(typeof(ExpandableObjectConverter))]
-		[DisplayNameLoc(LocalizedStrings.Str843Key)]
-		[DescriptionLoc(LocalizedStrings.Str745Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.MedPriceKey,
+			Description = LocalizedStrings.MedianPriceKey,
+			GroupName = LocalizedStrings.GeneralKey)]
 		public MedianPrice MedianPrice { get; }
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
-		public override bool IsFormed => LongMa.IsFormed;
+		/// <inheritdoc />
+		protected override bool CalcIsFormed() => LongMa.IsFormed;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		protected override IIndicatorValue OnProcess(IIndicatorValue input)
 		{
 			var mpValue = MedianPrice.Process(input);
@@ -99,30 +110,24 @@ namespace StockSharp.Algo.Indicators
 			return new DecimalIndicatorValue(this, sValue - lValue);
 		}
 
-		/// <summary>
-		/// Load settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Load(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Load(SettingsStorage storage)
 		{
-			base.Load(settings);
+			base.Load(storage);
 
-			LongMa.LoadNotNull(settings, nameof(LongMa));
-			ShortMa.LoadNotNull(settings, nameof(ShortMa));
-			MedianPrice.LoadNotNull(settings, nameof(MedianPrice));
+			LongMa.LoadIfNotNull(storage, nameof(LongMa));
+			ShortMa.LoadIfNotNull(storage, nameof(ShortMa));
+			MedianPrice.LoadIfNotNull(storage, nameof(MedianPrice));
 		}
 
-		/// <summary>
-		/// Save settings.
-		/// </summary>
-		/// <param name="settings">Settings storage.</param>
-		public override void Save(SettingsStorage settings)
+		/// <inheritdoc />
+		public override void Save(SettingsStorage storage)
 		{
-			base.Save(settings);
+			base.Save(storage);
 
-			settings.SetValue(nameof(LongMa), LongMa.Save());
-			settings.SetValue(nameof(ShortMa), ShortMa.Save());
-			settings.SetValue(nameof(MedianPrice), MedianPrice.Save());
+			storage.SetValue(nameof(LongMa), LongMa.Save());
+			storage.SetValue(nameof(ShortMa), ShortMa.Save());
+			storage.SetValue(nameof(MedianPrice), MedianPrice.Save());
 		}
 	}
 }

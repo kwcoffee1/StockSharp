@@ -1,53 +1,45 @@
-#region S# License
-/******************************************************************************************
-NOTICE!!!  This program and source code is owned and licensed by
-StockSharp, LLC, www.stocksharp.com
-Viewing or use of this code requires your acceptance of the license
-agreement found at https://github.com/StockSharp/StockSharp/blob/master/LICENSE
-Removal of this comment is a violation of the license agreement.
-
-Project: StockSharp.Algo.Testing.Algo
-File: HistoryMessageAdapter.cs
-Created: 2015, 11, 11, 2:32 PM
-
-Copyright 2010 by StockSharp, LLC
-*******************************************************************************************/
-#endregion S# License
 namespace StockSharp.Algo.Testing
 {
 	using System;
 	using System.Collections.Generic;
 	using System.Linq;
+	using System.Threading;
 
 	using Ecng.Collections;
 	using Ecng.Common;
-
-	using MoreLinq;
+	using Ecng.ComponentModel;
 
 	using StockSharp.Algo.Storages;
 	using StockSharp.BusinessEntities;
 	using StockSharp.Messages;
 	using StockSharp.Localization;
-
-	using SourceKey = System.Tuple<Messages.SecurityId, Messages.MarketDataTypes, object>;
+	using StockSharp.Logging;
 
 	/// <summary>
 	/// The adapter, receiving messages form the storage <see cref="IStorageRegistry"/>.
 	/// </summary>
 	public class HistoryMessageAdapter : MessageAdapter
 	{
-		private readonly Dictionary<SourceKey, MarketDataGenerator> _generators = new Dictionary<SourceKey, MarketDataGenerator>();
-		private readonly Dictionary<SourceKey, Func<DateTimeOffset, IEnumerable<Message>>> _historySources = new Dictionary<SourceKey, Func<DateTimeOffset, IEnumerable<Message>>>();
+		private readonly Dictionary<(SecurityId secId, DataType dataType), (MarketDataGenerator generator, long transId)> _generators = new();
+		private readonly Dictionary<(SecurityId secId, DataType dataType), Func<DateTimeOffset, IEnumerable<Message>>> _historySources = new();
 
-		private readonly CachedBasketMarketDataStorage<Message> _basketStorage;
+		private readonly List<Tuple<IMarketDataStorage, long>> _actions = new();
+		private readonly SyncObject _moveNextSyncRoot = new();
+		private readonly SyncObject _syncRoot = new();
 
-		private bool _isSuspended;
+		private readonly BasketMarketDataStorage<Message> _basketStorage = new();
+
+		private CancellationTokenSource _cancellationToken;
+
+		private bool _isChanged;
 		private bool _isStarted;
 
 		/// <summary>
 		/// The number of loaded events.
 		/// </summary>
 		public int LoadedMessageCount { get; private set; }
+
+		private int _postTradeMarketTimeChangedCount = 2;
 
 		/// <summary>
 		/// The number of the event <see cref="IConnector.MarketTimeChanged"/> calls after end of trading. By default it is equal to 2.
@@ -57,8 +49,14 @@ namespace StockSharp.Algo.Testing
 		/// </remarks>
 		public int PostTradeMarketTimeChangedCount
 		{
-			get => _basketStorage.PostTradeMarketTimeChangedCount;
-			set => _basketStorage.PostTradeMarketTimeChangedCount = value;
+			get => _postTradeMarketTimeChangedCount;
+			set
+			{
+				if (value < 0)
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
+
+				_postTradeMarketTimeChangedCount = value;
+			}
 		}
 
 		/// <summary>
@@ -83,55 +81,21 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		public ISecurityProvider SecurityProvider { get; }
 
+		private TimeSpan _marketTimeChangedInterval = TimeSpan.FromSeconds(1);
+
 		/// <summary>
 		/// The interval of message <see cref="TimeMessage"/> generation. By default, it is equal to 1 sec.
 		/// </summary>
-		[CategoryLoc(LocalizedStrings.Str186Key)]
-		[DisplayNameLoc(LocalizedStrings.TimeIntervalKey)]
-		[DescriptionLoc(LocalizedStrings.Str195Key)]
-		public virtual TimeSpan MarketTimeChangedInterval
+		public TimeSpan MarketTimeChangedInterval
 		{
-			get => _basketStorage.MarketTimeChangedInterval;
-			set => _basketStorage.MarketTimeChangedInterval = value;
-		}
-
-		/// <summary>
-		/// Default value of <see cref="MaxMessageCount"/>.
-		/// </summary>
-		public const int DefaultMaxMessageCount = 1000000;
-
-		/// <summary>
-		/// The maximal size of the message queue, up to which history data are read. By default, it is equal to <see cref="DefaultMaxMessageCount"/>.
-		/// </summary>
-		public int MaxMessageCount
-		{
-			get => _basketStorage.MaxMessageCount;
-			set => _basketStorage.MaxMessageCount = value;
-		}
-
-		/// <summary>
-		/// Initializes a new instance of the <see cref="HistoryMessageAdapter"/>.
-		/// </summary>
-		/// <param name="transactionIdGenerator">Transaction id generator.</param>
-		public HistoryMessageAdapter(IdGenerator transactionIdGenerator)
-			: base(transactionIdGenerator)
-		{
-			_basketStorage = new CachedBasketMarketDataStorage<Message>(transactionIdGenerator)
+			get => _marketTimeChangedInterval;
+			set
 			{
-				Boards = Enumerable.Empty<ExchangeBoard>(),
-				Parent = this
-			};
+				if (value <= TimeSpan.Zero)
+					throw new ArgumentOutOfRangeException(nameof(value), value, LocalizedStrings.InvalidValue);
 
-			MaxMessageCount = DefaultMaxMessageCount;
-
-			StartDate = DateTimeOffset.MinValue;
-			StopDate = DateTimeOffset.MaxValue;
-
-			this.AddMarketDataSupport();
-			this.AddSupportedMessage(ExtendedMessageTypes.EmulationState);
-			this.AddSupportedMessage(ExtendedMessageTypes.HistorySource);
-			this.AddSupportedMessage(ExtendedMessageTypes.Generator);
-			this.AddSupportedMessage(ExtendedMessageTypes.ChangeTimeInterval);
+				_marketTimeChangedInterval = value;
+			}
 		}
 
 		/// <summary>
@@ -140,14 +104,18 @@ namespace StockSharp.Algo.Testing
 		/// <param name="transactionIdGenerator">Transaction id generator.</param>
 		/// <param name="securityProvider">The provider of information about instruments.</param>
 		public HistoryMessageAdapter(IdGenerator transactionIdGenerator, ISecurityProvider securityProvider)
-			: this(transactionIdGenerator)
+			: base(transactionIdGenerator)
 		{
 			SecurityProvider = securityProvider;
 
-			_basketStorage.Boards = SecurityProvider
-				.LookupAll()
-				.Select(s => s.Board)
-				.Distinct();
+			StartDate = DateTimeOffset.MinValue;
+			StopDate = DateTimeOffset.MaxValue;
+			GenerateOrderBookFromLevel1 = false;
+
+			this.AddMarketDataSupport();
+			this.AddSupportedMessage(MessageTypes.EmulationState, null);
+			this.AddSupportedMessage(ExtendedMessageTypes.HistorySource, true);
+			this.AddSupportedMessage(ExtendedMessageTypes.Generator, true);
 		}
 
 		/// <summary>
@@ -163,11 +131,21 @@ namespace StockSharp.Algo.Testing
 		/// <summary>
 		/// Check loading dates are they tradable.
 		/// </summary>
-		public bool CheckTradableDates
+		public bool CheckTradableDates { get; set; }
+
+		/// <summary>
+		/// <see cref="BasketMarketDataStorage{T}.Cache"/>.
+		/// </summary>
+		public MarketDataStorageCache StorageCache
 		{
-			get => _basketStorage.CheckTradableDates;
-			set => _basketStorage.CheckTradableDates = value;
+			get => _basketStorage.Cache;
+			set => _basketStorage.Cache = value;
 		}
+
+		/// <summary>
+		/// <see cref="MarketDataStorageCache"/>.
+		/// </summary>
+		public MarketDataStorageCache AdapterCache { get; set; }
 
 		/// <summary>
 		/// Order book builders.
@@ -181,10 +159,8 @@ namespace StockSharp.Algo.Testing
 		}
 
 		private DateTimeOffset _currentTime;
-		
-		/// <summary>
-		/// The current time.
-		/// </summary>
+
+		/// <inheritdoc />
 		public override DateTimeOffset CurrentTime => _currentTime;
 
 		/// <summary>
@@ -192,15 +168,15 @@ namespace StockSharp.Algo.Testing
 		/// </summary>
 		protected override void DisposeManaged()
 		{
-			_basketStorage.Dispose();
+			Stop();
 
 			base.DisposeManaged();
 		}
 
-		private IEnumerable<MarketDataTypes> _supportedMarketDataTypes;
+		private IEnumerable<DataType> _supportedMarketDataTypes;
 
 		/// <inheritdoc />
-		public override IEnumerable<MarketDataTypes> SupportedMarketDataTypes
+		public override IEnumerable<DataType> SupportedMarketDataTypes
 		{
 			get
 			{
@@ -208,83 +184,80 @@ namespace StockSharp.Algo.Testing
 				{
 					var drive = DriveInternal;
 
-					var dataTypes = drive.GetAvailableDataTypes(default(SecurityId), StorageFormat);
+					var dataTypes = drive.GetAvailableDataTypes(default, StorageFormat);
 
 					_supportedMarketDataTypes = dataTypes
-						.Select(dt => dt.ToMarketDataType())
-						.Where(t => t != null)
-						.Select(t => t.Value)
+						//.Select(dt => dt.ToMarketDataType())
+						//.Where(t => t != null)
+						//.Select(t => t.Value)
 						.Distinct()
 						.ToArray();
 				}
-				
+
 				return _supportedMarketDataTypes;
 			}
 		}
 
 		/// <inheritdoc />
+		public override IEnumerable<DataType> GetSupportedDataTypes(SecurityId securityId)
+			=> DriveInternal.GetAvailableDataTypes(securityId, StorageFormat);
+
+		/// <inheritdoc />
 		public override bool IsFullCandlesOnly => false;
 
 		/// <inheritdoc />
-		public override IEnumerable<TimeSpan> GetTimeFrames(SecurityId securityId = default(SecurityId))
-		{
-			return this.GetCandleArgs<TimeSpan>(typeof(TimeFrameCandleMessage), securityId);
-		}
+		public override bool IsSupportCandlesUpdates(MarketDataMessage subscription) => true;
 
 		/// <inheritdoc />
-		public override IEnumerable<object> GetCandleArgs(Type candleType, SecurityId securityId = default(SecurityId))
+		public override IEnumerable<object> GetCandleArgs(Type candleType, SecurityId securityId, DateTimeOffset? from, DateTimeOffset? to)
 		{
 			var drive = DriveInternal;
 
 			if (drive == null)
 				return Enumerable.Empty<object>();
 
-			var dataType = candleType.ToCandleMarketDataType();
-
 			var args = _historySources
-	             .Where(t => t.Key.Item2 == dataType && (t.Key.Item1 == securityId || t.Key.Item1.IsDefault()))
-	             .Select(s => s.Key.Item3)
+	             .Where(t => t.Key.dataType.MessageType == candleType && (t.Key.secId == securityId || t.Key.secId == default))
+	             .Select(s => s.Key.dataType.Arg)
 	             .ToArray();
 
 			if (args.Length > 0)
 				return args;
 
 			args = _generators
-	             .Where(t => t.Key.Item2 == dataType && (t.Key.Item1 == securityId || t.Key.Item1.IsDefault()))
-	             .Select(s => s.Key.Item3)
+	             .Where(t => t.Key.dataType.MessageType == candleType && (t.Key.secId == securityId || t.Key.secId == default))
+	             .Select(s => s.Key.dataType.Arg)
 	             .ToArray();
 
 			if (args.Length > 0)
 				return args;
 
-			return drive
-			       .GetAvailableDataTypes(securityId, StorageFormat)
-			       .Where(t => t.MessageType == candleType)
-			       .Select(t => t.Arg)
-			       .Distinct()
-			       .OrderBy()
-			       .ToArray();
+			return drive.GetCandleArgs(StorageFormat, candleType, securityId, from, to);
 		}
 
 		/// <inheritdoc />
-		protected override void OnSendInMessage(Message message)
+		public override bool IsAllDownloadingSupported(DataType dataType)
+			=> dataType == DataType.Securities || base.IsAllDownloadingSupported(dataType);
+
+		/// <inheritdoc />
+		protected override bool OnSendInMessage(Message message)
 		{
 			switch (message.Type)
 			{
 				case MessageTypes.Reset:
 				{
-					_isSuspended = false;
-					_currentTime = default(DateTimeOffset);
-
 					_generators.Clear();
 					_historySources.Clear();
 
-                    _basketStorage.Reset();
-					
+                    _currentTime = default;
+					_basketStorage.InnerStorages.Clear();
+
 					LoadedMessageCount = 0;
 
 					if (!_isStarted)
 						SendOutMessage(new ResetMessage());
+
+					_isStarted = false;
 
 					break;
 				}
@@ -292,7 +265,7 @@ namespace StockSharp.Algo.Testing
 				case MessageTypes.Connect:
 				{
 					if (_isStarted)
-						throw new InvalidOperationException(LocalizedStrings.Str1116);
+						throw new InvalidOperationException(LocalizedStrings.NotDisconnectPrevTime);
 
 					SendOutMessage(new ConnectMessage { LocalTime = StartDate });
 					break;
@@ -300,16 +273,9 @@ namespace StockSharp.Algo.Testing
 
 				case MessageTypes.Disconnect:
 				{
-					_isSuspended = false;
-
-					if(_isStarted)
-						SendOutMessage(new LastMessage { LocalTime = StopDate });
+					_isStarted = false;
 
 					SendOutMessage(new DisconnectMessage { LocalTime = StopDate });
-					//SendOutMessage(new ResetMessage());
-
-					_basketStorage.Reset();
-					_isStarted = false;
 
 					break;
 				}
@@ -318,27 +284,21 @@ namespace StockSharp.Algo.Testing
 				{
 					var lookupMsg = (SecurityLookupMessage)message;
 
-					var securities = lookupMsg.SecurityId.IsDefault() 
-							? SecurityProvider.LookupAll() 
+					var securities = lookupMsg.SecurityId == default
+							? SecurityProvider.LookupAll()
 							: SecurityProvider.Lookup(lookupMsg);
 
-					securities.ForEach(security =>
+					var processedBoards = new HashSet<ExchangeBoard>();
+
+					foreach (var security in securities)
 					{
-						SendOutMessage(security.Board.ToMessage());
+						if (security.Board != null && processedBoards.Add(security.Board))
+							SendOutMessage(security.Board.ToMessage());
 
-						var secMsg = security.ToMessage();
-						secMsg.OriginalTransactionId = lookupMsg.TransactionId;
-						SendOutMessage(secMsg);
+						SendOutMessage(security.ToMessage(originalTransactionId: lookupMsg.TransactionId));
+					}
 
-						//SendOutMessage(new Level1ChangeMessage { SecurityId = security.ToSecurityId() }
-						//	.Add(Level1Fields.StepPrice, security.StepPrice)
-						//	.Add(Level1Fields.MinPrice, security.MinPrice)
-						//	.Add(Level1Fields.MaxPrice, security.MaxPrice)
-						//	.Add(Level1Fields.MarginBuy, security.MarginBuy)
-						//	.Add(Level1Fields.MarginSell, security.MarginSell));
-					});
-
-					SendOutMessage(new SecurityLookupResultMessage { OriginalTransactionId = lookupMsg.TransactionId });
+					SendSubscriptionResult(lookupMsg);
 
 					break;
 				}
@@ -351,7 +311,7 @@ namespace StockSharp.Algo.Testing
 				{
 					var sourceMsg = (HistorySourceMessage)message;
 
-					var key = Tuple.Create(sourceMsg.SecurityId, sourceMsg.DataType, sourceMsg.Arg);
+					var key = (sourceMsg.SecurityId, sourceMsg.DataType2);
 
 					if (sourceMsg.IsSubscribe)
 						_historySources[key] = sourceMsg.GetMessages;
@@ -361,118 +321,130 @@ namespace StockSharp.Algo.Testing
 					break;
 				}
 
-				case ExtendedMessageTypes.EmulationState:
+				case MessageTypes.EmulationState:
 				{
 					var stateMsg = (EmulationStateMessage)message;
-					var isSuspended = false;
 
 					switch (stateMsg.State)
 					{
-						case EmulationStates.Starting:
+						case ChannelStates.Starting:
 						{
-							if (_isStarted)
-								_isSuspended = false;
-							else
-							{
-								_isStarted = true;
-								_basketStorage.Start(stateMsg.StartDate.IsDefault() ? StartDate : stateMsg.StartDate, stateMsg.StopDate.IsDefault() ? StopDate : stateMsg.StopDate);
-							}
+							if (!_isStarted)
+								Start(stateMsg.StartDate == default ? StartDate : stateMsg.StartDate, stateMsg.StopDate == default ? StopDate : stateMsg.StopDate);
 
 							break;
 						}
 
-						case EmulationStates.Suspending:
+						case ChannelStates.Stopping:
 						{
-							_isSuspended = true;
-							isSuspended = true;
-							break;
-						}
-
-						case EmulationStates.Stopping:
-						{
-							_isSuspended = false;
-							_basketStorage.Stop();
+							Stop();
 							break;
 						}
 					}
 
-					SendOutMessage(message);
-
-					if (isSuspended)
-						SendOutMessage(new EmulationStateMessage { State = EmulationStates.Suspended });
-
+					SendOutMessage(stateMsg);
 					break;
 				}
 
 				case ExtendedMessageTypes.Generator:
 				{
 					var generatorMsg = (GeneratorMessage)message;
-					var item = Tuple.Create(generatorMsg.SecurityId, generatorMsg.DataType, generatorMsg.Arg);
 
 					if (generatorMsg.IsSubscribe)
-						_generators.Add(item, generatorMsg.Generator);
+					{
+						_generators.Add((generatorMsg.SecurityId, generatorMsg.DataType2), (generatorMsg.Generator, generatorMsg.TransactionId));
+					}
 					else
-						_generators.Remove(item);
+					{
+						var key = _generators.FirstOrDefault(p => p.Value.transId == generatorMsg.OriginalTransactionId).Key;
+
+						if (key != default)
+							_generators.Remove(key);
+					}
 
 					break;
 				}
 
-				case ExtendedMessageTypes.ChangeTimeInterval:
-				{
-					var intervalMsg = (ChangeTimeIntervalMessage)message;
-					_basketStorage.MarketTimeChangedInterval = intervalMsg.Interval;
-					break;
-				}
+				default:
+					return false;
 			}
 
-			//SendOutMessage(message);
+			return true;
 		}
 
 		private void ProcessMarketDataMessage(MarketDataMessage message)
 		{
-			var securityId = message.SecurityId;
-			var security = SecurityProvider.LookupById(securityId);
-
-			if (security == null)
+			void AddStorage(IMarketDataStorage storage, long transactionId)
 			{
-				RaiseMarketDataMessage(message, new InvalidOperationException(LocalizedStrings.Str704Params.Put(securityId)));
-				return;
+				if (storage == null)
+					throw new ArgumentNullException(nameof(storage));
+
+				if (transactionId == 0)
+					throw new ArgumentNullException(nameof(transactionId));
+
+				this.AddInfoLog("Add storage: {0}/{1} {2}-{3}", storage.SecurityId, storage.DataType, storage.GetFromDate(), storage.GetToDate());
+
+				_isChanged = true;
+				_actions.Add(Tuple.Create(storage, transactionId));
+
+				_syncRoot.PulseSignal();
 			}
+
+			void RemoveStorage(long originalTransactionId)
+			{
+				if (originalTransactionId == 0)
+					throw new ArgumentNullException(nameof(originalTransactionId));
+
+				_isChanged = true;
+				_actions.Add(Tuple.Create((IMarketDataStorage)null, originalTransactionId));
+
+				_syncRoot.PulseSignal();
+			}
+
+			var isSubscribe = message.IsSubscribe;
+			var securityId = message.SecurityId;
+			var dataType = message.DataType2;
+			var transId = message.TransactionId;
+			var originId = message.OriginalTransactionId;
+
+			// security check must be done Start thread's loop
+			//if (SecurityProvider.LookupById(securityId) == null)
+			//{
+			//	SendSubscriptionReply(transId, new InvalidOperationException(LocalizedStrings.SecurityNoFound.Put(securityId)));
+			//	return;
+			//}
 
 			if (StorageRegistry == null)
 			{
-				RaiseMarketDataMessage(message, new InvalidOperationException(LocalizedStrings.Str1117Params.Put(message.DataType, securityId)));
+				SendSubscriptionReply(transId, new InvalidOperationException(LocalizedStrings.NotSupportedDataForSecurity.Put(dataType, securityId)));
 				return;
 			}
 
 			Func<DateTimeOffset, IEnumerable<Message>> GetHistorySource()
 			{
 				Func<DateTimeOffset, IEnumerable<Message>> GetHistorySource2(SecurityId s)
-				{
-					return _historySources.TryGetValue(Tuple.Create(s, message.DataType, message.Arg));
-				}
+					=> _historySources.TryGetValue((s, dataType));
 
-				return GetHistorySource2(message.SecurityId) ?? GetHistorySource2(default(SecurityId));
+				return GetHistorySource2(securityId) ?? GetHistorySource2(default);
 			}
+
+			bool HasGenerator(DataType dt) => _generators.ContainsKey((securityId, dt));
 
 			Exception error = null;
 
-			switch (message.DataType)
+			if (dataType == DataType.Level1)
 			{
-				case MarketDataTypes.Level1:
+				if (isSubscribe)
 				{
-					if (_generators.ContainsKey(Tuple.Create(message.SecurityId, message.DataType, message.Arg)))
-						break;
-
-					if (message.IsSubscribe)
+					if (!HasGenerator(dataType))
 					{
 						var historySource = GetHistorySource();
 
 						if (historySource == null)
 						{
-							_basketStorage.AddStorage(StorageRegistry.GetLevel1MessageStorage(security, Drive, StorageFormat), message.TransactionId);
+							AddStorage(StorageRegistry.GetLevel1MessageStorage(securityId, Drive, StorageFormat), transId);
 
-							//BasketStorage.AddStorage(new InMemoryMarketDataStorage<ClearingMessage>(security, null, date => new[]
+							//AddStorage(new InMemoryMarketDataStorage<ClearingMessage>(security, null, date => new[]
 							//{
 							//	new ClearingMessage
 							//	{
@@ -484,167 +456,393 @@ namespace StockSharp.Algo.Testing
 						}
 						else
 						{
-							_basketStorage.AddStorage(new InMemoryMarketDataStorage<Level1ChangeMessage>(security, null, historySource), message.TransactionId);
+							AddStorage(new InMemoryMarketDataStorage<Level1ChangeMessage>(securityId, null, historySource), transId);
 						}
 					}
-					else
-					{
-						_basketStorage.RemoveStorage(message.OriginalTransactionId);
-						//BasketStorage.RemoveStorage<InMemoryMarketDataStorage<ClearingMessage>>(security, ExtendedMessageTypes.Clearing, null);
-					}
-
-					break;
 				}
-
-				case MarketDataTypes.MarketDepth:
+				else
 				{
-					if (_generators.ContainsKey(Tuple.Create(message.SecurityId, message.DataType, message.Arg)))
-						break;
-
-					if (message.IsSubscribe)
+					RemoveStorage(originId);
+					//RemoveStorage<InMemoryMarketDataStorage<ClearingMessage>>(security, ExtendedMessageTypes.Clearing, null);
+				}
+			}
+			else if (dataType == DataType.MarketDepth)
+			{
+				if (isSubscribe)
+				{
+					if (!HasGenerator(dataType))
 					{
 						var historySource = GetHistorySource();
 
-						_basketStorage.AddStorage(historySource == null
-							? StorageRegistry.GetQuoteMessageStorage(security, Drive, StorageFormat)
-							: new InMemoryMarketDataStorage<QuoteChangeMessage>(security, null, historySource),
-							message.TransactionId);
+						AddStorage(historySource == null
+							? StorageRegistry.GetQuoteMessageStorage(securityId, Drive, StorageFormat, message.DoNotBuildOrderBookIncrement)
+							: new InMemoryMarketDataStorage<QuoteChangeMessage>(securityId, null, historySource),
+							transId);
 					}
-					else
-						_basketStorage.RemoveStorage(message.OriginalTransactionId);
-					
-					break;
 				}
-
-				case MarketDataTypes.Trades:
+				else
+					RemoveStorage(originId);
+			}
+			else if (dataType == DataType.Ticks)
+			{
+				if (isSubscribe)
 				{
-					if (_generators.ContainsKey(Tuple.Create(message.SecurityId, message.DataType, message.Arg)))
-						break;
-
-					if (message.IsSubscribe)
+					if (!HasGenerator(dataType))
 					{
 						var historySource = GetHistorySource();
 
-						_basketStorage.AddStorage(historySource == null
-							? StorageRegistry.GetTickMessageStorage(security, Drive, StorageFormat)
-							: new InMemoryMarketDataStorage<ExecutionMessage>(security, null, historySource),
-							message.TransactionId);
+						AddStorage(historySource == null
+							? StorageRegistry.GetTickMessageStorage(securityId, Drive, StorageFormat)
+							: new InMemoryMarketDataStorage<ExecutionMessage>(securityId, null, historySource),
+							transId);
 					}
-					else
-						_basketStorage.RemoveStorage(message.OriginalTransactionId);
-					
-					break;
 				}
-
-				case MarketDataTypes.OrderLog:
+				else
+					RemoveStorage(originId);
+			}
+			else if (dataType == DataType.OrderLog)
+			{
+				if (isSubscribe)
 				{
-					if (_generators.ContainsKey(Tuple.Create(message.SecurityId, message.DataType, message.Arg)))
-						break;
-
-					if (message.IsSubscribe)
+					if (!HasGenerator(dataType))
 					{
 						var historySource = GetHistorySource();
 
-						_basketStorage.AddStorage(historySource == null
-							? StorageRegistry.GetOrderLogMessageStorage(security, Drive, StorageFormat)
-							: new InMemoryMarketDataStorage<ExecutionMessage>(security, null, historySource),
-							message.TransactionId);
+						AddStorage(historySource == null
+							? StorageRegistry.GetOrderLogMessageStorage(securityId, Drive, StorageFormat)
+							: new InMemoryMarketDataStorage<ExecutionMessage>(securityId, null, historySource),
+							transId);
 					}
-					else
-						_basketStorage.RemoveStorage(message.OriginalTransactionId);
-
-					break;
 				}
-
-				case MarketDataTypes.CandleTimeFrame:
-				case MarketDataTypes.CandleTick:
-				case MarketDataTypes.CandleVolume:
-				case MarketDataTypes.CandleRange:
-				case MarketDataTypes.CandlePnF:
-				case MarketDataTypes.CandleRenko:
+				else
+					RemoveStorage(originId);
+			}
+			else if (dataType.IsCandles)
+			{
+				if (isSubscribe)
 				{
-					if (_generators.ContainsKey(Tuple.Create(message.SecurityId, MarketDataTypes.Trades, message.Arg)))
+					if (HasGenerator(DataType.Ticks))
 					{
-						if (message.IsSubscribe)
-							SendOutMarketDataNotSupported(message.TransactionId);
-
+						SendSubscriptionNotSupported(transId);
 						return;
 					}
 
-					if (message.IsSubscribe)
-					{
-						var historySource = GetHistorySource();
-						var candleType = message.DataType.ToCandleMessage();
+					var historySource = GetHistorySource();
+					var candleType = dataType.MessageType;
+					var arg = message.GetArg();
 
-						_basketStorage.AddStorage(historySource == null
-							? StorageRegistry.GetCandleMessageStorage(candleType, security, message.Arg, Drive, StorageFormat)
-							: new InMemoryMarketDataStorage<CandleMessage>(security, message.Arg, historySource, candleType),
-							message.TransactionId);
-					}
-					else
-						_basketStorage.RemoveStorage(message.OriginalTransactionId);
-
-					break;
+					AddStorage(historySource == null
+							? StorageRegistry.GetCandleMessageStorage(candleType, securityId, arg, Drive, StorageFormat)
+							: new InMemoryMarketDataStorage<CandleMessage>(securityId, arg, historySource, candleType),
+						transId);
 				}
-
-				default:
-					error = new InvalidOperationException(LocalizedStrings.Str1118Params.Put(message.DataType));
-					break;
+				else
+					RemoveStorage(originId);
+			}
+			else
+			{
+				error = new InvalidOperationException(LocalizedStrings.NotSupportedDataForSecurity.Put(dataType, Messages.Extensions.AllSecurityId));
 			}
 
-			RaiseMarketDataMessage(message, error);
+			SendSubscriptionReply(transId, error);
+
+			if (isSubscribe && error == null)
+				SendSubscriptionResult(message);
 		}
 
-		private void RaiseMarketDataMessage(MarketDataMessage message, Exception error)
+		private BoardMessage[] GetBoard()
+			=> SecurityProvider
+			.LookupAll()
+			.Select(s => s.Board)
+			.Distinct()
+			.Select(b => b.ToMessage())
+			.ToArray();
+
+		/// <summary>
+		/// Start data loading.
+		/// </summary>
+		/// <param name="startDateTime">Datetime in history for starting the paper trading.</param>
+		/// <param name="stopDateTime">Datetime in history to stop the paper trading (date is included).</param>
+		private void Start(DateTimeOffset startDateTime, DateTimeOffset stopDateTime)
 		{
-			var reply = (MarketDataMessage)message.Clone();
-			reply.OriginalTransactionId = message.TransactionId;
-			reply.Error = error;
-			SendOutMessage(reply);
+			_isStarted = true;
+
+			_cancellationToken = new CancellationTokenSource();
+
+			ThreadingHelper
+				.ThreadInvariant(() =>
+				{
+					try
+					{
+						var messageTypes = new[] { MessageTypes.Time/*, ExtendedMessageTypes.Clearing*/ };
+						var token = _cancellationToken.Token;
+
+						BoardMessage[] boards = null;
+
+						while (!IsDisposed && !token.IsCancellationRequested)
+						{
+							_syncRoot.WaitSignal();
+
+							_isChanged = false;
+
+							_moveNextSyncRoot.PulseSignal();
+
+							foreach (var action in _actions.CopyAndClear())
+							{
+								var storage = action.Item1;
+								var subscriptionId = action.Item2;
+
+								if (storage != null)
+									_basketStorage.InnerStorages.Add(storage, subscriptionId);
+								else
+									_basketStorage.InnerStorages.Remove(subscriptionId);
+							}
+
+							boards ??= CheckTradableDates ? GetBoard() : Array.Empty<BoardMessage>();
+
+							var currentTime = _currentTime == default ? startDateTime : _currentTime;
+
+							var loadDateInUtc = currentTime.UtcDateTime.Date;
+							var stopDateInUtc = stopDateTime.UtcDateTime.Date;
+
+							var checkDates = CheckTradableDates && boards.Length > 0;
+
+							while (loadDateInUtc <= stopDateInUtc && !_isChanged && !token.IsCancellationRequested)
+							{
+								if (!checkDates || boards.Any(b => b.IsTradeDate(currentTime, true)))
+								{
+									this.AddInfoLog("Loading {0}", loadDateInUtc);
+
+									IEnumerable<Message> messages;
+									bool noData;
+
+									if (AdapterCache is not null)
+									{
+										messages = AdapterCache.GetMessages(default, default, loadDateInUtc, _basketStorage.Load);
+										noData = messages.IsEmpty();
+									}
+									else
+									{
+										var enu = _basketStorage.Load(loadDateInUtc);
+
+										// storage for the specified date contains only time messages and clearing events
+										noData = !enu.DataTypes.Except(messageTypes).Any();
+
+										messages = enu;
+									}
+
+									if (noData)
+										EnqueueMessages(startDateTime, stopDateTime, currentTime, GetSimpleTimeLine(boards, currentTime, MarketTimeChangedInterval), token);
+									else
+										EnqueueMessages(startDateTime, stopDateTime, currentTime, messages, token);
+								}
+
+								loadDateInUtc += TimeSpan.FromDays(1);
+							}
+
+							if (!_isChanged)
+							{
+								SendOutMessage(new EmulationStateMessage
+								{
+									LocalTime = stopDateTime,
+									State = ChannelStates.Stopping,
+								});
+
+								break;
+							}
+						}
+					}
+					catch (Exception ex)
+					{
+						SendOutMessage(ex.ToErrorMessage());
+
+						SendOutMessage(new EmulationStateMessage
+						{
+							LocalTime = stopDateTime,
+							State = ChannelStates.Stopping,
+							Error = ex,
+						});
+					}
+				})
+				.Name(Name)
+				.Launch();
 		}
 
 		/// <summary>
-		/// Send next outgoing message.
+		/// Stop data loading.
 		/// </summary>
-		/// <returns><see langword="true" />, if message was sent, otherwise, <see langword="false" />.</returns>
-		public bool SendOutMessage()
+		private void Stop()
 		{
-			if (!_isStarted || _isSuspended)
-				return false;
-
-			if (!_basketStorage.MoveNext())
-				return false;
-
-			var msg = _basketStorage.Current;
-
-			SendOutMessage(msg);
-
-			return true;
+			_cancellationToken?.Cancel();
+			_syncRoot.PulseSignal();
 		}
 
-		/// <summary>
-		/// Send outgoing message and raise <see cref="MessageAdapter.NewOutMessage"/> event.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		public override void SendOutMessage(Message message)
+		private void EnqueueMessages(DateTimeOffset fromTime, DateTimeOffset toTime, DateTimeOffset curTime, IEnumerable<Message> messages, CancellationToken token)
+		{
+			foreach (var msg in messages)
+			{
+				if (_isChanged || token.IsCancellationRequested)
+					break;
+
+				var msgServerTime = ((IServerTimeMessage)msg).ServerTime;
+
+				if (msgServerTime < curTime)
+					continue;
+
+				msg.LocalTime = msgServerTime;
+
+				if (msg.LocalTime < fromTime)
+				{
+					// не пропускаем только стаканы, тики и ОЛ
+					if (msg.Type is MessageTypes.QuoteChange or MessageTypes.Execution)
+						continue;
+				}
+
+				if (msg.LocalTime > toTime)
+					break;
+
+				SendOutMessage(msg);
+			}
+		}
+
+		private static IEnumerable<(BoardMessage, Range<TimeSpan>)> GetOrderedRanges(BoardMessage[] boards, DateTimeOffset date)
+		{
+			if (boards is null)
+				throw new ArgumentNullException(nameof(boards));
+
+			var orderedRanges = boards
+				.Where(b => b.IsTradeDate(date, true))
+				.SelectMany(board =>
+				{
+					var period = board.WorkingTime.GetPeriod(date.ToLocalTime(board.TimeZone));
+
+					return period == null || period.Times.Count == 0
+						       ? new[] { (board, new Range<TimeSpan>(TimeSpan.Zero, TimeHelper.LessOneDay)) }
+						       : period.Times.Select(t => (board, ToUtc(board, t)));
+				})
+				.OrderBy(i => i.Item2.Min)
+				.ToList();
+
+			for (var i = 0; i < orderedRanges.Count - 1; )
+			{
+				if (orderedRanges[i].Item2.Contains(orderedRanges[i + 1].Item2))
+				{
+					orderedRanges.RemoveAt(i + 1);
+				}
+				else if (orderedRanges[i + 1].Item2.Contains(orderedRanges[i].Item2))
+				{
+					orderedRanges.RemoveAt(i);
+				}
+				else if (orderedRanges[i].Item2.Intersect(orderedRanges[i + 1].Item2) != null)
+				{
+					orderedRanges[i] = (orderedRanges[i].board, new Range<TimeSpan>(orderedRanges[i].Item2.Min, orderedRanges[i + 1].Item2.Max));
+					orderedRanges.RemoveAt(i + 1);
+				}
+				else
+					i++;
+			}
+
+			return orderedRanges;
+		}
+
+		private static Range<TimeSpan> ToUtc(BoardMessage board, Range<TimeSpan> range)
+		{
+			var min = DateTime.MinValue + range.Min;
+			var max = DateTime.MinValue + range.Max;
+
+			var utcMin = min.To(board.TimeZone);
+			var utcMax = max.To(board.TimeZone);
+
+			return new Range<TimeSpan>(utcMin.TimeOfDay, utcMax.TimeOfDay);
+		}
+
+		/*
+		private IEnumerable<TimeMessage> GetTimeLine(BoardMessage[] boards, DateTimeOffset date, TimeSpan interval)
+		{
+			var ranges = GetOrderedRanges(boards, date);
+			var lastTime = TimeSpan.Zero;
+
+			foreach (var range in ranges)
+			{
+				for (var time = range.Item2.Min; time <= range.Item2.Max; time += interval)
+				{
+					var serverTime = GetTime(date, time);
+
+					if (serverTime.Date < date.Date)
+						continue;
+
+					lastTime = serverTime.TimeOfDay;
+					yield return new TimeMessage { ServerTime = serverTime };
+				}
+			}
+
+			foreach (var m in GetPostTradeTimeMessages(date, lastTime, interval))
+			{
+				yield return m;
+			}
+		}
+		*/
+
+		private IEnumerable<TimeMessage> GetSimpleTimeLine(BoardMessage[] boards, DateTimeOffset date, TimeSpan interval)
+		{
+			var ranges = GetOrderedRanges(boards, date);
+			var lastTime = TimeSpan.Zero;
+
+			foreach (var range in ranges)
+			{
+				var time = GetTime(date, range.Item2.Min);
+				if (time.Date >= date.Date)
+					yield return new TimeMessage { ServerTime = time };
+
+				time = GetTime(date, range.Item2.Max);
+				if (time.Date >= date.Date)
+					yield return new TimeMessage { ServerTime = time };
+
+				lastTime = range.Item2.Max;
+			}
+
+			foreach (var m in GetPostTradeTimeMessages(date, lastTime, interval))
+			{
+				yield return m;
+			}
+		}
+
+		private static DateTimeOffset GetTime(DateTimeOffset date, TimeSpan timeOfDay)
+		{
+			return (date.Date + timeOfDay).ApplyTimeZone(date.Offset);
+		}
+
+		private IEnumerable<TimeMessage> GetPostTradeTimeMessages(DateTimeOffset date, TimeSpan lastTime, TimeSpan interval)
+		{
+			for (var i = 0; i < PostTradeMarketTimeChangedCount; i++)
+			{
+				lastTime += interval;
+
+				if (lastTime > TimeHelper.LessOneDay)
+					break;
+
+				yield return new TimeMessage
+				{
+					ServerTime = GetTime(date, lastTime)
+				};
+			}
+		}
+
+		/// <inheritdoc />
+		protected override void SendOutMessage(Message message)
 		{
 			LoadedMessageCount++;
-			
-			var serverTime = message.TryGetServerTime();
 
-			if (serverTime != null)
-				_currentTime = serverTime.Value;
+			if (message.TryGetServerTime(out var serverTime))
+				_currentTime = serverTime;
 
 			base.SendOutMessage(message);
 		}
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
-			return LocalizedStrings.Str1127Params.Put(StartDate, StopDate);
+			return $"Hist: {StartDate}-{StopDate}";
 		}
 	}
 }

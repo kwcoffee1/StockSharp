@@ -1,7 +1,6 @@
 namespace StockSharp.Algo.Strategies
 {
 	using System;
-	using System.Collections.Generic;
 
 	using Ecng.Common;
 
@@ -12,6 +11,16 @@ namespace StockSharp.Algo.Strategies
 	/// </summary>
 	public static class StrategyParamHelper
 	{
+		private static StrategyParam<T> TryAdd<T>(this Strategy strategy, StrategyParam<T> p)
+		{
+			if (strategy is null)
+				throw new ArgumentNullException(nameof(strategy));
+
+			strategy.Parameters.Add(p);
+
+			return p;
+		}
+
 		/// <summary>
 		/// Initializes a new instance of the <see cref="StrategyParam{T}"/>.
 		/// </summary>
@@ -20,9 +29,9 @@ namespace StockSharp.Algo.Strategies
 		/// <param name="name">Parameter name.</param>
 		/// <param name="initialValue">The initial value.</param>
 		/// <returns>The strategy parameter.</returns>
-		public static StrategyParam<T> Param<T>(this Strategy strategy, string name, T initialValue = default(T))
+		public static StrategyParam<T> Param<T>(this Strategy strategy, string name, T initialValue = default)
 		{
-			return new StrategyParam<T>(strategy, name, initialValue);
+			return strategy.TryAdd(new StrategyParam<T>(name, initialValue));
 		}
 
 		/// <summary>
@@ -34,13 +43,13 @@ namespace StockSharp.Algo.Strategies
 		/// <param name="name">Parameter name.</param>
 		/// <param name="initialValue">The initial value.</param>
 		/// <returns>The strategy parameter.</returns>
-		public static StrategyParam<T> Param<T>(this Strategy strategy, string id, string name, T initialValue = default(T))
+		public static StrategyParam<T> Param<T>(this Strategy strategy, string id, string name, T initialValue = default)
 		{
-			return new StrategyParam<T>(strategy, id, name, initialValue);
+			return strategy.TryAdd(new StrategyParam<T>(id, name, initialValue));
 		}
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="StrategyParam{T}"/>.
+		/// Fill optimization parameters.
 		/// </summary>
 		/// <typeparam name="T">The type of the parameter value.</typeparam>
 		/// <param name="param">The strategy parameter.</param>
@@ -48,7 +57,7 @@ namespace StockSharp.Algo.Strategies
 		/// <param name="optimizeTo">The To value at optimization.</param>
 		/// <param name="optimizeStep">The Increment value at optimization.</param>
 		/// <returns>The strategy parameter.</returns>
-		public static StrategyParam<T> Optimize<T>(this StrategyParam<T> param, T optimizeFrom = default(T), T optimizeTo = default(T), T optimizeStep = default(T))
+		public static StrategyParam<T> Optimize<T>(this StrategyParam<T> param, T optimizeFrom = default, T optimizeTo = default, T optimizeStep = default)
 		{
 			if (param == null)
 				throw new ArgumentNullException(nameof(param));
@@ -61,22 +70,64 @@ namespace StockSharp.Algo.Strategies
 		}
 
 		/// <summary>
+		/// Set <see cref="StrategyParam{T}.CanOptimize"/> value.
+		/// </summary>
+		/// <typeparam name="T">The type of the parameter value.</typeparam>
+		/// <param name="param">The strategy parameter.</param>
+		/// <param name="canOptimize">The value of <see cref="StrategyParam{T}.CanOptimize"/>.</param>
+		/// <returns>The strategy parameter.</returns>
+		public static StrategyParam<T> CanOptimize<T>(this StrategyParam<T> param, bool canOptimize)
+		{
+			if (param == null)
+				throw new ArgumentNullException(nameof(param));
+
+			param.CanOptimize = canOptimize;
+
+			return param;
+		}
+
+		/// <summary>
 		/// Check can optimize parameter.
 		/// </summary>
-		/// <param name="parameter">Strategy parameter.</param>
-		/// <param name="excludeParameters">Excluded parameters.</param>
+		/// <param name="type">The type of the parameter value.</param>
 		/// <returns><see langword="true" />, if can optimize the parameter, otherwise, <see langword="false" />.</returns>
-		public static bool CanOptimize(this IStrategyParam parameter, ISet<string> excludeParameters)
+		public static bool CanOptimize(this Type type)
 		{
-			if (parameter == null)
-				throw new ArgumentNullException(nameof(parameter));
+			if (type is null)
+				throw new ArgumentNullException(nameof(type));
 
-			if (excludeParameters == null)
-				throw new ArgumentNullException(nameof(excludeParameters));
+			if (type.IsNullable())
+				type = type.GetUnderlyingType();
 
-			var type = parameter.Value.GetType();
+			return type.IsNumeric() && !type.IsEnum() || type == typeof(bool) || type == typeof(Unit) || type == typeof(TimeSpan);
+		}
 
-			return (type.IsNumeric() && !type.IsEnum() || type == typeof(Unit)) && !excludeParameters.Contains(parameter.Name);
+		/// <summary>
+		/// Set not <see langword="null"/> validator.
+		/// </summary>
+		/// <typeparam name="T"><see cref="StrategyParam{T}"/> type.</typeparam>
+		/// <param name="param"><see cref="StrategyParam{T}"/></param>
+		/// <returns><see cref="StrategyParam{T}"/></returns>
+		public static StrategyParam<T> NotNull<T>(this StrategyParam<T> param)
+			=> param.SetValidator(v => v is not null);
+
+		/// <summary>
+		/// Set parameter validator.
+		/// </summary>
+		/// <typeparam name="T"><see cref="StrategyParam{T}"/> type.</typeparam>
+		/// <param name="param"><see cref="StrategyParam{T}"/></param>
+		/// <param name="validator"><see cref="StrategyParam{T}.Validator"/></param>
+		/// <returns><see cref="StrategyParam{T}"/></returns>
+		public static StrategyParam<T> SetValidator<T>(this StrategyParam<T> param, Func<T, bool> validator)
+		{
+			if (param is null)
+				throw new ArgumentNullException(nameof(param));
+
+			if (validator is null)
+				throw new ArgumentNullException(nameof(validator));
+
+			param.Validator = validator;
+			return param;
 		}
 	}
 }

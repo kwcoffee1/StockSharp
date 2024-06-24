@@ -13,10 +13,12 @@ Created: 2015, 11, 11, 2:32 PM
 Copyright 2010 by StockSharp, LLC
 *******************************************************************************************/
 #endregion S# License
+
 namespace StockSharp.Algo.Indicators
 {
 	using System;
 	using System.ComponentModel;
+	using System.ComponentModel.DataAnnotations;
 
 	using Ecng.Common;
 	using Ecng.ComponentModel;
@@ -41,21 +43,19 @@ namespace StockSharp.Algo.Indicators
 			ResultType = type.GetValueType(false);
 		}
 
-		/// <summary>
-		/// Unique ID.
-		/// </summary>
+		/// <inheritdoc />
 		[Browsable(false)]
 		public Guid Id { get; private set; } = Guid.NewGuid();
 
 		private string _name;
 
-		/// <summary>
-		/// Indicator name.
-		/// </summary>
-		[DisplayNameLoc(LocalizedStrings.NameKey)]
-		[DescriptionLoc(LocalizedStrings.Str908Key)]
-		[CategoryLoc(LocalizedStrings.GeneralKey)]
-		public virtual string Name
+		/// <inheritdoc />
+		[Display(
+			ResourceType = typeof(LocalizedStrings),
+			Name = LocalizedStrings.NameKey,
+			Description = LocalizedStrings.IndicatorNameKey,
+			GroupName = LocalizedStrings.GeneralKey)]
+		public string Name
 		{
 			get => _name;
 			set
@@ -67,12 +67,14 @@ namespace StockSharp.Algo.Indicators
 			}
 		}
 
-		/// <summary>
-		/// To reset the indicator status to initial. The method is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
+		[Browsable(false)]
+		public virtual int NumValuesToInitialize => 1;
+
+		/// <inheritdoc />
 		public virtual void Reset()
 		{
-			IsFormed = false;
+			_isFormed = false;
 			Container.ClearValues();
 			Reseted?.Invoke();
 		}
@@ -97,50 +99,58 @@ namespace StockSharp.Algo.Indicators
 			Name = storage.GetValue<string>(nameof(Name));
 		}
 
-		/// <summary>
-		/// Whether the indicator is set.
-		/// </summary>
+		/// <inheritdoc />
 		[Browsable(false)]
-		public virtual bool IsFormed { get; protected set; }
+		public virtual IndicatorMeasures Measure { get; } = IndicatorMeasures.Price;
+
+		private bool _isFormed;
+
+		/// <inheritdoc />
+		[Browsable(false)]
+		public bool IsFormed
+		{
+			get
+			{
+				if (_isFormed)
+					return true;
+
+				return _isFormed = CalcIsFormed();
+			}
+			protected set => _isFormed = value;
+		}
 
 		/// <summary>
-		/// The container storing indicator data.
+		/// Calc <see cref="IsFormed"/>.
 		/// </summary>
+		/// <returns><see cref="IsFormed"/></returns>
+		protected virtual bool CalcIsFormed() => false;
+
+		/// <inheritdoc />
 		[Browsable(false)]
 		public IIndicatorContainer Container { get; } = new IndicatorContainer();
 
-		/// <summary>
-		/// Input values type.
-		/// </summary>
+		/// <inheritdoc />
 		[Browsable(false)]
 		public virtual Type InputType { get; }
 
-		/// <summary>
-		/// Result values type.
-		/// </summary>
+		/// <inheritdoc />
 		[Browsable(false)]
 		public virtual Type ResultType { get; }
 
-		/// <summary>
-		/// The indicator change event (for example, a new value is added).
-		/// </summary>
+		/// <inheritdoc />
 		public event Action<IIndicatorValue, IIndicatorValue> Changed;
 
-		/// <summary>
-		/// The event of resetting the indicator status to initial. The event is called each time when initial settings are changed (for example, the length of period).
-		/// </summary>
+		/// <inheritdoc />
 		public event Action Reseted;
 
-		/// <summary>
-		/// To handle the input value.
-		/// </summary>
-		/// <param name="input">The input value.</param>
-		/// <returns>The resulting value.</returns>
+		/// <inheritdoc />
 		public virtual IIndicatorValue Process(IIndicatorValue input)
 		{
 			var result = OnProcess(input);
 
-			result.InputValue = input;
+			if(result.Indicator != this)
+				throw new InvalidOperationException($"invalid indicator value. expected {GetType().Name} got {result.Indicator?.GetType()}");
+
 			//var result = value as IIndicatorValue ?? input.SetValue(value);
 
 			if (input.IsFinal)
@@ -149,7 +159,7 @@ namespace StockSharp.Algo.Indicators
 				Container.AddValue(input, result);
 			}
 
-			if (IsFormed && !result.IsEmpty)
+			if (!result.IsEmpty)
 				RaiseChangedEvent(input, result);
 
 			return result;
@@ -163,7 +173,7 @@ namespace StockSharp.Algo.Indicators
 		protected abstract IIndicatorValue OnProcess(IIndicatorValue input);
 
 		/// <summary>
-		/// To call the event <see cref="BaseIndicator.Changed"/>.
+		/// To call the event <see cref="Changed"/>.
 		/// </summary>
 		/// <param name="input">The input value of the indicator.</param>
 		/// <param name="result">The resulting value of the indicator.</param>
@@ -183,17 +193,17 @@ namespace StockSharp.Algo.Indicators
 		/// </summary>
 		/// <returns>Copy.</returns>
 		public override IIndicator Clone()
-		{
-			return PersistableHelper.Clone(this);
-		}
+			=> PersistableHelper.Clone(this);
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
-		public override string ToString()
+		/// <inheritdoc />
+		public override string ToString() => Name;
+
+		/// <inheritdoc/>
+		public virtual IIndicatorValue CreateValue(object[] values)
 		{
-			return Name;
+			var value = GetType().GetValueType(false).CreateInstance<IIndicatorValue>(this);
+			value.FromValues(values);
+			return value;
 		}
 	}
 }

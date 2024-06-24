@@ -4,7 +4,6 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 	using System.Collections.Generic;
 	using System.Linq;
 	using System.Runtime.InteropServices;
-	using System.Text;
 
 	using Ecng.Common;
 	using Ecng.ComponentModel;
@@ -14,6 +13,7 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 	using StockSharp.Localization;
 	using StockSharp.Logging;
 	using StockSharp.Messages;
+	using StockSharp.Configuration;
 
 	/// <summary>
 	/// Implementation of <see cref="ISnapshotSerializer{TKey,TMessage}"/> in binary format for <see cref="ExecutionMessage"/>.
@@ -32,18 +32,15 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			public long LastChangeServerTime;
 			public long LastChangeLocalTime;
 
-			[Obsolete]
-			public long Obsolete2;
-
 			public long TransactionId;
 
 			public bool HasOrderInfo;
 			public bool HasTradeInfo;
 
-			public decimal OrderPrice;
+			public BlittableDecimal OrderPrice;
 			public long? OrderId;
 			//public long OrderUserId;
-			public decimal? OrderVolume;
+			public BlittableDecimal? OrderVolume;
 			public byte? OrderType;
 			//public byte OrderSide;
 			public byte? OrderTif;
@@ -54,8 +51,8 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			public string OrderStringId;
 
 			public long? TradeId;
-			public decimal? TradePrice;
-			public decimal? TradeVolume;
+			public BlittableDecimal? TradePrice;
+			public BlittableDecimal? TradeVolume;
 
 			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
 			public string BrokerCode;
@@ -72,64 +69,60 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			public string Error;
 
 			public short? Currency;
-			
+
 			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
 			public string DepoName;
 
 			public long? ExpiryDate;
-			
-			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
-			[Obsolete]
-			public string Obsolete1;
 
 			public byte? IsMarketMaker;
 			public byte Side;
-			
+
 			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
 			public string OrderBoardId;
 
-			public decimal? VisibleVolume;
+			public BlittableDecimal? VisibleVolume;
 			public byte? OrderState;
 			public long? OrderStatus;
-			public decimal? Balance;
-			
+			public BlittableDecimal? Balance;
+
 			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
 			public string UserOrderId;
 
+			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
+			public string StrategyId;
+
 			public byte? OriginSide;
 			public long? Latency;
-			public decimal? PnL;
-			public decimal? Position;
-			public decimal? Slippage;
-			public decimal? Commission;
+			public BlittableDecimal? PnL;
+			public BlittableDecimal? Position;
+			public BlittableDecimal? Slippage;
+			public BlittableDecimal? Commission;
 			public int? TradeStatus;
-			
+
 			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S100)]
 			public string TradeStringId;
 
-			public decimal? OpenInterest;
-			public byte? IsMargin;
+			public BlittableDecimal? OpenInterest;
+			public byte? MarginMode;
+			public byte? IsManual;
+
+			public BlittableDecimal? AveragePrice;
+			public BlittableDecimal? Yield;
+			public BlittableDecimal? MinVolume;
+			public byte? PositionEffect;
+			public byte? PostOnly;
+			public byte? Initiator;
+
+			public long SeqNum;
+			public SnapshotDataType? BuildFrom;
+
+			public int? Leverage;
 
 			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S256)]
 			public string ConditionType;
 
 			public int ConditionParamsCount;
-		}
-
-		[StructLayout(LayoutKind.Sequential, Pack = 1)]
-		private struct TransactionConditionParamV20
-		{
-			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S32)]
-			public string Name;
-
-			[MarshalAs(UnmanagedType.ByValTStr, SizeConst = Sizes.S256)]
-			public string ValueType;
-
-			public long? NumValue;
-			public decimal? DecimalValue;
-			public bool? BoolValue;
-
-			public int StringValueLen;
 		}
 
 		[StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -141,13 +134,13 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			public int ValueTypeLen;
 
 			public long? NumValue;
-			public decimal? DecimalValue;
+			public BlittableDecimal? DecimalValue;
 			public bool? BoolValue;
 
 			public int StringValueLen;
 		}
 
-		Version ISnapshotSerializer<string, ExecutionMessage>.Version { get; } = SnapshotVersions.V21;
+		Version ISnapshotSerializer<string, ExecutionMessage>.Version { get; } = SnapshotVersions.V23;
 
 		string ISnapshotSerializer<string, ExecutionMessage>.Name => "Transactions";
 
@@ -159,8 +152,8 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			if (message == null)
 				throw new ArgumentNullException(nameof(message));
 
-			if (message.ExecutionType != ExecutionTypes.Transaction)
-				throw new ArgumentOutOfRangeException(nameof(message), message.ExecutionType, LocalizedStrings.Str1695Params.Put(message));
+			if (message.DataType != DataType.Transactions)
+				throw new ArgumentOutOfRangeException(nameof(message), message.DataType, LocalizedStrings.UnknownType.Put(message));
 
 			if (message.TransactionId == 0)
 				throw new InvalidOperationException("TransId == 0");
@@ -182,56 +175,67 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 				ClientCode = message.ClientCode.VerifySize(Sizes.S100),
 				Comment = message.Comment.VerifySize(Sizes.S100),
 				SystemComment = message.SystemComment.VerifySize(Sizes.S100),
-				Currency = message.Currency == null ? (short?)null : (short)message.Currency.Value,
+				Currency = message.Currency == null ? null : (short)message.Currency.Value,
 				DepoName = message.DepoName.VerifySize(Sizes.S100),
 				Error = (message.Error?.Message).VerifySize(Sizes.S200),
 				ExpiryDate = message.ExpiryDate?.To<long>(),
-				//Obsolete1 = message.PortfolioName,
-				IsMarketMaker = message.IsMarketMaker == null ? (byte?)null : (byte)(message.IsMarketMaker.Value ? 1 : 0),
-				IsMargin = message.IsMargin == null ? (byte?)null : (byte)(message.IsMargin.Value ? 1 : 0),
+				IsMarketMaker = message.IsMarketMaker?.ToByte(),
+				MarginMode = message.MarginMode?.ToByte(),
+				IsManual = message.IsManual?.ToByte(),
 				Side = (byte)message.Side,
 				OrderId = message.OrderId,
 				OrderStringId = message.OrderStringId.VerifySize(Sizes.S100),
 				OrderBoardId = message.OrderBoardId.VerifySize(Sizes.S100),
-				OrderPrice = message.OrderPrice,
-				OrderVolume = message.OrderVolume,
-				VisibleVolume = message.VisibleVolume,
-				OrderType = message.OrderType == null ? (byte?)null : (byte)message.OrderType.Value,
-				OrderState = message.OrderState == null ? (byte?)null : (byte)message.OrderState.Value,
+				OrderPrice = (BlittableDecimal)message.OrderPrice,
+				OrderVolume = (BlittableDecimal?)message.OrderVolume,
+				VisibleVolume = (BlittableDecimal?)message.VisibleVolume,
+				OrderType = message.OrderType?.ToByte(),
+				OrderState = message.OrderState?.ToByte(),
 				OrderStatus = message.OrderStatus,
-				Balance = message.Balance,
+				Balance = (BlittableDecimal?)message.Balance,
 				UserOrderId = message.UserOrderId.VerifySize(Sizes.S100),
-				OriginSide = message.OriginSide == null ? (byte?)null : (byte)message.OriginSide.Value,
+				StrategyId = message.StrategyId.VerifySize(Sizes.S100),
+				OriginSide = message.OriginSide?.ToByte(),
 				Latency = message.Latency?.Ticks,
-				PnL = message.PnL,
-				Position = message.Position,
-				Slippage = message.Slippage,
-				Commission = message.Commission,
-				TradePrice = message.TradePrice,
-				TradeVolume = message.TradeVolume,
-				TradeStatus = message.TradeStatus,
+				PnL = (BlittableDecimal?)message.PnL,
+				Position = (BlittableDecimal?)message.Position,
+				Slippage = (BlittableDecimal?)message.Slippage,
+				Commission = (BlittableDecimal?)message.Commission,
+				TradePrice = (BlittableDecimal?)message.TradePrice,
+				TradeVolume = (BlittableDecimal?)message.TradeVolume,
+				TradeStatus = (int?)message.TradeStatus,
 				TradeId = message.TradeId,
 				TradeStringId = message.TradeStringId.VerifySize(Sizes.S100),
-				OpenInterest = message.OpenInterest,
-				IsSystem = message.IsSystem == null ? (byte?)null : (byte)(message.IsSystem.Value ? 1 : 0),
-				OrderTif = message.TimeInForce == null ? (byte?)null : (byte)message.TimeInForce.Value,
+				OpenInterest = (BlittableDecimal?)message.OpenInterest,
+				IsSystem = message.IsSystem?.ToByte(),
+				OrderTif = message.TimeInForce?.ToByte(),
+
+				AveragePrice = (BlittableDecimal?)message.AveragePrice,
+				Yield = (BlittableDecimal?)message.Yield,
+				MinVolume = (BlittableDecimal?)message.MinVolume,
+				PositionEffect = message.PositionEffect?.ToByte(),
+				PostOnly = message.PostOnly?.ToByte(),
+				Initiator = message.Initiator?.ToByte(),
+				SeqNum = message.SeqNum,
+				BuildFrom = message.BuildFrom == null ? default(SnapshotDataType?) : (SnapshotDataType)message.BuildFrom,
+				Leverage = message.Leverage,
+
 				ConditionType = (message.Condition?.GetType().GetTypeName(false)).VerifySize(Sizes.S256),
 			};
 
-			var conParams = message.Condition?.Parameters.Where(p => p.Value != null).ToArray() ?? ArrayHelper.Empty<KeyValuePair<string, object>>();
+			var conParams = message.Condition?.Parameters.Where(p => p.Value != null).ToArray() ?? Array.Empty<KeyValuePair<string, object>>();
 
 			snapshot.ConditionParamsCount = conParams.Length;
 
-			var paramSize = (version > SnapshotVersions.V20 ? typeof(TransactionConditionParamV21) : typeof(TransactionConditionParamV20)).SizeOf();
-			var snapshotSize = typeof(TransactionSnapshot).SizeOf();
+			var paramSize = typeof(TransactionConditionParamV21).SizeOf();
 
 			var result = new List<byte>();
 
-			var buffer = new byte[snapshotSize];
+			var buffer = new byte[typeof(TransactionSnapshot).SizeOf()];
 
 			var ptr = snapshot.StructToPtr();
-			Marshal.Copy(ptr, buffer, 0, snapshotSize);
-			Marshal.FreeHGlobal(ptr);
+			ptr.CopyTo(buffer);
+			ptr.FreeHGlobal();
 
 			result.AddRange(buffer);
 
@@ -241,24 +245,11 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 
 				var paramTypeName = paramType.GetTypeAsString(false);
 
-				dynamic param;
-
-				if (version > SnapshotVersions.V20)
+				var param = new TransactionConditionParamV21
 				{
-					param = new TransactionConditionParamV21
-					{
-						ValueTypeLen = Encoding.UTF8.GetBytes(paramTypeName).Length
-					};
-				}
-				else
-				{
-					param = new TransactionConditionParamV20
-					{
-						ValueType = paramTypeName.VerifySize(Sizes.S256),
-					};
-				}
-
-				param.Name = conParam.Key.VerifySize(Sizes.S32);
+					ValueTypeLen = paramTypeName.UTF8().Length,
+					Name = conParam.Key.VerifySize(Sizes.S32)
+				};
 
 				byte[] stringValue = null;
 
@@ -298,13 +289,13 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 						param.NumValue = ts.To<long>();
 						break;
 					case float f:
-						param.DecimalValue = (decimal)f;
+						param.DecimalValue = (BlittableDecimal)(decimal)f;
 						break;
 					case double d:
-						param.DecimalValue = (decimal)d;
+						param.DecimalValue = (BlittableDecimal)(decimal)d;
 						break;
 					case decimal dec:
-						param.DecimalValue = dec;
+						param.DecimalValue = (BlittableDecimal)dec;
 						break;
 					case bool bln:
 						param.BoolValue = bln;
@@ -317,13 +308,13 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 						var storage = new SettingsStorage();
 
 						if (r.HasMinValue)
-							storage.SetValue(nameof(r.Min), r.Min);
+							storage.SetValue(nameof(r.Min), r.Min.ToStorage());
 
 						if (r.HasMaxValue)
-							storage.SetValue(nameof(r.Max), r.Max);
+							storage.SetValue(nameof(r.Max), r.Max.ToStorage());
 
 						if (storage.Count > 0)
-							stringValue = new XmlSerializer<SettingsStorage>().Serialize(storage);
+							stringValue = storage.Serialize();
 
 						break;
 					}
@@ -332,12 +323,12 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 						var storage = p.Save();
 
 						if (storage.Count > 0)
-							stringValue = new XmlSerializer<SettingsStorage>().Serialize(storage);
+							stringValue = storage.Serialize();
 
 						break;
 					}
 					default:
-						stringValue = typeof(XmlSerializer<>).MakeGenericType(paramType).CreateInstance<ISerializer>().Serialize(conParam.Value);
+						//stringValue = Paths.CreateSerializer(paramType).Serialize(conParam.Value);
 						break;
 				}
 
@@ -348,14 +339,14 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 
 				var paramBuff = new byte[paramSize];
 
-				var rowPtr = version > SnapshotVersions.V20 ? ((TransactionConditionParamV21)param).StructToPtr() : ((TransactionConditionParamV20)param).StructToPtr();
-				Marshal.Copy(rowPtr, paramBuff, 0, paramSize);
-				Marshal.FreeHGlobal(rowPtr);
+				var rowPtr = param.StructToPtr();
+				rowPtr.CopyTo(paramBuff);
+				rowPtr.FreeHGlobal();
 
 				result.AddRange(paramBuff);
 
 				if (version > SnapshotVersions.V20)
-					result.AddRange(Encoding.UTF8.GetBytes(paramTypeName));
+					result.AddRange(paramTypeName.UTF8());
 
 				if (stringValue == null)
 					continue;
@@ -371,12 +362,11 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			if (version == null)
 				throw new ArgumentNullException(nameof(version));
 
-			// Pin the managed memory while, copy it out the data, then unpin it
-			using (var handle = new GCHandle<byte[]>(buffer, GCHandleType.Pinned))
+			using (var handle = new GCHandle<byte[]>(buffer))
 			{
-				var ptr = handle.Value.AddrOfPinnedObject();
+				var ptr = handle.CreatePointer();
 
-				var snapshot = ptr.ToStruct<TransactionSnapshot>();
+				var snapshot = ptr.ToStruct<TransactionSnapshot>(true);
 
 				var execMsg = new ExecutionMessage
 				{
@@ -385,58 +375,70 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 					ServerTime = snapshot.LastChangeServerTime.To<DateTimeOffset>(),
 					LocalTime = snapshot.LastChangeLocalTime.To<DateTimeOffset>(),
 
-					ExecutionType = ExecutionTypes.Transaction,
+					DataTypeEx = DataType.Transactions,
 
 					//OriginalTransactionId = snapshot.OriginalTransactionId,
 					TransactionId = snapshot.TransactionId,
 
 					HasOrderInfo = snapshot.HasOrderInfo,
-					HasTradeInfo = snapshot.HasTradeInfo,
+					//HasTradeInfo = snapshot.HasTradeInfo,
 
-					BrokerCode = snapshot.BrokerCode,
-					ClientCode = snapshot.ClientCode,
-
-					Comment = snapshot.Comment,
-					SystemComment = snapshot.SystemComment,
-
-					Currency = snapshot.Currency == null ? (CurrencyTypes?)null : (CurrencyTypes)snapshot.Currency.Value,
-					DepoName = snapshot.DepoName,
-					Error = snapshot.Error.IsEmpty() ? null : new InvalidOperationException(snapshot.Error),
-
-					ExpiryDate = snapshot.ExpiryDate?.To<DateTimeOffset>(),
-					IsMarketMaker = snapshot.IsMarketMaker == null ? (bool?)null : (snapshot.IsMarketMaker.Value == 1),
-					IsMargin = snapshot.IsMargin == null ? (bool?)null : (snapshot.IsMargin.Value == 1),
-					Side = (Sides)snapshot.Side,
-					OrderId = snapshot.OrderId,
-					OrderStringId = snapshot.OrderStringId,
-					OrderBoardId = snapshot.OrderBoardId,
-					OrderPrice = snapshot.OrderPrice,
-					OrderVolume = snapshot.OrderVolume,
-					VisibleVolume = snapshot.VisibleVolume,
-					OrderType = snapshot.OrderType == null ? (OrderTypes?)null : (OrderTypes)snapshot.OrderType.Value,
-					OrderState = snapshot.OrderState == null ? (OrderStates?)null : (OrderStates)snapshot.OrderState.Value,
-					OrderStatus = snapshot.OrderStatus,
-					Balance = snapshot.Balance,
-					UserOrderId = snapshot.UserOrderId,
-					OriginSide = snapshot.OriginSide == null ? (Sides?)null : (Sides)snapshot.OriginSide.Value,
-					Latency = snapshot.Latency == null ? (TimeSpan?)null : TimeSpan.FromTicks(snapshot.Latency.Value),
-					PnL = snapshot.PnL,
-					Position = snapshot.Position,
-					Slippage = snapshot.Slippage,
-					Commission = snapshot.Commission,
-					TradePrice = snapshot.TradePrice,
-					TradeVolume = snapshot.TradeVolume,
-					TradeStatus = snapshot.TradeStatus,
-					TradeId = snapshot.TradeId,
-					TradeStringId = snapshot.TradeStringId,
-					OpenInterest = snapshot.OpenInterest,
-					IsSystem = snapshot.IsSystem == null ? (bool?)null : (snapshot.IsSystem.Value == 1),
-					TimeInForce = snapshot.OrderTif == null ? (TimeInForce?)null : (TimeInForce)snapshot.OrderTif.Value,
+					
 				};
 
-				ptr += typeof(TransactionSnapshot).SizeOf();
+				execMsg.BrokerCode = snapshot.BrokerCode;
+				execMsg.ClientCode = snapshot.ClientCode;
 
-				var paramSize = (version > SnapshotVersions.V20 ? typeof(TransactionConditionParamV21) : typeof(TransactionConditionParamV20)).SizeOf();
+				execMsg.Comment = snapshot.Comment;
+				execMsg.SystemComment = snapshot.SystemComment;
+
+				execMsg.Currency = snapshot.Currency == null ? null : (CurrencyTypes)snapshot.Currency.Value;
+				execMsg.DepoName = snapshot.DepoName;
+				execMsg.Error = snapshot.Error.IsEmpty() ? null : new InvalidOperationException(snapshot.Error);
+
+				execMsg.ExpiryDate = snapshot.ExpiryDate?.To<DateTimeOffset>();
+				execMsg.IsMarketMaker = snapshot.IsMarketMaker?.ToBool();
+				execMsg.MarginMode = (MarginModes?)snapshot.MarginMode;
+				execMsg.IsManual = snapshot.IsManual?.ToBool();
+				execMsg.Side = (Sides)snapshot.Side;
+				execMsg.OrderId = snapshot.OrderId;
+				execMsg.OrderStringId = snapshot.OrderStringId;
+				execMsg.OrderBoardId = snapshot.OrderBoardId;
+				execMsg.OrderPrice = snapshot.OrderPrice;
+				execMsg.OrderVolume = snapshot.OrderVolume;
+				execMsg.VisibleVolume = snapshot.VisibleVolume;
+				execMsg.OrderType = snapshot.OrderType?.ToEnum<OrderTypes>();
+				execMsg.OrderState = snapshot.OrderState?.ToEnum<OrderStates>();
+				execMsg.OrderStatus = snapshot.OrderStatus;
+				execMsg.Balance = snapshot.Balance;
+				execMsg.UserOrderId = snapshot.UserOrderId;
+				execMsg.StrategyId = snapshot.StrategyId;
+				execMsg.OriginSide = snapshot.OriginSide?.ToEnum<Sides>();
+				execMsg.Latency = snapshot.Latency == null ? null : TimeSpan.FromTicks(snapshot.Latency.Value);
+				execMsg.PnL = snapshot.PnL;
+				execMsg.Position = snapshot.Position;
+				execMsg.Slippage = snapshot.Slippage;
+				execMsg.Commission = snapshot.Commission;
+				execMsg.TradePrice = snapshot.TradePrice;
+				execMsg.TradeVolume = snapshot.TradeVolume;
+				execMsg.TradeStatus = snapshot.TradeStatus;
+				execMsg.TradeId = snapshot.TradeId;
+				execMsg.TradeStringId = snapshot.TradeStringId;
+				execMsg.OpenInterest = snapshot.OpenInterest;
+				execMsg.IsSystem = snapshot.IsSystem?.ToBool();
+				execMsg.TimeInForce = snapshot.OrderTif?.ToEnum<TimeInForce>();
+
+				execMsg.AveragePrice = snapshot.AveragePrice;
+				execMsg.Yield = snapshot.Yield;
+				execMsg.MinVolume = snapshot.MinVolume;
+				execMsg.PositionEffect = snapshot.PositionEffect?.ToEnum<OrderPositionEffects>();
+				execMsg.PostOnly = snapshot.PostOnly?.ToBool();
+				execMsg.Initiator = snapshot.Initiator?.ToBool();
+				execMsg.SeqNum = snapshot.SeqNum;
+				execMsg.BuildFrom = snapshot.BuildFrom;
+				execMsg.Leverage = snapshot.Leverage;
+
+				//var paramSize = (version > SnapshotVersions.V20 ? typeof(TransactionConditionParamV21) : typeof(TransactionConditionParamV20)).SizeOf();
 
 				if (!snapshot.ConditionType.IsEmpty())
 				{
@@ -446,33 +448,12 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 
 				for (var i = 0; i < snapshot.ConditionParamsCount; i++)
 				{
-					dynamic param;
-					string paramTypeName;
+					var param = ptr.ToStruct<TransactionConditionParamV21>(true);
 
-					if (version > SnapshotVersions.V20)
-					{
-						var s = ptr.ToStruct<TransactionConditionParamV21>();
+					var typeBuffer = new byte[param.ValueTypeLen];
+					ptr.CopyTo(typeBuffer, true);
 
-						ptr += paramSize;
-
-						var typeBuffer = new byte[s.ValueTypeLen];
-						Marshal.Copy(ptr, typeBuffer, 0, typeBuffer.Length);
-
-						paramTypeName = Encoding.UTF8.GetString(typeBuffer);
-
-						ptr += s.ValueTypeLen;
-
-						param = s;
-					}
-					else
-					{
-						var s = ptr.ToStruct<TransactionConditionParamV20>();
-						paramTypeName = s.ValueType;
-
-						ptr += paramSize;
-
-						param = s;
-					}
+					var paramTypeName = typeBuffer.UTF8();
 
 					try
 					{
@@ -490,47 +471,45 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 						//	value = param.StringValue.ToUnit();
 						else if (param.StringValueLen > 0)
 						{
-							var strBuffer = new byte[(int)param.StringValueLen];
-							Marshal.Copy(ptr, strBuffer, 0, strBuffer.Length);
-							ptr += strBuffer.Length;
+							var strBuffer = new byte[param.StringValueLen];
+							ptr.CopyTo(strBuffer, true);
 
-							if (typeof(IPersistable).IsAssignableFrom(paramType))
+							if (paramType.IsPersistable())
 							{
-								var persistable = paramType.CreateInstance<IPersistable>();
-								persistable.Load(new XmlSerializer<SettingsStorage>().Deserialize(strBuffer));
-								value = persistable;
+								value = strBuffer.Deserialize<SettingsStorage>()?.Load(paramType) ?? throw new InvalidOperationException("unable to deserialize param value");
 							}
-							else if (typeof(IRange).IsAssignableFrom(paramType))
+							else if (paramType.Is<IRange>())
 							{
 								var range = paramType.CreateInstance<IRange>();
 
-								var storage = new XmlSerializer<SettingsStorage>().Deserialize(strBuffer);
+								var storage = strBuffer.Deserialize<SettingsStorage>() ?? throw new InvalidOperationException("unable to deserialize IRange param value");
 
 								if (storage.ContainsKey(nameof(range.Min)))
-									range.Min = storage.GetValue<object>(nameof(range.Min));
+									range.Min = storage.GetValue<SettingsStorage>(nameof(range.Min)).FromStorage();
 
 								if (storage.ContainsKey(nameof(range.Max)))
-									range.Max = storage.GetValue<object>(nameof(range.Max));
+									range.Max = storage.GetValue<SettingsStorage>(nameof(range.Max)).FromStorage();
 
 								value = range;
 							}
 							else
 							{
-								value = typeof(XmlSerializer<>).MakeGenericType(paramType).CreateInstance<ISerializer>().Deserialize(strBuffer);
+								value = null;
+								//value = Paths.CreateSerializer(paramType).Deserialize(strBuffer);
 							}
 						}
 						else
 							value = null;
-					
+
 						value = value.To(paramType);
-						execMsg.Condition.Parameters.Add((string)param.Name, value);
+						execMsg.Condition.Parameters.Add(param.Name, value);
 					}
 					catch (Exception ex)
 					{
 						ex.LogError();
 					}
 				}
-				
+
 				return execMsg;
 			}
 		}
@@ -550,21 +529,6 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			return key.ToLowerInvariant();
 		}
 
-		ExecutionMessage ISnapshotSerializer<string, ExecutionMessage>.CreateCopy(ExecutionMessage message)
-		{
-			if (message.SecurityId.IsDefault())
-				throw new ArgumentException(message.ToString());
-
-			var copy = (ExecutionMessage)message.Clone();
-
-			//if (copy.TransactionId == 0)
-			//	copy.TransactionId = message.OriginalTransactionId;
-
-			//copy.OriginalTransactionId = 0;
-
-			return copy;
-		}
-
 		void ISnapshotSerializer<string, ExecutionMessage>.Update(ExecutionMessage message, ExecutionMessage changes)
 		{
 			if (!changes.BrokerCode.IsEmpty())
@@ -579,31 +543,31 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			if (!changes.SystemComment.IsEmpty())
 				message.SystemComment = changes.SystemComment;
 
-			if (changes.Currency != null)
+			if (changes.Currency != default)
 				message.Currency = changes.Currency;
 
-			if (changes.Condition != null)
+			if (changes.Condition != default)
 				message.Condition = changes.Condition.Clone();
 
 			if (!changes.DepoName.IsEmpty())
 				message.DepoName = changes.DepoName;
 
-			if (changes.Error != null)
+			if (changes.Error != default)
 				message.Error = changes.Error;
 
-			if (changes.ExpiryDate != null)
+			if (changes.ExpiryDate != default)
 				message.ExpiryDate = changes.ExpiryDate;
 
 			if (!changes.PortfolioName.IsEmpty())
 				message.PortfolioName = changes.PortfolioName;
 
-			if (changes.IsMarketMaker != null)
+			if (changes.IsMarketMaker != default)
 				message.IsMarketMaker = changes.IsMarketMaker;
 
-			if (changes.HasOrderInfo)
-				message.Side = changes.Side;
+			//if (changes.HasOrderInfo)
+			//	message.Side = changes.Side;
 
-			if (changes.OrderId != null)
+			if (changes.OrderId != default)
 				message.OrderId = changes.OrderId;
 
 			if (!changes.OrderBoardId.IsEmpty())
@@ -612,83 +576,113 @@ namespace StockSharp.Algo.Storages.Binary.Snapshot
 			if (!changes.OrderStringId.IsEmpty())
 				message.OrderStringId = changes.OrderStringId;
 
-			if (changes.OrderType != null)
+			if (changes.OrderType != default)
 				message.OrderType = changes.OrderType;
 
-			if (changes.OrderPrice != 0)
+			if (changes.OrderPrice != default)
 				message.OrderPrice = changes.OrderPrice;
 
-			if (changes.OrderVolume != null)
+			if (changes.OrderVolume != default)
 				message.OrderVolume = changes.OrderVolume;
 
-			if (changes.VisibleVolume != null)
+			if (changes.VisibleVolume != default)
 				message.VisibleVolume = changes.VisibleVolume;
 
-			if (changes.OrderState != null)
+			if (changes.OrderState != default)
 				message.OrderState = changes.OrderState;
 
-			if (changes.OrderStatus != null)
+			if (changes.OrderStatus != default)
 				message.OrderStatus = changes.OrderStatus;
 
-			if (changes.Balance != null)
+			if (changes.Balance != default)
 				message.Balance = changes.Balance;
 
 			if (!changes.UserOrderId.IsEmpty())
 				message.UserOrderId = changes.UserOrderId;
 
-			if (changes.OriginSide != null)
+			if (!changes.StrategyId.IsEmpty())
+				message.StrategyId = changes.StrategyId;
+
+			if (changes.OriginSide != default)
 				message.OriginSide = changes.OriginSide;
 
-			if (changes.Latency != null)
+			if (changes.Latency != default)
 				message.Latency = changes.Latency;
 
-			if (changes.PnL != null)
+			if (changes.PnL != default)
 				message.PnL = changes.PnL;
 
-			if (changes.Position != null)
+			if (changes.Position != default)
 				message.Position = changes.Position;
 
-			if (changes.Slippage != null)
+			if (changes.Slippage != default)
 				message.Slippage = changes.Slippage;
 
-			if (changes.Commission != null)
+			if (changes.Commission != default)
 				message.Commission = changes.Commission;
 
-			if (changes.TradePrice != null)
+			if (changes.TradePrice != default)
 				message.TradePrice = changes.TradePrice;
 
-			if (changes.TradeVolume != null)
+			if (changes.TradeVolume != default)
 				message.TradeVolume = changes.TradeVolume;
 
-			if (changes.TradeStatus != null)
+			if (changes.TradeStatus != default)
 				message.TradeStatus = changes.TradeStatus;
 
-			if (changes.TradeId != null)
+			if (changes.TradeId != default)
 				message.TradeId = changes.TradeId;
 
 			if (!changes.TradeStringId.IsEmpty())
 				message.TradeStringId = changes.TradeStringId;
 
-			if (changes.OpenInterest != null)
+			if (changes.OpenInterest != default)
 				message.OpenInterest = changes.OpenInterest;
 
-			if (changes.IsMargin != null)
-				message.IsMargin = changes.IsMargin;
+			if (changes.MarginMode != default)
+				message.MarginMode = changes.MarginMode;
 
-			if (changes.TimeInForce != null)
+			if (changes.TimeInForce != default)
 				message.TimeInForce = changes.TimeInForce;
 
-			//if (changes.OriginalTransactionId != 0)
+			//if (changes.OriginalTransactionId != default)
 			//	message.OriginalTransactionId = changes.OriginalTransactionId;
 
-			//if (changes.TransactionId != 0)
+			//if (changes.TransactionId != default)
 			//	message.TransactionId = changes.TransactionId;
 
 			if (changes.HasOrderInfo)
 				message.HasOrderInfo = true;
 
-			if (changes.HasTradeInfo)
-				message.HasTradeInfo = true;
+			//if (changes.HasTradeInfo)
+			//	message.HasTradeInfo = true;
+
+			if (changes.AveragePrice != default)
+				message.AveragePrice = changes.AveragePrice;
+
+			if (changes.MinVolume != default)
+				message.MinVolume = changes.MinVolume;
+
+			if (changes.Yield != default)
+				message.Yield = changes.Yield;
+
+			if (changes.PositionEffect != default)
+				message.PositionEffect = changes.PositionEffect;
+
+			if (changes.PostOnly != default)
+				message.PostOnly = changes.PostOnly;
+
+			if (changes.Initiator != default)
+				message.Initiator = changes.Initiator;
+
+			if (changes.SeqNum != default)
+				message.SeqNum = changes.SeqNum;
+
+			if (changes.BuildFrom != default)
+				message.BuildFrom = changes.BuildFrom;
+
+			if (changes.Leverage != default)
+				message.Leverage = changes.Leverage;
 
 			message.LocalTime = changes.LocalTime;
 			message.ServerTime = changes.ServerTime;

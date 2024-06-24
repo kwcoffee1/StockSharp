@@ -16,11 +16,7 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.BusinessEntities
 {
 	using System;
-	using System.Collections.Generic;
 	using System.Runtime.Serialization;
-	using System.Xml.Serialization;
-
-	using Ecng.Serialization;
 
 	using StockSharp.Messages;
 
@@ -28,8 +24,8 @@ namespace StockSharp.BusinessEntities
 	/// Description of the error that occurred during the registration or cancellation of the order.
 	/// </summary>
 	[Serializable]
-	[System.Runtime.Serialization.DataContract]
-	public class OrderFail : IExtendableEntity
+	[DataContract]
+	public class OrderFail : IErrorMessage, ILocalTimeMessage, IServerTimeMessage, ISeqNumMessage
 	{
 		/// <summary>
 		/// Initializes a new instance of the <see cref="OrderFail"/>.
@@ -42,14 +38,12 @@ namespace StockSharp.BusinessEntities
 		/// The order which was not registered or was canceled due to an error.
 		/// </summary>
 		[DataMember]
-		[RelationSingle]
 		public Order Order { get; set; }
 
 		/// <summary>
 		/// System information about error containing the reason for the refusal or cancel of registration.
 		/// </summary>
 		[DataMember]
-		[BinaryFormatter]
 		public Exception Error { get; set; }
 
 		/// <summary>
@@ -64,19 +58,13 @@ namespace StockSharp.BusinessEntities
 		public DateTimeOffset LocalTime { get; set; }
 
 		/// <summary>
-		/// Extended information on the order with an error.
+		/// Sequence number.
 		/// </summary>
-		[XmlIgnore]
-		public IDictionary<string, object> ExtensionInfo
-		{
-			get => Order.ExtensionInfo;
-			set => Order.ExtensionInfo = value;
-		}
+		/// <remarks>Zero means no information.</remarks>
+		[DataMember]
+		public long SeqNum { get; set; }
 
-		/// <summary>
-		/// Returns a string that represents the current object.
-		/// </summary>
-		/// <returns>A string that represents the current object.</returns>
+		/// <inheritdoc />
 		public override string ToString()
 		{
 			return $"{Error?.Message}/{Order}";

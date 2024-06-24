@@ -16,6 +16,7 @@ Copyright 2010 by StockSharp, LLC
 namespace StockSharp.Algo.PnL
 {
 	using System;
+	using System.Collections.Generic;
 
 	using Ecng.Common;
 	using Ecng.Collections;
@@ -28,7 +29,10 @@ namespace StockSharp.Algo.PnL
 	/// </summary>
 	public class PnLManager : IPnLManager
 	{
-		private readonly CachedSynchronizedDictionary<string, PortfolioPnLManager> _portfolioManagers = new CachedSynchronizedDictionary<string, PortfolioPnLManager>(StringComparer.InvariantCultureIgnoreCase);
+		private readonly CachedSynchronizedDictionary<string, PortfolioPnLManager> _managersByPf = new(StringComparer.InvariantCultureIgnoreCase);
+		private readonly Dictionary<long, PortfolioPnLManager> _managersByTransId = new();
+		private readonly Dictionary<long, PortfolioPnLManager> _managersByOrderId = new();
+		private readonly Dictionary<string, PortfolioPnLManager> _managersByOrderStringId = new(StringComparer.InvariantCultureIgnoreCase);
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="PnLManager"/>.
@@ -38,36 +42,54 @@ namespace StockSharp.Algo.PnL
 		}
 
 		/// <summary>
-		/// Total profit-loss.
+		/// Use <see cref="DataType.Ticks"/> for <see cref="UnrealizedPnL"/> calculation.
 		/// </summary>
-		public virtual decimal PnL => RealizedPnL + UnrealizedPnL ?? 0;
+		public bool UseTick { get; set; } = true;
+
+		/// <summary>
+		/// Use <see cref="DataType.OrderLog"/> for <see cref="UnrealizedPnL"/> calculation.
+		/// </summary>
+		public bool UseOrderLog { get; set; }
+
+		/// <summary>
+		/// Use <see cref="QuoteChangeMessage"/> for <see cref="UnrealizedPnL"/> calculation.
+		/// </summary>
+		public bool UseOrderBook { get; set; }
+
+		/// <summary>
+		/// Use <see cref="Level1ChangeMessage"/> for <see cref="UnrealizedPnL"/> calculation.
+		/// </summary>
+		public bool UseLevel1 { get; set; }
+
+		/// <summary>
+		/// Use <see cref="CandleMessage"/> for <see cref="UnrealizedPnL"/> calculation.
+		/// </summary>
+		public bool UseCandles { get; set; } = true;
+
+		/// <inheritdoc />
+		public decimal PnL => RealizedPnL + UnrealizedPnL ?? 0;
 
 		private decimal _realizedPnL;
 
-		/// <summary>
-		/// The relative value of profit-loss without open position accounting.
-		/// </summary>
-		public virtual decimal RealizedPnL => _realizedPnL;
+		/// <inheritdoc />
+		public decimal RealizedPnL => _realizedPnL;
 
-		/// <summary>
-		/// The value of unrealized profit-loss.
-		/// </summary>
-		public virtual decimal? UnrealizedPnL
+		/// <inheritdoc />
+		public decimal? UnrealizedPnL
 		{
 			get
 			{
 				decimal? retVal = null;
 
-				foreach (var manager in _portfolioManagers.CachedValues)
+				foreach (var manager in _managersByPf.CachedValues)
 				{
-					var manPnl = manager.UnrealizedPnL;
+					var pnl = manager.UnrealizedPnL;
 
-					if (manPnl != null)
+					if (pnl != null)
 					{
-						if (retVal == null)
-							retVal = 0;
+						retVal ??= 0;
 
-						retVal += manPnl.Value;
+						retVal += pnl.Value;
 					}
 				}
 
@@ -75,24 +97,21 @@ namespace StockSharp.Algo.PnL
 			}
 		}
 
-		/// <summary>
-		/// To zero <see cref="PnL"/>.
-		/// </summary>
+		/// <inheritdoc />
 		public void Reset()
 		{
-			lock (_portfolioManagers.SyncRoot)
+			lock (_managersByPf.SyncRoot)
 			{
 				_realizedPnL = 0;
-				_portfolioManagers.Clear();	
+				_managersByPf.Clear();
+				_managersByTransId.Clear();
+				_managersByOrderId.Clear();
+				_managersByOrderStringId.Clear();
 			}
 		}
 
-		/// <summary>
-		/// To process the message, containing market data or trade. If the trade was already processed earlier, previous information returns.
-		/// </summary>
-		/// <param name="message">The message, containing market data or trade.</param>
-		/// <returns>Information on new trade.</returns>
-		public PnLInfo ProcessMessage(Message message)
+		/// <inheritdoc />
+		public PnLInfo ProcessMessage(Message message, ICollection<PortfolioPnLManager> changedPortfolios)
 		{
 			if (message == null)
 				throw new ArgumentNullException(nameof(message));
@@ -105,33 +124,125 @@ namespace StockSharp.Algo.PnL
 					return null;
 				}
 
+				case MessageTypes.OrderRegister:
+				{
+					var regMsg = (OrderRegisterMessage)message;
+
+					lock (_managersByPf.SyncRoot)
+					{
+						var manager = _managersByPf.SafeAdd(regMsg.PortfolioName, pf => new PortfolioPnLManager(pf));
+						_managersByTransId.Add(regMsg.TransactionId, manager);
+					}
+
+					return null;
+				}
+
 				case MessageTypes.Execution:
 				{
-					var trade = (ExecutionMessage)message;
+					var execMsg = (ExecutionMessage)message;
 
-					if (trade.HasTradeInfo())
+					if (execMsg.DataType == DataType.Transactions)
 					{
-						// TODO
-						if (trade.PortfolioName.IsEmpty())
-							return null;
+						var transId = execMsg.TransactionId == 0
+							? execMsg.OriginalTransactionId
+							: execMsg.TransactionId;
 
-						lock (_portfolioManagers.SyncRoot)
+						PortfolioPnLManager manager = null;
+
+						if (execMsg.HasOrderInfo())
 						{
-							var manager = _portfolioManagers.SafeAdd(trade.PortfolioName, pf => new PortfolioPnLManager(pf));
+							lock (_managersByPf.SyncRoot)
+							{
+								if (!_managersByTransId.TryGetValue(transId, out manager))
+								{
+									if (!execMsg.PortfolioName.IsEmpty())
+										manager = _managersByPf.SafeAdd(execMsg.PortfolioName, key => new PortfolioPnLManager(key));
+									else if (execMsg.OrderId != null)
+										manager = _managersByOrderId.TryGetValue(execMsg.OrderId.Value);
+									else if (!execMsg.OrderStringId.IsEmpty())
+										manager = _managersByOrderStringId.TryGetValue(execMsg.OrderStringId);
+								}
 
-							if (manager.ProcessMyTrade(trade, out var info))
+								if (manager == null)
+									return null;
+
+								if (execMsg.OrderId != null)
+									_managersByOrderId.TryAdd2(execMsg.OrderId.Value, manager);
+								else if (!execMsg.OrderStringId.IsEmpty())
+									_managersByOrderStringId.TryAdd2(execMsg.OrderStringId, manager);
+							}
+						}
+
+						if (execMsg.HasTradeInfo())
+						{
+							lock (_managersByPf.SyncRoot)
+							{
+								if (manager == null && !_managersByTransId.TryGetValue(transId, out manager))
+									return null;
+
+								if (!manager.ProcessMyTrade(execMsg, out var info))
+									return null;
+
 								_realizedPnL += info.PnL;
-
-							return info;
+								changedPortfolios?.Add(manager);
+								return info;
+							}
 						}
 					}
+					else if (execMsg.DataType == DataType.Ticks)
+					{
+						if (!UseTick)
+							return null;
+					}
+					else if (execMsg.DataType == DataType.OrderLog)
+					{
+						if (!UseOrderLog)
+							return null;
+					}
+					else
+						return null;
 
 					break;
 				}
+
+				case MessageTypes.Level1Change:
+				{
+					if (!UseLevel1)
+						return null;
+
+					break;
+				}
+				case MessageTypes.QuoteChange:
+				{
+					if (!UseOrderBook || ((QuoteChangeMessage)message).State != null)
+						return null;
+
+					break;
+				}
+
+				//case MessageTypes.PortfolioChange:
+				case MessageTypes.PositionChange:
+				{
+					break;
+				}
+
+				default:
+				{
+					if (message is CandleMessage)
+					{
+						if (UseCandles)
+							break;
+					}
+
+					return null;
+				}
 			}
 
-			foreach (var pnLManager in _portfolioManagers.CachedValues)
-				pnLManager.ProcessMessage(message);
+			foreach (var manager in _managersByPf.CachedValues)
+			{
+				if (manager.ProcessMessage(message))
+					changedPortfolios?.Add(manager);
+			}
 
 			return null;
 		}

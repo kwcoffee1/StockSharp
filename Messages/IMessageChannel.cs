@@ -20,32 +20,19 @@ namespace StockSharp.Messages
 	using Ecng.Common;
 
 	/// <summary>
-	/// Message sender base interface.
-	/// </summary>
-	public interface IMessageSender
-	{
-		/// <summary>
-		/// Send message.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		void SendInMessage(Message message);
-
-		/// <summary>
-		/// Send outgoing message.
-		/// </summary>
-		/// <param name="message">Message.</param>
-		void SendOutMessage(Message message);
-	}
-
-	/// <summary>
 	/// Message channel base interface.
 	/// </summary>
 	public interface IMessageChannel : IDisposable, ICloneable<IMessageChannel>
 	{
 		/// <summary>
-		/// Is channel opened.
+		/// State.
 		/// </summary>
-		bool IsOpened { get; }
+		ChannelStates State { get; }
+
+		/// <summary>
+		/// <see cref="State"/> change event.
+		/// </summary>
+		event Action StateChanged;
 
 		/// <summary>
 		/// Open channel.
@@ -58,10 +45,26 @@ namespace StockSharp.Messages
 		void Close();
 
 		/// <summary>
+		/// Suspend.
+		/// </summary>
+		void Suspend();
+
+		/// <summary>
+		/// Resume.
+		/// </summary>
+		void Resume();
+
+		/// <summary>
+		/// Clear.
+		/// </summary>
+		void Clear();
+
+		/// <summary>
 		/// Send message.
 		/// </summary>
 		/// <param name="message">Message.</param>
-		void SendInMessage(Message message);
+		/// <returns><see langword="true"/> if the specified message was processed successfully, otherwise, <see langword="false"/>.</returns>
+		bool SendInMessage(Message message);
 
 		/// <summary>
 		/// New message event.
@@ -83,9 +86,16 @@ namespace StockSharp.Messages
 
 		void IDisposable.Dispose()
 		{
+			GC.SuppressFinalize(this);
 		}
 
-		bool IMessageChannel.IsOpened => true;
+		ChannelStates IMessageChannel.State => ChannelStates.Started;
+
+		event Action IMessageChannel.StateChanged
+		{
+			add { }
+			remove { }
+		}
 
 		void IMessageChannel.Open()
 		{
@@ -95,9 +105,22 @@ namespace StockSharp.Messages
 		{
 		}
 
-		void IMessageChannel.SendInMessage(Message message)
+		void IMessageChannel.Suspend()
+		{
+		}
+
+		void IMessageChannel.Resume()
+		{
+		}
+
+		void IMessageChannel.Clear()
+		{
+		}
+
+		bool IMessageChannel.SendInMessage(Message message)
 		{
 			_newMessage?.Invoke(message);
+			return true;
 		}
 
 		private Action<Message> _newMessage;
